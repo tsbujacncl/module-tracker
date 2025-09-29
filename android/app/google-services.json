@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "273321735011",
+    "project_id": "module-tracker-tyr",
+    "storage_bucket": "module-tracker-tyr.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:273321735011:android:a038410b7cd3f25ad9d956",
+        "android_client_info": {
+          "package_name": "com.yourname.module_tracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCl5ODoaN_hbEnGw4bl3lkZ9UkxheA3pyI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
