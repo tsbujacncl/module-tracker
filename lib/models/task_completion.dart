@@ -49,6 +49,34 @@ class TaskCompletion {
     };
   }
 
+  // For local storage
+  factory TaskCompletion.fromMap(Map<String, dynamic> map) {
+    return TaskCompletion(
+      id: map['id'] ?? '',
+      moduleId: map['moduleId'] ?? '',
+      taskId: map['taskId'] ?? '',
+      weekNumber: map['weekNumber'] ?? 1,
+      status: TaskStatus.values.firstWhere(
+        (e) => e.toString() == 'TaskStatus.${map['status']}',
+        orElse: () => TaskStatus.notStarted,
+      ),
+      completedAt: map['completedAt'] != null
+          ? DateTime.parse(map['completedAt'])
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'moduleId': moduleId,
+      'taskId': taskId,
+      'weekNumber': weekNumber,
+      'status': status.toString().split('.').last,
+      'completedAt': completedAt?.toIso8601String(),
+    };
+  }
+
   TaskCompletion copyWith({
     String? id,
     String? moduleId,

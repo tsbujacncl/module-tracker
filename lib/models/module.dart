@@ -8,6 +8,7 @@ class Module {
   final String semesterId;
   final bool isActive;
   final DateTime createdAt;
+  final int credits;
 
   Module({
     required this.id,
@@ -17,6 +18,7 @@ class Module {
     required this.semesterId,
     required this.isActive,
     required this.createdAt,
+    this.credits = 0,
   });
 
   factory Module.fromFirestore(DocumentSnapshot doc) {
@@ -29,6 +31,7 @@ class Module {
       semesterId: data['semesterId'] ?? '',
       isActive: data['isActive'] ?? true,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
+      credits: data['credits'] ?? 0,
     );
   }
 
@@ -40,6 +43,34 @@ class Module {
       'semesterId': semesterId,
       'isActive': isActive,
       'createdAt': Timestamp.fromDate(createdAt),
+      'credits': credits,
+    };
+  }
+
+  // For local storage
+  factory Module.fromMap(Map<String, dynamic> map) {
+    return Module(
+      id: map['id'] ?? '',
+      userId: map['userId'] ?? '',
+      name: map['name'] ?? '',
+      code: map['code'] ?? '',
+      semesterId: map['semesterId'] ?? '',
+      isActive: map['isActive'] ?? true,
+      createdAt: DateTime.parse(map['createdAt']),
+      credits: map['credits'] ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'userId': userId,
+      'name': name,
+      'code': code,
+      'semesterId': semesterId,
+      'isActive': isActive,
+      'createdAt': createdAt.toIso8601String(),
+      'credits': credits,
     };
   }
 
@@ -51,6 +82,7 @@ class Module {
     String? semesterId,
     bool? isActive,
     DateTime? createdAt,
+    int? credits,
   }) {
     return Module(
       id: id ?? this.id,
@@ -60,6 +92,7 @@ class Module {
       semesterId: semesterId ?? this.semesterId,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
+      credits: credits ?? this.credits,
     );
   }
 }

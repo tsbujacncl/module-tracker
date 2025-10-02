@@ -4,6 +4,7 @@ import 'package:module_tracker/models/semester.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/utils/date_utils.dart' as utils;
+import 'package:module_tracker/utils/date_picker_utils.dart';
 
 class SemesterSetupScreen extends ConsumerStatefulWidget {
   const SemesterSetupScreen({super.key});
@@ -27,7 +28,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
   }
 
   Future<void> _selectStartDate() async {
-    final picked = await showDatePicker(
+    final picked = await showMondayFirstDatePicker(
       context: context,
       initialDate: _startDate ?? DateTime.now(),
       firstDate: DateTime(2020),
@@ -43,7 +44,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
   }
 
   Future<void> _selectEndDate() async {
-    final picked = await showDatePicker(
+    final picked = await showMondayFirstDatePicker(
       context: context,
       initialDate: _endDate ?? _startDate?.add(const Duration(days: 84)) ?? DateTime.now(),
       firstDate: _startDate ?? DateTime.now(),
@@ -81,6 +82,11 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
       final user = ref.read(currentUserProvider);
       if (user == null) throw Exception('User not logged in');
 
+      print('DEBUG SEMESTER: Creating semester for user: ${user.uid}');
+      print('DEBUG SEMESTER: User email: ${user.email}');
+      print('DEBUG SEMESTER: User is anonymous: ${user.isAnonymous}');
+      print('DEBUG SEMESTER: Auth provider: ${user.providerData.map((p) => p.providerId).join(", ")}');
+
       final repository = ref.read(firestoreRepositoryProvider);
       final semester = Semester(
         id: '',
@@ -88,10 +94,24 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
         startDate: _startDate!,
         endDate: _endDate!,
         numberOfWeeks: numberOfWeeks,
+        examPeriodStart: null,
+        examPeriodEnd: null,
+        readingWeekStart: null,
+        readingWeekEnd: null,
         createdAt: DateTime.now(),
       );
 
-      await repository.createSemester(user.uid, semester);
+      print('DEBUG SEMESTER: Calling createSemester...');
+
+      // Add timeout to prevent hanging
+      await repository.createSemester(user.uid, semester).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Semester creation timed out. Please check your internet connection and Firestore security rules.');
+        },
+      );
+
+      print('DEBUG SEMESTER: Semester created successfully!');
 
       if (mounted) {
         Navigator.pop(context);
@@ -103,11 +123,13 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
         );
       }
     } catch (e) {
+      print('DEBUG SEMESTER: Error creating semester - $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -124,11 +146,14 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
       appBar: AppBar(
         title: const Text('Create Semester'),
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
             Text(
               'Semester Information',
               style: Theme.of(context).textTheme.headlineSmall,
@@ -223,7 +248,9 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                     )
                   : const Text('Create Semester'),
             ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );

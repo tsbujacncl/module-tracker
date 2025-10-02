@@ -20,6 +20,7 @@ final activeModulesProvider = StreamProvider<List<Module>>((ref) {
 });
 
 // Get modules for current semester
+// Note: Not using autoDispose to prevent disposal issues during navigation
 final currentSemesterModulesProvider = StreamProvider<List<Module>>((ref) {
   final user = ref.watch(currentUserProvider);
   final repository = ref.watch(firestoreRepositoryProvider);
@@ -78,4 +79,37 @@ final allTaskCompletionsProvider = StreamProvider.family<List<TaskCompletion>, S
   }
 
   return repository.getAllTaskCompletions(user.uid, moduleId);
+});
+
+// Get all recurring tasks for all modules in current semester (for calendar view)
+final allCurrentSemesterTasksProvider = StreamProvider<Map<String, List<RecurringTask>>>((ref) async* {
+  final user = ref.watch(currentUserProvider);
+  final repository = ref.watch(firestoreRepositoryProvider);
+
+  if (user == null) {
+    yield {};
+    return;
+  }
+
+  // Watch the modules stream
+  await for (final modules in repository.getModulesBySemester(
+    user.uid,
+    ref.watch(currentSemesterProvider)?.id ?? '',
+    activeOnly: true,
+  )) {
+    if (modules.isEmpty) {
+      yield {};
+      continue;
+    }
+
+    // Fetch all recurring tasks for all modules
+    final tasksByModule = <String, List<RecurringTask>>{};
+
+    for (final module in modules) {
+      final tasks = await repository.getRecurringTasks(user.uid, module.id).first;
+      tasksByModule[module.id] = tasks;
+    }
+
+    yield tasksByModule;
+  }
 });

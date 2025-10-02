@@ -1,0 +1,307 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:module_tracker/models/semester.dart';
+import 'package:module_tracker/providers/semester_provider.dart';
+import 'package:module_tracker/providers/repository_provider.dart';
+import 'package:module_tracker/providers/auth_provider.dart';
+import 'package:intl/intl.dart';
+
+class SemesterArchiveScreen extends ConsumerWidget {
+  const SemesterArchiveScreen({super.key});
+
+  Future<void> _archiveSemester(
+    BuildContext context,
+    WidgetRef ref,
+    Semester semester,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Archive ${semester.name}?'),
+        content: const Text(
+          'This will move the semester to the archive. You can restore it later if needed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      final user = ref.read(currentUserProvider);
+      if (user != null) {
+        final repository = ref.read(firestoreRepositoryProvider);
+        await repository.updateSemester(
+          user.uid,
+          semester.id,
+          semester.copyWith(isArchived: true).toFirestore(),
+        );
+      }
+    }
+  }
+
+  Future<void> _restoreSemester(
+    BuildContext context,
+    WidgetRef ref,
+    Semester semester,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Restore ${semester.name}?'),
+        content: const Text(
+          'This will restore the semester and set it as the active semester.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      final user = ref.read(currentUserProvider);
+      if (user != null) {
+        final repository = ref.read(firestoreRepositoryProvider);
+        await repository.updateSemester(
+          user.uid,
+          semester.id,
+          semester.copyWith(isArchived: false).toFirestore(),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentSemester = ref.watch(currentSemesterProvider);
+    final archivedSemesters = ref.watch(archivedSemestersProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Semester Archive',
+          style: GoogleFonts.poppins(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFF0F9FF),
+              Color(0xFFE0F2FE),
+              Color(0xFFBAE6FD),
+            ],
+          ),
+        ),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Current Semester Section
+            if (currentSemester != null) ...[
+              Text(
+                'Current Semester',
+                style: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _SemesterCard(
+                semester: currentSemester,
+                isArchived: false,
+                onArchive: () => _archiveSemester(context, ref, currentSemester),
+              ),
+              const SizedBox(height: 32),
+            ],
+            // Archived Semesters Section
+            Text(
+              'Archived Semesters',
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (archivedSemesters.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.archive_outlined,
+                        size: 64,
+                        color: Color(0xFF94A3B8),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No archived semesters',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          color: const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ...archivedSemesters.map(
+                (semester) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _SemesterCard(
+                    semester: semester,
+                    isArchived: true,
+                    onRestore: () => _restoreSemester(context, ref, semester),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SemesterCard extends StatelessWidget {
+  final Semester semester;
+  final bool isArchived;
+  final VoidCallback? onArchive;
+  final VoidCallback? onRestore;
+
+  const _SemesterCard({
+    required this.semester,
+    required this.isArchived,
+    this.onArchive,
+    this.onRestore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFormat = DateFormat('MMM d, y');
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isArchived
+              ? [const Color(0xFF64748B), const Color(0xFF475569)]
+              : [const Color(0xFF0EA5E9), const Color(0xFF06B6D4)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: (isArchived ? const Color(0xFF64748B) : const Color(0xFF0EA5E9))
+                .withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    semester.name,
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                if (isArchived)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'ARCHIVED',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${dateFormat.format(semester.startDate)} - ${dateFormat.format(semester.endDate)}',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: Colors.white.withOpacity(0.9),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${semester.numberOfWeeks} weeks',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: Colors.white.withOpacity(0.9),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (!isArchived && onArchive != null)
+                  TextButton.icon(
+                    onPressed: onArchive,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: Colors.white.withOpacity(0.2),
+                    ),
+                    icon: const Icon(Icons.archive_outlined, size: 18),
+                    label: const Text('Archive'),
+                  ),
+                if (isArchived && onRestore != null)
+                  TextButton.icon(
+                    onPressed: onRestore,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: Colors.white.withOpacity(0.2),
+                    ),
+                    icon: const Icon(Icons.unarchive_outlined, size: 18),
+                    label: const Text('Restore'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

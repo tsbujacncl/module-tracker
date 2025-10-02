@@ -12,48 +12,76 @@ class FirestoreRepository {
 
   /// Get user's semesters
   Stream<List<Semester>> getUserSemesters(String userId) {
+    print('DEBUG REPO: Setting up semester stream for user: $userId');
+
     return _firestore
         .collection('users')
         .doc(userId)
         .collection('semesters')
         .orderBy('startDate', descending: true)
-        .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => Semester.fromFirestore(doc)).toList());
+        .snapshots(includeMetadataChanges: true)
+        .map((snapshot) {
+          print('DEBUG REPO: Semester stream emitted - count: ${snapshot.docs.length}, from cache: ${snapshot.metadata.isFromCache}');
+          return snapshot.docs.map((doc) => Semester.fromFirestore(doc)).toList();
+        });
   }
 
-  /// Get a specific semester
+  /// Get a specific semester with retry logic for eventual consistency
   Future<Semester?> getSemester(String userId, String semesterId) async {
-    final doc = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('semesters')
-        .doc(semesterId)
-        .get();
+    // Try up to 3 times with increasing delays to handle Firestore eventual consistency
+    for (int attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        await Future.delayed(Duration(milliseconds: 300 * attempt));
+        print('DEBUG REPO: Retry attempt $attempt for semester $semesterId');
+      }
 
-    if (!doc.exists) return null;
-    return Semester.fromFirestore(doc);
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('semesters')
+          .doc(semesterId)
+          .get();
+
+      if (doc.exists) {
+        print('DEBUG REPO: Semester found on attempt ${attempt + 1}');
+        return Semester.fromFirestore(doc);
+      }
+    }
+
+    print('DEBUG REPO: Semester $semesterId not found after 3 attempts');
+    return null;
   }
 
   /// Create a new semester
   Future<String> createSemester(String userId, Semester semester) async {
+    print('DEBUG REPO: Creating semester for user: $userId');
+    print('DEBUG REPO: Semester name: ${semester.name}');
+
     final docRef = await _firestore
         .collection('users')
         .doc(userId)
         .collection('semesters')
         .add(semester.toFirestore());
+
+    print('DEBUG REPO: Semester created with ID: ${docRef.id}');
+    print('DEBUG REPO: Verifying write...');
+
+    // Verify the write by reading it back
+    final verifyDoc = await docRef.get();
+    print('DEBUG REPO: Write verification - exists: ${verifyDoc.exists}');
+
     return docRef.id;
   }
 
   /// Update semester
   Future<void> updateSemester(
-      String userId, String semesterId, Semester semester) async {
+      String userId, String semesterId, Map<String, dynamic> data) async {
     await _firestore
         .collection('users')
         .doc(userId)
         .collection('semesters')
         .doc(semesterId)
-        .update(semester.toFirestore());
+        .update(data);
   }
 
   // ========== MODULE OPERATIONS ==========
@@ -70,13 +98,15 @@ class FirestoreRepository {
       query = query.where('isActive', isEqualTo: true);
     }
 
-    return query.snapshots().map((snapshot) =>
+    return query.snapshots(includeMetadataChanges: true).map((snapshot) =>
         snapshot.docs.map((doc) => Module.fromFirestore(doc)).toList());
   }
 
   /// Get modules for a specific semester
   Stream<List<Module>> getModulesBySemester(
       String userId, String semesterId, {bool? activeOnly}) {
+    print('DEBUG REPO: Setting up modules stream for user: $userId, semester: $semesterId');
+
     var query = _firestore
         .collection('users')
         .doc(userId)
@@ -87,17 +117,30 @@ class FirestoreRepository {
       query = query.where('isActive', isEqualTo: true);
     }
 
-    return query.snapshots().map((snapshot) =>
-        snapshot.docs.map((doc) => Module.fromFirestore(doc)).toList());
+    return query.snapshots(includeMetadataChanges: true).map((snapshot) {
+      print('DEBUG REPO: Modules stream emitted - count: ${snapshot.docs.length}, from cache: ${snapshot.metadata.isFromCache}');
+      return snapshot.docs.map((doc) => Module.fromFirestore(doc)).toList();
+    });
   }
 
   /// Create a new module
   Future<String> createModule(String userId, Module module) async {
+    print('DEBUG REPO: Creating module for user: $userId');
+    print('DEBUG REPO: Module name: ${module.name}, Semester ID: ${module.semesterId}');
+
     final docRef = await _firestore
         .collection('users')
         .doc(userId)
         .collection('modules')
         .add(module.toFirestore());
+
+    print('DEBUG REPO: Module created with ID: ${docRef.id}');
+    print('DEBUG REPO: Verifying write...');
+
+    // Verify the write by reading it back
+    final verifyDoc = await docRef.get();
+    print('DEBUG REPO: Write verification - exists: ${verifyDoc.exists}');
+
     return docRef.id;
   }
 
@@ -134,7 +177,7 @@ class FirestoreRepository {
         .collection('modules')
         .doc(moduleId)
         .collection('recurringTasks')
-        .snapshots()
+        .snapshots(includeMetadataChanges: true)
         .map((snapshot) => snapshot.docs
             .map((doc) => RecurringTask.fromFirestore(doc, moduleId))
             .toList());
@@ -198,15 +241,17 @@ class FirestoreRepository {
 
   /// Update assessment
   Future<void> updateAssessment(
-      String userId, String moduleId, String assessmentId, Assessment assessment) async {
+      String userId, String semesterId, String moduleId, String assessmentId, Map<String, dynamic> data) async {
     await _firestore
         .collection('users')
         .doc(userId)
+        .collection('semesters')
+        .doc(semesterId)
         .collection('modules')
         .doc(moduleId)
         .collection('assessments')
         .doc(assessmentId)
-        .update(assessment.toFirestore());
+        .update(data);
   }
 
   /// Delete assessment
