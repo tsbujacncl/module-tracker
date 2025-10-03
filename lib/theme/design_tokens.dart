@@ -218,3 +218,27 @@ class DesignTokens {
     return brightness == Brightness.dark ? textSecondaryDark : textSecondaryLight;
   }
 }
+
+// ==================== CONVENIENCE ALIASES ====================
+// Aliases for commonly used spacing and radius values
+
+class AppSpacing {
+  AppSpacing._();
+  
+  static const double xs = DesignTokens.spaceXS;
+  static const double sm = DesignTokens.spaceS;
+  static const double md = DesignTokens.spaceM;
+  static const double lg = DesignTokens.spaceL;
+  static const double xl = DesignTokens.spaceXL;
+  static const double xxl = DesignTokens.spaceXXL;
+}
+
+class AppBorderRadius {
+  AppBorderRadius._();
+  
+  static const double sm = DesignTokens.radiusS;
+  static const double md = DesignTokens.radiusM;
+  static const double lg = DesignTokens.radiusL;
+  static const double xl = DesignTokens.radiusXL;
+  static const double xxl = DesignTokens.radiusXXL;
+}

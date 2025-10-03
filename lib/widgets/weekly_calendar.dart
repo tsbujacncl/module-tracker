@@ -9,6 +9,7 @@ import 'package:module_tracker/models/assessment.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/module_provider.dart';
+import 'package:module_tracker/providers/user_preferences_provider.dart';
 
 class WeeklyCalendar extends ConsumerWidget {
   final Semester semester;
@@ -898,9 +899,51 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                       if (user == null) return;
 
                       final repository = ref.read(firestoreRepositoryProvider);
+
+                      // Simple 2-state toggle by default
                       final newStatus = !isCompleted
                           ? TaskStatus.complete
                           : TaskStatus.notStarted;
+
+                      final now = DateTime.now();
+
+                      final newCompletion = TaskCompletion(
+                        id: completion.id,
+                        moduleId: module.id,
+                        taskId: assessment.id,
+                        weekNumber: weekNumber,
+                        status: newStatus,
+                        completedAt: newStatus == TaskStatus.complete ? now : null,
+                      );
+
+                      await repository.upsertTaskCompletion(
+                        user.uid,
+                        module.id,
+                        newCompletion,
+                      );
+                    },
+                    onLongPress: () async {
+                      final user = ref.read(currentUserProvider);
+                      if (user == null) return;
+
+                      final preferences = ref.read(userPreferencesProvider);
+                      if (!preferences.enableThreeStateTaskToggle) return;
+
+                      final repository = ref.read(firestoreRepositoryProvider);
+
+                      // Cycle through 3 states: notStarted -> inProgress -> complete -> notStarted
+                      TaskStatus newStatus;
+                      switch (completion.status) {
+                        case TaskStatus.notStarted:
+                          newStatus = TaskStatus.inProgress;
+                          break;
+                        case TaskStatus.inProgress:
+                          newStatus = TaskStatus.complete;
+                          break;
+                        case TaskStatus.complete:
+                          newStatus = TaskStatus.notStarted;
+                          break;
+                      }
 
                       final now = DateTime.now();
 
@@ -924,19 +967,29 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                       height: 18,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isCompleted ? const Color(0xFFEF4444) : Colors.white,
+                        color: completion.status == TaskStatus.complete
+                            ? const Color(0xFFEF4444)
+                            : completion.status == TaskStatus.inProgress
+                                ? Colors.orange
+                                : Colors.white,
                         border: Border.all(
                           color: const Color(0xFFEF4444),
                           width: 2,
                         ),
                       ),
-                      child: isCompleted
+                      child: completion.status == TaskStatus.complete
                           ? const Icon(
                               Icons.check,
                               size: 12,
                               color: Colors.white,
                             )
-                          : null,
+                          : completion.status == TaskStatus.inProgress
+                              ? const Icon(
+                                  Icons.more_horiz,
+                                  size: 12,
+                                  color: Colors.white,
+                                )
+                              : null,
                     ),
                   ),
                 ),
@@ -1113,9 +1166,89 @@ class _TimetableTaskBox extends ConsumerWidget {
                       if (user == null) return;
 
                       final repository = ref.read(firestoreRepositoryProvider);
+
+                      // Simple 2-state toggle by default
                       final newStatus = !isCompleted
                           ? TaskStatus.complete
                           : TaskStatus.notStarted;
+
+                      final now = DateTime.now();
+
+                      final newCompletion = TaskCompletion(
+                        id: completion.id,
+                        moduleId: module.id,
+                        taskId: task.id,
+                        weekNumber: weekNumber,
+                        status: newStatus,
+                        completedAt: newStatus == TaskStatus.complete ? now : null,
+                      );
+
+                      await repository.upsertTaskCompletion(
+                        user.uid,
+                        module.id,
+                        newCompletion,
+                      );
+
+                      // If completing a parent task, complete all its subtasks
+                      if (newStatus == TaskStatus.complete) {
+                        final allTasksAsync = ref.read(recurringTasksProvider(module.id));
+                        final allTasks = allTasksAsync.value;
+
+                        if (allTasks != null) {
+                          final subtasks = allTasks.where((t) => t.parentTaskId == task.id).toList();
+
+                          for (final subtask in subtasks) {
+                            final subtaskCompletion = completions.firstWhere(
+                              (c) => c.taskId == subtask.id,
+                              orElse: () => TaskCompletion(
+                                id: '',
+                                moduleId: module.id,
+                                taskId: subtask.id,
+                                weekNumber: weekNumber,
+                                status: TaskStatus.notStarted,
+                              ),
+                            );
+
+                            final newSubCompletion = TaskCompletion(
+                              id: subtaskCompletion.id,
+                              moduleId: module.id,
+                              taskId: subtask.id,
+                              weekNumber: weekNumber,
+                              status: TaskStatus.complete,
+                              completedAt: now,
+                            );
+
+                            await repository.upsertTaskCompletion(
+                              user.uid,
+                              module.id,
+                              newSubCompletion,
+                            );
+                          }
+                        }
+                      }
+                    },
+                    onLongPress: () async {
+                      final user = ref.read(currentUserProvider);
+                      if (user == null) return;
+
+                      final preferences = ref.read(userPreferencesProvider);
+                      if (!preferences.enableThreeStateTaskToggle) return;
+
+                      final repository = ref.read(firestoreRepositoryProvider);
+
+                      // Cycle through 3 states: notStarted -> inProgress -> complete -> notStarted
+                      TaskStatus newStatus;
+                      switch (completion.status) {
+                        case TaskStatus.notStarted:
+                          newStatus = TaskStatus.inProgress;
+                          break;
+                        case TaskStatus.inProgress:
+                          newStatus = TaskStatus.complete;
+                          break;
+                        case TaskStatus.complete:
+                          newStatus = TaskStatus.notStarted;
+                          break;
+                      }
 
                       final now = DateTime.now();
 
@@ -1177,21 +1310,29 @@ class _TimetableTaskBox extends ConsumerWidget {
                       height: 18,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isCompleted
+                        color: completion.status == TaskStatus.complete
                             ? getTaskColor(task.type)
-                            : Colors.white,
+                            : completion.status == TaskStatus.inProgress
+                                ? Colors.orange
+                                : Colors.white,
                         border: Border.all(
                           color: getTaskColor(task.type),
                           width: 2,
                         ),
                       ),
-                      child: isCompleted
+                      child: completion.status == TaskStatus.complete
                           ? const Icon(
                               Icons.check,
                               size: 12,
                               color: Colors.white,
                             )
-                          : null,
+                          : completion.status == TaskStatus.inProgress
+                              ? const Icon(
+                                  Icons.more_horiz,
+                                  size: 12,
+                                  color: Colors.white,
+                                )
+                              : null,
                     ),
                   ),
                 ),

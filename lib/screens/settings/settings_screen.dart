@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/theme_provider.dart';
+import 'package:module_tracker/providers/user_preferences_provider.dart';
+import 'package:module_tracker/providers/customization_provider.dart';
+import 'package:module_tracker/models/customization_preferences.dart';
+import 'package:module_tracker/screens/settings/notification_settings_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -211,6 +215,106 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _showFontSizeDialog(FontSize current) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Font Size'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: FontSize.values.map((size) {
+            return RadioListTile<FontSize>(
+              title: Text(size.displayName),
+              value: size,
+              groupValue: current,
+              onChanged: (value) {
+                if (value != null) {
+                  ref.read(customizationProvider.notifier).setFontSize(value);
+                  Navigator.pop(context);
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showWeekStartDialog(WeekStartDay current) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Week Starts On'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: WeekStartDay.values.map((day) {
+            return RadioListTile<WeekStartDay>(
+              title: Text(day.displayName),
+              value: day,
+              groupValue: current,
+              onChanged: (value) {
+                if (value != null) {
+                  ref.read(customizationProvider.notifier).setWeekStartDay(value);
+                  Navigator.pop(context);
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showTaskViewDialog(TaskView current) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Default Task View'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: TaskView.values.map((view) {
+            return RadioListTile<TaskView>(
+              title: Text(view.displayName),
+              value: view,
+              groupValue: current,
+              onChanged: (value) {
+                if (value != null) {
+                  ref.read(customizationProvider.notifier).setDefaultTaskView(value);
+                  Navigator.pop(context);
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showGradeFormatDialog(GradeDisplayFormat current) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Grade Display Format'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: GradeDisplayFormat.values.map((format) {
+            return RadioListTile<GradeDisplayFormat>(
+              title: Text(format.displayName),
+              value: format,
+              groupValue: current,
+              onChanged: (value) {
+                if (value != null) {
+                  ref.read(customizationProvider.notifier).setGradeDisplayFormat(value);
+                  Navigator.pop(context);
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showDeleteAccountDialog() async {
     final passwordController = TextEditingController();
 
@@ -292,6 +396,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final currentTheme = ref.watch(themeProvider);
+    final userPreferences = ref.watch(userPreferencesProvider);
+    final customizationPrefs = ref.watch(customizationProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -362,6 +468,127 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         onTap: _showThemeDialog,
                       ),
                       const Divider(height: 1),
+                      SwitchListTile(
+                        secondary: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.task_alt,
+                            color: Color(0xFF10B981),
+                            size: 20,
+                          ),
+                        ),
+                        title: const Text('Advanced Task Status'),
+                        subtitle: const Text('Enable 3-state toggle (not started, in progress, complete)'),
+                        value: userPreferences.enableThreeStateTaskToggle,
+                        onChanged: (value) {
+                          ref.read(userPreferencesProvider.notifier).setThreeStateTaskToggle(value);
+                        },
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.notifications_outlined,
+                            color: Color(0xFF8B5CF6),
+                            size: 20,
+                          ),
+                        ),
+                        title: const Text('Notifications'),
+                        subtitle: const Text('Manage reminders and alerts'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const NotificationSettingsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Customization Section
+                Card(
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEC4899).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.palette_outlined,
+                                color: Color(0xFFEC4899),
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Customization',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.text_fields),
+                        title: const Text('Font Size'),
+                        subtitle: Text(customizationPrefs.fontSize.displayName),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _showFontSizeDialog(customizationPrefs.fontSize),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.calendar_today),
+                        title: const Text('Week Starts On'),
+                        subtitle: Text(customizationPrefs.weekStartDay.displayName),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _showWeekStartDialog(customizationPrefs.weekStartDay),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.view_agenda),
+                        title: const Text('Default Task View'),
+                        subtitle: Text(customizationPrefs.defaultTaskView.displayName),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _showTaskViewDialog(customizationPrefs.defaultTaskView),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.grade),
+                        title: const Text('Grade Display Format'),
+                        subtitle: Text(customizationPrefs.gradeDisplayFormat.displayName),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _showGradeFormatDialog(customizationPrefs.gradeDisplayFormat),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Security Section
+                Card(
+                  child: Column(
+                    children: [
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(8),

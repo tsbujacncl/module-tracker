@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -131,7 +132,107 @@ class NotificationService {
   /// Cancel the daily reminder
   Future<void> cancelDailyReminder() async {
     await _notifications.cancel(0);
+    // Cancel all daily reminders for specific days (IDs 10-16)
+    for (int i = 10; i <= 16; i++) {
+      await _notifications.cancel(i);
+    }
     print('DEBUG NOTIFICATIONS: Daily reminder cancelled');
+  }
+
+  /// Schedule daily reminder with custom time and days
+  /// [time] - Time of day for the reminder
+  /// [days] - Set of weekdays (1=Monday, 7=Sunday)
+  Future<void> scheduleDailyReminderCustom(
+    TimeOfDay time,
+    Set<int> days,
+  ) async {
+    print('DEBUG NOTIFICATIONS: Scheduling custom daily reminder at ${time.hour}:${time.minute} for days: $days');
+
+    // Cancel existing daily reminders
+    await cancelDailyReminder();
+
+    if (days.isEmpty) {
+      print('DEBUG NOTIFICATIONS: No days selected, skipping schedule');
+      return;
+    }
+
+    final now = tz.TZDateTime.now(tz.local);
+
+    // Schedule a notification for each selected day
+    for (final day in days) {
+      // Calculate next occurrence of this weekday
+      var scheduledTime = _getNextWeekday(
+        day,
+        time.hour,
+        time.minute,
+      );
+
+      // Make sure it's in the future
+      if (scheduledTime.isBefore(now)) {
+        scheduledTime = scheduledTime.add(const Duration(days: 7));
+      }
+
+      print('DEBUG NOTIFICATIONS: Scheduling for weekday $day at $scheduledTime');
+
+      await _notifications.zonedSchedule(
+        9 + day, // IDs 10-16 for Mon-Sun
+        'Daily Task Reminder',
+        'Time to check your tasks for today!',
+        scheduledTime,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'daily_reminder_custom',
+            'Custom Daily Reminders',
+            channelDescription: 'Customizable daily task reminders',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+      );
+    }
+  }
+
+  /// Get next occurrence of a specific weekday at a specific time
+  /// [weekday] - 1=Monday, 7=Sunday
+  tz.TZDateTime _getNextWeekday(int weekday, int hour, int minute) {
+    final now = tz.TZDateTime.now(tz.local);
+    int daysUntilTarget = (weekday - now.weekday) % 7;
+
+    if (daysUntilTarget == 0) {
+      // It's the target day today
+      final targetTime = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        hour,
+        minute,
+      );
+
+      // If the time hasn't passed yet today, schedule for today
+      if (targetTime.isAfter(now)) {
+        return targetTime;
+      }
+      // Otherwise, schedule for next week
+      daysUntilTarget = 7;
+    }
+
+    return tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day + daysUntilTarget,
+      hour,
+      minute,
+    );
   }
 
   /// Send immediate notification for incomplete tasks
@@ -173,6 +274,170 @@ class NotificationService {
         ),
       ),
     );
+  }
+
+  /// Schedule weekend planning reminder (Sunday evening)
+  Future<void> scheduleWeekendPlanning(TimeOfDay time) async {
+    print('DEBUG NOTIFICATIONS: Scheduling weekend planning at ${time.hour}:${time.minute}');
+
+    await cancelWeekendPlanning();
+
+    // Schedule for Sunday (weekday 7)
+    var scheduledTime = _getNextWeekday(
+      7, // Sunday
+      time.hour,
+      time.minute,
+    );
+
+    final now = tz.TZDateTime.now(tz.local);
+    if (scheduledTime.isBefore(now)) {
+      scheduledTime = scheduledTime.add(const Duration(days: 7));
+    }
+
+    print('DEBUG NOTIFICATIONS: Next weekend planning scheduled for: $scheduledTime');
+
+    await _notifications.zonedSchedule(
+      20, // Weekend planning notification ID
+      'Plan Your Week',
+      'Take a moment to review your upcoming week!',
+      scheduledTime,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'weekend_planning',
+          'Weekend Planning',
+          channelDescription: 'Weekly planning reminders',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+    );
+  }
+
+  /// Cancel weekend planning reminder
+  Future<void> cancelWeekendPlanning() async {
+    await _notifications.cancel(20);
+    print('DEBUG NOTIFICATIONS: Weekend planning cancelled');
+  }
+
+  /// Schedule assessment due alerts
+  /// This should be called with assessment data to schedule alerts
+  Future<void> scheduleAssessmentAlert({
+    required String assessmentId,
+    required String assessmentName,
+    required DateTime dueDate,
+    required int daysBeforeDue,
+  }) async {
+    final notificationTime = dueDate.subtract(Duration(days: daysBeforeDue));
+    final now = DateTime.now();
+
+    // Don't schedule if the notification time has passed
+    if (notificationTime.isBefore(now)) {
+      print('DEBUG NOTIFICATIONS: Assessment alert time has passed, skipping');
+      return;
+    }
+
+    // Generate unique ID based on assessment and days before
+    final notificationId = 100 + assessmentId.hashCode.abs() % 1000 + daysBeforeDue;
+
+    final scheduledTime = tz.TZDateTime.from(notificationTime, tz.local);
+
+    String timeFrame = daysBeforeDue == 1 ? 'tomorrow' : 'in $daysBeforeDue days';
+
+    await _notifications.zonedSchedule(
+      notificationId,
+      'Assessment Due Soon',
+      '$assessmentName is due $timeFrame',
+      scheduledTime,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'assessment_alerts',
+          'Assessment Alerts',
+          channelDescription: 'Alerts for upcoming assessments',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+    );
+
+    print('DEBUG NOTIFICATIONS: Scheduled assessment alert for $assessmentName, due $timeFrame');
+  }
+
+  /// Cancel all assessment alerts (IDs 100-1999)
+  Future<void> cancelAllAssessmentAlerts() async {
+    for (int i = 100; i < 2000; i++) {
+      await _notifications.cancel(i);
+    }
+    print('DEBUG NOTIFICATIONS: All assessment alerts cancelled');
+  }
+
+  /// Schedule lecture reminder
+  Future<void> scheduleLectureReminder({
+    required String lectureId,
+    required String lectureName,
+    required DateTime lectureTime,
+    required int minutesBefore,
+  }) async {
+    final notificationTime = lectureTime.subtract(Duration(minutes: minutesBefore));
+    final now = DateTime.now();
+
+    // Don't schedule if the notification time has passed
+    if (notificationTime.isBefore(now)) {
+      print('DEBUG NOTIFICATIONS: Lecture reminder time has passed, skipping');
+      return;
+    }
+
+    // Generate unique ID based on lecture
+    final notificationId = 2000 + lectureId.hashCode.abs() % 1000;
+
+    final scheduledTime = tz.TZDateTime.from(notificationTime, tz.local);
+
+    await _notifications.zonedSchedule(
+      notificationId,
+      'Upcoming Lecture',
+      '$lectureName starts in $minutesBefore minutes',
+      scheduledTime,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'lecture_reminders',
+          'Lecture Reminders',
+          channelDescription: 'Reminders for upcoming lectures',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+    );
+
+    print('DEBUG NOTIFICATIONS: Scheduled lecture reminder for $lectureName');
+  }
+
+  /// Cancel all lecture reminders (IDs 2000-2999)
+  Future<void> cancelAllLectureReminders() async {
+    for (int i = 2000; i < 3000; i++) {
+      await _notifications.cancel(i);
+    }
+    print('DEBUG NOTIFICATIONS: All lecture reminders cancelled');
   }
 
   /// Handle notification tap

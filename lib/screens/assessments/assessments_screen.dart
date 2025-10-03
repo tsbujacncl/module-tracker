@@ -8,6 +8,7 @@ import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/module_provider.dart';
 import 'package:module_tracker/screens/assessments/assessment_detail_screen.dart';
 import 'package:module_tracker/widgets/assessment_weighting_indicator.dart';
+import 'package:module_tracker/widgets/tbc_assessment_banner.dart';
 import 'package:module_tracker/theme/design_tokens.dart';
 
 class AssignmentsScreen extends ConsumerWidget {
@@ -154,9 +155,13 @@ class _ModuleAssessmentCard extends ConsumerWidget {
           return const SizedBox.shrink();
         }
 
+        // Separate TBC (To Be Confirmed) assessments from regular ones
+        final tbcAssessments = assessments.where((a) => a.dueDate == null).toList();
+        final confirmedAssessments = assessments.where((a) => a.dueDate != null).toList();
+
         final totalWeighting = assessments.fold<double>(0, (sum, a) => sum + a.weighting);
         final unaccountedPercentage = math.max(0.0, 100.0 - totalWeighting);
-        final colors = generateColors(assessments.length);
+        final colors = generateColors(confirmedAssessments.length);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 16),
@@ -214,11 +219,28 @@ class _ModuleAssessmentCard extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 20),
+                // TBC Banner
+                if (tbcAssessments.isNotEmpty) ...[
+                  TbcAssessmentBanner(
+                    tbcCount: tbcAssessments.length,
+                    onTap: () {
+                      // Show TBC assessments dialog or scroll to TBC section
+                      showDialog(
+                        context: context,
+                        builder: (context) => _TbcAssessmentsDialog(
+                          assessments: tbcAssessments,
+                          module: module,
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                ],
                 const Divider(),
                 const SizedBox(height: 20),
                 // Assignment list
                 Text(
-                  'Assignments',
+                  'Confirmed Assignments',
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -226,7 +248,7 @@ class _ModuleAssessmentCard extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                ...assessments.asMap().entries.map((entry) {
+                ...confirmedAssessments.asMap().entries.map((entry) {
                   final index = entry.key;
                   final assessment = entry.value;
                   return Padding(
@@ -388,6 +410,139 @@ class _ModuleAssessmentCard extends ConsumerWidget {
       },
       loading: () => const SizedBox.shrink(),
       error: (error, stack) => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _TbcAssessmentsDialog extends StatelessWidget {
+  final List<Assessment> assessments;
+  final Module module;
+
+  const _TbcAssessmentsDialog({
+    required this.assessments,
+    required this.module,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Icon(
+            Icons.schedule,
+            color: Color(0xFFF59E0B),
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'To Be Confirmed',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'These assessments need date confirmation:',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...assessments.map((assessment) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withOpacity(0.3),
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  color: const Color(0xFFF59E0B).withOpacity(0.05),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      assessment.name,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '${assessment.weighting.toStringAsFixed(0)}%',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFFF59E0B),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF64748B).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            assessment.type.toString().split('.').last[0].toUpperCase() +
+                                assessment.type.toString().split('.').last.substring(1),
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.pop(context);
+            // Navigate to module form to edit assessments
+            // This would require access to the module form screen
+          },
+          child: const Text('Edit Module'),
+        ),
+      ],
     );
   }
 }

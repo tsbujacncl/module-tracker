@@ -9,6 +9,7 @@ class Module {
   final bool isActive;
   final DateTime createdAt;
   final int credits;
+  final int? colorValue; // Stored as color value (e.g., 0xFF3B82F6)
 
   Module({
     required this.id,
@@ -19,6 +20,7 @@ class Module {
     required this.isActive,
     required this.createdAt,
     this.credits = 0,
+    this.colorValue,
   });
 
   factory Module.fromFirestore(DocumentSnapshot doc) {
@@ -32,6 +34,7 @@ class Module {
       isActive: data['isActive'] ?? true,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       credits: data['credits'] ?? 0,
+      colorValue: data['colorValue'] as int?,
     );
   }
 
@@ -44,6 +47,7 @@ class Module {
       'isActive': isActive,
       'createdAt': Timestamp.fromDate(createdAt),
       'credits': credits,
+      'colorValue': colorValue,
     };
   }
 
@@ -58,6 +62,7 @@ class Module {
       isActive: map['isActive'] ?? true,
       createdAt: DateTime.parse(map['createdAt']),
       credits: map['credits'] ?? 0,
+      colorValue: map['colorValue'] as int?,
     );
   }
 
@@ -71,6 +76,7 @@ class Module {
       'isActive': isActive,
       'createdAt': createdAt.toIso8601String(),
       'credits': credits,
+      'colorValue': colorValue,
     };
   }
 
@@ -83,6 +89,7 @@ class Module {
     bool? isActive,
     DateTime? createdAt,
     int? credits,
+    int? colorValue,
   }) {
     return Module(
       id: id ?? this.id,
@@ -93,6 +100,7 @@ class Module {
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       credits: credits ?? this.credits,
+      colorValue: colorValue ?? this.colorValue,
     );
   }
 }

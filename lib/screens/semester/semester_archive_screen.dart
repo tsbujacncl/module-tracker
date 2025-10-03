@@ -7,8 +7,16 @@ import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:intl/intl.dart';
 
-class SemesterArchiveScreen extends ConsumerWidget {
+class SemesterArchiveScreen extends ConsumerStatefulWidget {
   const SemesterArchiveScreen({super.key});
+
+  @override
+  ConsumerState<SemesterArchiveScreen> createState() => _SemesterArchiveScreenState();
+}
+
+class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
+  int _displayCount = 10; // Initial display count
+  String? _selectedYear; // Filter by year
 
   Future<void> _archiveSemester(
     BuildContext context,
@@ -87,9 +95,27 @@ class SemesterArchiveScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final currentSemester = ref.watch(currentSemesterProvider);
-    final archivedSemesters = ref.watch(archivedSemestersProvider);
+    final allArchivedSemesters = ref.watch(archivedSemestersProvider);
+
+    // Filter by year if selected
+    final filteredSemesters = _selectedYear != null
+        ? allArchivedSemesters.where((s) {
+            return s.startDate.year.toString() == _selectedYear;
+          }).toList()
+        : allArchivedSemesters;
+
+    // Apply pagination
+    final archivedSemesters = filteredSemesters.take(_displayCount).toList();
+    final hasMore = filteredSemesters.length > _displayCount;
+
+    // Get unique years for filter
+    final years = allArchivedSemesters
+        .map((s) => s.startDate.year.toString())
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a)); // Sort descending
 
     return Scaffold(
       appBar: AppBar(
@@ -100,6 +126,49 @@ class SemesterArchiveScreen extends ConsumerWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
+        actions: [
+          // Year filter
+          if (years.isNotEmpty)
+            PopupMenuButton<String?>(
+              icon: const Icon(Icons.filter_list),
+              tooltip: 'Filter by year',
+              onSelected: (year) {
+                setState(() {
+                  _selectedYear = year;
+                  _displayCount = 10; // Reset pagination on filter change
+                });
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem<String?>(
+                  value: null,
+                  child: Row(
+                    children: [
+                      if (_selectedYear == null)
+                        const Icon(Icons.check, size: 18)
+                      else
+                        const SizedBox(width: 18),
+                      const SizedBox(width: 8),
+                      const Text('All Years'),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                ...years.map((year) => PopupMenuItem<String>(
+                      value: year,
+                      child: Row(
+                        children: [
+                          if (_selectedYear == year)
+                            const Icon(Icons.check, size: 18)
+                          else
+                            const SizedBox(width: 18),
+                          const SizedBox(width: 8),
+                          Text(year),
+                        ],
+                      ),
+                    )),
+              ],
+            ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -155,7 +224,7 @@ class SemesterArchiveScreen extends ConsumerWidget {
                   ),
                 ),
               )
-            else
+            else ...[
               ...archivedSemesters.map(
                 (semester) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -166,6 +235,35 @@ class SemesterArchiveScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              // Load More button
+              if (hasMore)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16, bottom: 32),
+                  child: Center(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _displayCount += 10; // Load 10 more
+                        });
+                      },
+                      icon: const Icon(Icons.expand_more),
+                      label: Text(
+                        'Load More (${filteredSemesters.length - _displayCount} remaining)',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
         ],
       ),
     );
