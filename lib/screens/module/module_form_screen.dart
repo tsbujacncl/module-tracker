@@ -152,7 +152,8 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
 
   void _addRecurringTask() {
     setState(() {
-      _recurringTasks.add(_RecurringTaskInput());
+      // Add to top of list (stack behavior)
+      _recurringTasks.insert(0, _RecurringTaskInput());
     });
   }
 
@@ -164,7 +165,8 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
 
   void _addAssessment() {
     setState(() {
-      _assessments.add(_AssessmentInput());
+      // Add to top of list (stack behavior)
+      _assessments.insert(0, _AssessmentInput());
     });
   }
 
@@ -289,6 +291,18 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
         );
         print('DEBUG: Module created with ID: $moduleId');
       }
+
+      // Sort recurring tasks by day of week (Monday to Sunday)
+      _recurringTasks.sort((a, b) => a.dayOfWeek.compareTo(b.dayOfWeek));
+
+      // Sort assessments by due date (earliest first)
+      _assessments.sort((a, b) {
+        // Handle null dates - put them at the end
+        if (a.dueDate == null && b.dueDate == null) return 0;
+        if (a.dueDate == null) return 1;
+        if (b.dueDate == null) return -1;
+        return a.dueDate!.compareTo(b.dueDate!);
+      });
 
       // Create recurring tasks (lectures/labs/tutorials)
       for (final taskInput in _recurringTasks) {
@@ -514,13 +528,9 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
                     ),
                   ],
                 ),
-                FilledButton.icon(
+                IconButton(
+                  icon: const Icon(Icons.add_circle),
                   onPressed: _addRecurringTask,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add Scheduled Item'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
                 ),
               ],
             ),
@@ -546,7 +556,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Click "Add Scheduled Item" to add lectures, labs, or tutorials',
+                      'Tap the + button to add lectures, labs, or tutorials',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Colors.grey[500],
                       ),
@@ -683,6 +693,29 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
     return names.toList();
   }
 
+  // Parse time string (e.g., "09:00") to TimeOfDay
+  TimeOfDay? _parseTimeOfDay(String? timeString) {
+    if (timeString == null || timeString.isEmpty) return null;
+    try {
+      final parts = timeString.split(':');
+      if (parts.length == 2) {
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+        return TimeOfDay(hour: hour, minute: minute);
+      }
+    } catch (e) {
+      // Invalid format, return null
+    }
+    return null;
+  }
+
+  // Format TimeOfDay to string (e.g., "09:00")
+  String _formatTimeOfDay(TimeOfDay time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -795,52 +828,65 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
             Row(
               children: [
                 Expanded(
-                  child: TextFormField(
-                    initialValue: widget.task.time,
-                    decoration: const InputDecoration(
-                      labelText: 'Start Time',
-                      hintText: '09:00',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.access_time),
-                    ),
-                    onChanged: (value) {
-                      widget.task.time = value;
-                      widget.onChanged();
+                  child: InkWell(
+                    onTap: () async {
+                      final TimeOfDay? picked = await showTimePicker(
+                        context: context,
+                        initialTime: _parseTimeOfDay(widget.task.time) ?? const TimeOfDay(hour: 9, minute: 0),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          widget.task.time = _formatTimeOfDay(picked);
+                          widget.onChanged();
+                        });
+                      }
                     },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Start Time',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.access_time),
+                      ),
+                      child: Text(
+                        (widget.task.time?.isNotEmpty ?? false) ? widget.task.time! : 'Select time',
+                        style: TextStyle(
+                          color: (widget.task.time?.isNotEmpty ?? false) ? null : Colors.grey[600],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: TextFormField(
-                    initialValue: widget.task.endTime,
-                    decoration: const InputDecoration(
-                      labelText: 'End Time',
-                      hintText: '10:00',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.access_time),
-                    ),
-                    onChanged: (value) {
-                      widget.task.endTime = value;
-                      widget.onChanged();
+                  child: InkWell(
+                    onTap: () async {
+                      final TimeOfDay? picked = await showTimePicker(
+                        context: context,
+                        initialTime: _parseTimeOfDay(widget.task.endTime) ?? const TimeOfDay(hour: 10, minute: 0),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          widget.task.endTime = _formatTimeOfDay(picked);
+                          widget.onChanged();
+                        });
+                      }
                     },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'End Time',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.access_time),
+                      ),
+                      child: Text(
+                        widget.task.endTime?.isNotEmpty == true ? widget.task.endTime! : 'Select time',
+                        style: TextStyle(
+                          color: widget.task.endTime?.isNotEmpty == true ? null : Colors.grey[600],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            // Location
-            TextFormField(
-              initialValue: widget.task.location,
-              decoration: const InputDecoration(
-                labelText: 'Location (Optional)',
-                hintText: 'Room 101',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.location_on),
-              ),
-              onChanged: (value) {
-                widget.task.location = value;
-                widget.onChanged();
-              },
             ),
             const SizedBox(height: 16),
             // Custom tasks section

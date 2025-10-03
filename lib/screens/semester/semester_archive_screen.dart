@@ -101,21 +101,9 @@ class SemesterArchiveScreen extends ConsumerWidget {
           ),
         ),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF0F9FF),
-              Color(0xFFE0F2FE),
-              Color(0xFFBAE6FD),
-            ],
-          ),
-        ),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
             // Current Semester Section
             if (currentSemester != null) ...[
               Text(
@@ -178,8 +166,7 @@ class SemesterArchiveScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-          ],
-        ),
+        ],
       ),
     );
   }

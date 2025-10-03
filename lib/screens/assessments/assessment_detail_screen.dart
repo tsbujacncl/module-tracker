@@ -93,25 +93,13 @@ class _AssessmentDetailScreenState extends ConsumerState<AssessmentDetailScreen>
           ),
         ),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF0F9FF),
-              Color(0xFFE0F2FE),
-              Color(0xFFBAE6FD),
-            ],
-          ),
-        ),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
             // Assessment Card
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).cardTheme.color,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -364,7 +352,6 @@ class _AssessmentDetailScreenState extends ConsumerState<AssessmentDetailScreen>
               ),
             ),
           ],
-        ),
       ),
     );
   }

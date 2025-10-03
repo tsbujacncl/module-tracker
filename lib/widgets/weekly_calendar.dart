@@ -247,13 +247,19 @@ class WeeklyCalendar extends ConsumerWidget {
     final maxHeight = MediaQuery.of(context).size.height * 0.4;
     final pixelsPerHour = maxHeight / totalHours;
 
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = Theme.of(context).cardTheme.color ?? (isDarkMode ? const Color(0xFF1E293B) : Colors.white);
+    final headerColor = isDarkMode ? const Color(0xFF334155) : const Color(0xFFF0F9FF);
+    final legendColor = isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFFAFAFA);
+    final borderColor = isDarkMode ? const Color(0xFF334155) : const Color(0xFFE0F2FE);
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -265,7 +271,7 @@ class WeeklyCalendar extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0F9FF),
+              color: headerColor,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
@@ -292,7 +298,7 @@ class WeeklyCalendar extends ConsumerWidget {
                             fontWeight: FontWeight.w600,
                             color: isToday
                                 ? const Color(0xFF0EA5E9)
-                                : const Color(0xFF64748B),
+                                : (isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -313,7 +319,7 @@ class WeeklyCalendar extends ConsumerWidget {
                                 fontWeight: FontWeight.w600,
                                 color: isToday
                                     ? Colors.white
-                                    : const Color(0xFF0F172A),
+                                    : (isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A)),
                               ),
                             ),
                           ),
@@ -456,7 +462,7 @@ class WeeklyCalendar extends ConsumerWidget {
                               '${hour.toString().padLeft(2, '0')}:00',
                               style: GoogleFonts.inter(
                                 fontSize: 11,
-                                color: const Color(0xFF64748B),
+                                color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -613,15 +619,15 @@ class WeeklyCalendar extends ConsumerWidget {
                             Container(
                               padding: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFEF2F2),
+                                color: isDarkMode ? const Color(0xFF7F1D1D) : const Color(0xFFFEF2F2),
                                 border: Border(
                                   left: BorderSide(
-                                    color: const Color(0xFFE0F2FE).withOpacity(0.5),
+                                    color: borderColor.withOpacity(0.5),
                                     width: 1,
                                   ),
                                   right: index == 4
                                       ? BorderSide(
-                                          color: const Color(0xFFE0F2FE).withOpacity(0.5),
+                                          color: borderColor.withOpacity(0.5),
                                           width: 1,
                                         )
                                       : BorderSide.none,
@@ -649,12 +655,12 @@ class WeeklyCalendar extends ConsumerWidget {
                               decoration: BoxDecoration(
                                 border: Border(
                                   left: BorderSide(
-                                    color: const Color(0xFFE0F2FE).withOpacity(0.5),
+                                    color: borderColor.withOpacity(0.5),
                                     width: 1,
                                   ),
                                   right: index == 4
                                       ? BorderSide(
-                                          color: const Color(0xFFE0F2FE).withOpacity(0.5),
+                                          color: borderColor.withOpacity(0.5),
                                           width: 1,
                                         )
                                       : BorderSide.none,
@@ -676,7 +682,7 @@ class WeeklyCalendar extends ConsumerWidget {
                                       right: 0,
                                       child: Container(
                                         height: 1,
-                                        color: const Color(0xFFE0F2FE).withOpacity(0.3),
+                                        color: borderColor.withOpacity(0.3),
                                       ),
                                     );
                                   }),
@@ -697,9 +703,9 @@ class WeeklyCalendar extends ConsumerWidget {
           // Legend
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: const BoxDecoration(
-              color: Color(0xFFFAFAFA),
-              borderRadius: BorderRadius.only(
+            decoration: BoxDecoration(
+              color: legendColor,
+              borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(16),
                 bottomRight: Radius.circular(16),
               ),
@@ -740,6 +746,7 @@ class _LegendItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -756,7 +763,7 @@ class _LegendItem extends StatelessWidget {
           label,
           style: GoogleFonts.inter(
             fontSize: 11,
-            color: const Color(0xFF64748B),
+            color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
           ),
         ),
       ],
@@ -800,6 +807,7 @@ class _TimetableAssessmentBox extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final completionsAsync = ref.watch(
         taskCompletionsProvider((moduleId: module.id, weekNumber: weekNumber)));
 
@@ -857,7 +865,7 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                         style: GoogleFonts.inter(
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF0F172A),
+                          color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
                           height: 1.1,
                         ),
                         maxLines: 1,
@@ -869,7 +877,7 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                         style: GoogleFonts.inter(
                           fontSize: 8,
                           fontWeight: FontWeight.w500,
-                          color: const Color(0xFF64748B),
+                          color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                           height: 1.0,
                         ),
                         maxLines: 1,
@@ -991,6 +999,7 @@ class _TimetableTaskBox extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final completionsAsync = ref.watch(
         taskCompletionsProvider((moduleId: module.id, weekNumber: weekNumber)));
 
@@ -1048,7 +1057,7 @@ class _TimetableTaskBox extends ConsumerWidget {
                         style: GoogleFonts.inter(
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF0F172A),
+                          color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
                           height: 1.1,
                         ),
                         maxLines: 1,
@@ -1059,7 +1068,7 @@ class _TimetableTaskBox extends ConsumerWidget {
                         style: GoogleFonts.inter(
                           fontSize: 8,
                           fontWeight: FontWeight.w500,
-                          color: const Color(0xFF64748B),
+                          color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                           height: 1.0,
                         ),
                         maxLines: 1,
@@ -1071,7 +1080,7 @@ class _TimetableTaskBox extends ConsumerWidget {
                             Icon(
                               Icons.location_on,
                               size: 7,
-                              color: const Color(0xFF64748B),
+                              color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                             ),
                             const SizedBox(width: 2),
                             Expanded(
@@ -1079,7 +1088,7 @@ class _TimetableTaskBox extends ConsumerWidget {
                                 task.location!,
                                 style: GoogleFonts.inter(
                                   fontSize: 7,
-                                  color: const Color(0xFF64748B),
+                                  color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                                   height: 1.0,
                                 ),
                                 maxLines: 1,

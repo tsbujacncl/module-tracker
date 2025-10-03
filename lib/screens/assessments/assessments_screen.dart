@@ -7,6 +7,8 @@ import 'package:module_tracker/models/assessment.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/module_provider.dart';
 import 'package:module_tracker/screens/assessments/assessment_detail_screen.dart';
+import 'package:module_tracker/widgets/assessment_weighting_indicator.dart';
+import 'package:module_tracker/theme/design_tokens.dart';
 
 class AssignmentsScreen extends ConsumerWidget {
   const AssignmentsScreen({super.key});
@@ -52,19 +54,7 @@ class AssignmentsScreen extends ConsumerWidget {
           ),
         ),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF0F9FF),
-              Color(0xFFE0F2FE),
-              Color(0xFFBAE6FD),
-            ],
-          ),
-        ),
-        child: modulesAsync.when(
+      body: modulesAsync.when(
           data: (modules) {
             if (modules.isEmpty) {
               return Center(
@@ -141,7 +131,6 @@ class AssignmentsScreen extends ConsumerWidget {
             child: Text('Error: $error'),
           ),
         ),
-      ),
     );
   }
 }
@@ -334,6 +323,13 @@ class _ModuleAssessmentCard extends ConsumerWidget {
                     ),
                   );
                 }),
+                const SizedBox(height: 20),
+                const Divider(),
+                const SizedBox(height: 20),
+                // Weighting indicator
+                AssessmentWeightingIndicator(
+                  assessments: assessments,
+                ),
                 const SizedBox(height: 20),
                 const Divider(),
                 const SizedBox(height: 20),

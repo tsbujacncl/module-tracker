@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
+import 'package:module_tracker/providers/theme_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -164,6 +165,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  Future<void> _showThemeDialog() async {
+    final currentTheme = ref.read(themeProvider);
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Choose Theme'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: AppThemeMode.values.map((mode) {
+            return RadioListTile<AppThemeMode>(
+              title: Text(mode.displayName),
+              subtitle: Text(_getThemeDescription(mode)),
+              secondary: Icon(mode.icon),
+              value: mode,
+              groupValue: currentTheme,
+              onChanged: (value) {
+                if (value != null) {
+                  ref.read(themeProvider.notifier).setThemeMode(value);
+                  Navigator.pop(context);
+                }
+              },
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getThemeDescription(AppThemeMode mode) {
+    switch (mode) {
+      case AppThemeMode.light:
+        return 'Always use light theme';
+      case AppThemeMode.dark:
+        return 'Always use dark theme';
+      case AppThemeMode.system:
+        return 'Follow device settings';
+    }
+  }
+
   Future<void> _showDeleteAccountDialog() async {
     final passwordController = TextEditingController();
 
@@ -244,6 +291,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
+    final currentTheme = ref.watch(themeProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -255,24 +303,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF0F9FF),
-              Color(0xFFE0F2FE),
-              Color(0xFFBAE6FD),
-            ],
-          ),
-        ),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 600),
-            child: ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
                 // Account Information
                 Card(
                   child: Padding(
@@ -307,6 +343,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Card(
                   child: Column(
                     children: [
+                      ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            currentTheme.icon,
+                            color: const Color(0xFF8B5CF6),
+                            size: 20,
+                          ),
+                        ),
+                        title: const Text('Theme'),
+                        subtitle: Text(currentTheme.displayName),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: _showThemeDialog,
+                      ),
+                      const Divider(height: 1),
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(8),
@@ -373,7 +428,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ),
-      ),
     );
   }
 }

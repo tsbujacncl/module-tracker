@@ -12,6 +12,10 @@ import 'package:module_tracker/screens/semester/semester_archive_screen.dart';
 import 'package:module_tracker/widgets/module_card.dart';
 import 'package:module_tracker/widgets/week_navigation_bar.dart';
 import 'package:module_tracker/widgets/weekly_calendar.dart';
+import 'package:module_tracker/widgets/shared/empty_state.dart';
+import 'package:module_tracker/widgets/shared/app_loading_indicator.dart';
+import 'package:module_tracker/widgets/shared/app_error_state.dart';
+import 'package:module_tracker/theme/design_tokens.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -117,116 +121,25 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(width: 16),
         ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF0F9FF),
-              Color(0xFFE0F2FE),
-              Color(0xFFBAE6FD),
-            ],
-          ),
-        ),
-        child: semestersAsync.when(
+      body: semestersAsync.when(
           data: (semesters) {
             print('DEBUG HOME: Semesters data received - count: ${semesters.length}');
             if (semesters.isEmpty) {
               print('DEBUG HOME: No semesters found, showing empty state');
               // No semester setup yet - show add module button
-              return Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 400),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4)],
-                          ),
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF0EA5E9).withOpacity(0.3),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.school_rounded,
-                          size: 64,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'No Modules Yet',
-                        style: GoogleFonts.poppins(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF1E293B),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Text(
-                          'Add your first module to get started',
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            color: const Color(0xFF64748B),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4)],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF0EA5E9).withOpacity(0.4),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const ModuleFormScreen(),
-                              ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                          ),
-                          icon: const Icon(Icons.add_rounded, color: Colors.white),
-                          label: Text(
-                            'Add Module',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              return EmptyState(
+                icon: Icons.school_rounded,
+                title: 'No Modules Yet',
+                message: 'Add your first module to get started',
+                actionText: 'Add Module',
+                onAction: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ModuleFormScreen(),
+                    ),
+                  );
+                },
               );
             }
 
@@ -241,32 +154,10 @@ class HomeScreen extends ConsumerWidget {
               print('DEBUG HOME: Modules data received - count: ${modules.length}');
               if (modules.isEmpty) {
                 print('DEBUG HOME: No modules found for semester, showing empty state');
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.school,
-                        size: 64,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No Modules Yet',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Add your first module to start tracking',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(
-                              color: Colors.grey[600],
-                            ),
-                      ),
-                    ],
-                  ),
+                return const EmptyStateCompact(
+                  icon: Icons.school,
+                  title: 'No Modules Yet',
+                  message: 'Add your first module to start tracking',
                 );
               }
 
@@ -313,7 +204,7 @@ class HomeScreen extends ConsumerWidget {
                           style: GoogleFonts.poppins(
                             fontSize: 20,
                             fontWeight: FontWeight.w600,
-                            color: const Color(0xFF0F172A),
+                            color: Theme.of(context).textTheme.titleLarge?.color,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -342,30 +233,38 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   );
                 },
-                loading: () => const Center(
-                  child: CircularProgressIndicator(),
+                loading: () => const AppLoadingIndicator(
+                  message: 'Loading tasks...',
                 ),
-                error: (error, stack) => Center(
-                  child: Text('Error loading tasks: $error'),
+                error: (error, stack) => AppErrorState(
+                  message: error.toString(),
+                  onRetry: () {
+                    ref.invalidate(allCurrentSemesterTasksProvider);
+                  },
                 ),
               );
             },
-            loading: () => const Center(
-              child: CircularProgressIndicator(),
+            loading: () => const AppLoadingIndicator(
+              message: 'Loading modules...',
             ),
-            error: (error, stack) => Center(
-              child: Text('Error: $error'),
+            error: (error, stack) => AppErrorState(
+              message: error.toString(),
+              onRetry: () {
+                ref.invalidate(currentSemesterModulesProvider);
+              },
             ),
           );
           },
-          loading: () => const Center(
-            child: CircularProgressIndicator(),
+          loading: () => const AppLoadingIndicator(
+            message: 'Loading semester...',
           ),
-          error: (error, stack) => Center(
-            child: Text('Error: $error'),
+          error: (error, stack) => AppErrorState(
+            message: error.toString(),
+            onRetry: () {
+              ref.invalidate(semestersProvider);
+            },
           ),
         ),
-      ),
     );
   }
 }
