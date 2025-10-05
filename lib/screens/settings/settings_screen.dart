@@ -409,12 +409,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
+      body: ListView(
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
                 // Account Information
                 Card(
                   child: Padding(
@@ -649,12 +652,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         onTap: _showDeleteAccountDialog,
                       ),
                     ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
+      ],
+    ),
     );
   }
 }

@@ -104,3 +104,76 @@ final moduleGradeStatusProvider = Provider.family<GradeStatus, String>((ref, mod
     moduleGrade.projectedGrade,
   );
 });
+
+/// Provider for all module grades across all semesters
+final allModuleGradesProvider = Provider<List<ModuleGrade>>((ref) {
+  final modulesAsync = ref.watch(activeModulesProvider);
+
+  return modulesAsync.maybeWhen(
+    data: (modules) {
+      final grades = <ModuleGrade>[];
+
+      for (final module in modules) {
+        final moduleGrade = ref.watch(moduleGradeProvider(module.id));
+        if (moduleGrade != null) {
+          grades.add(moduleGrade);
+        }
+      }
+
+      return grades;
+    },
+    orElse: () => [],
+  );
+});
+
+/// Provider for overall average across all semesters (weighted by credits)
+final overallAverageProvider = Provider<double>((ref) {
+  final modulesAsync = ref.watch(activeModulesProvider);
+  final allGrades = ref.watch(allModuleGradesProvider);
+
+  if (allGrades.isEmpty) return 0.0;
+
+  final moduleCreditsMap = modulesAsync.maybeWhen(
+    data: (modules) {
+      return Map<String, int>.fromEntries(
+        modules.map((m) => MapEntry(m.id, m.credits)),
+      );
+    },
+    orElse: () => <String, int>{},
+  );
+
+  double totalWeightedGrade = 0.0;
+  double totalCredits = 0.0;
+
+  for (final grade in allGrades) {
+    final credits = (moduleCreditsMap[grade.moduleId] ?? 1).toDouble();
+    totalWeightedGrade += grade.currentGrade * credits;
+    totalCredits += credits;
+  }
+
+  return totalCredits > 0 ? totalWeightedGrade / totalCredits : 0.0;
+});
+
+/// Provider for total credits earned across all modules
+final totalCreditsEarnedProvider = Provider<int>((ref) {
+  final modulesAsync = ref.watch(activeModulesProvider);
+
+  return modulesAsync.maybeWhen(
+    data: (modules) {
+      return modules.fold<int>(0, (sum, module) => sum + module.credits);
+    },
+    orElse: () => 0,
+  );
+});
+
+/// Provider for current semester credits
+final semesterCreditsProvider = Provider<int>((ref) {
+  final modulesAsync = ref.watch(currentSemesterModulesProvider);
+
+  return modulesAsync.maybeWhen(
+    data: (modules) {
+      return modules.fold<int>(0, (sum, module) => sum + module.credits);
+    },
+    orElse: () => 0,
+  );
+});

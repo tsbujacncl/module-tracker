@@ -11,7 +11,8 @@ class SemesterArchiveScreen extends ConsumerStatefulWidget {
   const SemesterArchiveScreen({super.key});
 
   @override
-  ConsumerState<SemesterArchiveScreen> createState() => _SemesterArchiveScreenState();
+  ConsumerState<SemesterArchiveScreen> createState() =>
+      _SemesterArchiveScreenState();
 }
 
 class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
@@ -97,6 +98,7 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
   @override
   Widget build(BuildContext context) {
     final currentSemester = ref.watch(currentSemesterProvider);
+    final futureSemesters = ref.watch(futureSemestersProvider);
     final allArchivedSemesters = ref.watch(archivedSemestersProvider);
 
     // Filter by year if selected
@@ -111,20 +113,18 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
     final hasMore = filteredSemesters.length > _displayCount;
 
     // Get unique years for filter
-    final years = allArchivedSemesters
-        .map((s) => s.startDate.year.toString())
-        .toSet()
-        .toList()
-      ..sort((a, b) => b.compareTo(a)); // Sort descending
+    final years =
+        allArchivedSemesters
+            .map((s) => s.startDate.year.toString())
+            .toSet()
+            .toList()
+          ..sort((a, b) => b.compareTo(a)); // Sort descending
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Semester Archive',
-          style: GoogleFonts.poppins(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-          ),
+          'Semesters',
+          style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700),
         ),
         actions: [
           // Year filter
@@ -153,152 +153,208 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
                   ),
                 ),
                 const PopupMenuDivider(),
-                ...years.map((year) => PopupMenuItem<String>(
-                      value: year,
-                      child: Row(
-                        children: [
-                          if (_selectedYear == year)
-                            const Icon(Icons.check, size: 18)
-                          else
-                            const SizedBox(width: 18),
-                          const SizedBox(width: 8),
-                          Text(year),
-                        ],
-                      ),
-                    )),
+                ...years.map(
+                  (year) => PopupMenuItem<String>(
+                    value: year,
+                    child: Row(
+                      children: [
+                        if (_selectedYear == year)
+                          const Icon(Icons.check, size: 18)
+                        else
+                          const SizedBox(width: 18),
+                        const SizedBox(width: 8),
+                        Text(year),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
         children: [
-            // Current Semester Section
-            if (currentSemester != null) ...[
-              Text(
-                'Current Semester',
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _SemesterCard(
-                semester: currentSemester,
-                isArchived: false,
-                onArchive: () => _archiveSemester(context, ref, currentSemester),
-              ),
-              const SizedBox(height: 32),
-            ],
-            // Archived Semesters Section
-            Text(
-              'Archived Semesters',
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF0F172A),
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (archivedSemesters.isEmpty)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.archive_outlined,
-                        size: 64,
-                        color: Color(0xFF94A3B8),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No archived semesters',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Current Semester Section
+                if (currentSemester != null) ...[
+                  Text(
+                    'Current Semester',
+                    style: GoogleFonts.poppins(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF0F172A),
+                    ),
                   ),
-                ),
-              )
-            else ...[
-              ...archivedSemesters.map(
-                (semester) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _SemesterCard(
-                    semester: semester,
-                    isArchived: true,
-                    onRestore: () => _restoreSemester(context, ref, semester),
+                  const SizedBox(height: 12),
+                  _SemesterCard(
+                    semester: currentSemester,
+                    status: SemesterStatus.current,
+                    onArchive: () =>
+                        _archiveSemester(context, ref, currentSemester),
                   ),
-                ),
-              ),
-              // Load More button
-              if (hasMore)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16, bottom: 32),
-                  child: Center(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _displayCount += 10; // Load 10 more
-                        });
-                      },
-                      icon: const Icon(Icons.expand_more),
-                      label: Text(
-                        'Load More (${filteredSemesters.length - _displayCount} remaining)',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
+                  const SizedBox(height: 32),
+                ],
+                // Future Semesters Section
+                if (futureSemesters.isNotEmpty) ...[
+                  Text(
+                    'Future Semesters',
+                    style: GoogleFonts.poppins(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ...futureSemesters.map(
+                    (semester) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _SemesterCard(
+                        semester: semester,
+                        status: SemesterStatus.future,
+                        onArchive: () =>
+                            _archiveSemester(context, ref, semester),
                       ),
                     ),
                   ),
+                  const SizedBox(height: 32),
+                ],
+                // Archived Semesters Section
+                Text(
+                  'Archived Semesters',
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF0F172A),
+                  ),
                 ),
-            ],
+                const SizedBox(height: 12),
+                if (archivedSemesters.isEmpty)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.archive_outlined,
+                            size: 64,
+                            color: Color(0xFF94A3B8),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'No archived semesters',
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else ...[
+                  ...archivedSemesters.map(
+                    (semester) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _SemesterCard(
+                        semester: semester,
+                        status: SemesterStatus.archived,
+                        onRestore: () =>
+                            _restoreSemester(context, ref, semester),
+                      ),
+                    ),
+                  ),
+                  // Load More button
+                  if (hasMore)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16, bottom: 32),
+                      child: Center(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _displayCount += 10; // Load 10 more
+                            });
+                          },
+                          icon: const Icon(Icons.expand_more),
+                          label: Text(
+                            'Load More (${filteredSemesters.length - _displayCount} remaining)',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
+enum SemesterStatus { current, future, archived }
+
 class _SemesterCard extends StatelessWidget {
   final Semester semester;
-  final bool isArchived;
+  final SemesterStatus status;
   final VoidCallback? onArchive;
   final VoidCallback? onRestore;
 
   const _SemesterCard({
     required this.semester,
-    required this.isArchived,
+    required this.status,
     this.onArchive,
     this.onRestore,
   });
 
+  List<Color> _getGradientColors() {
+    switch (status) {
+      case SemesterStatus.current:
+        return [const Color(0xFF0EA5E9), const Color(0xFF06B6D4)];
+      case SemesterStatus.future:
+        return [const Color(0xFF8B5CF6), const Color(0xFFEC4899)];
+      case SemesterStatus.archived:
+        return [const Color(0xFF64748B), const Color(0xFF475569)];
+    }
+  }
+
+  String? _getStatusLabel() {
+    switch (status) {
+      case SemesterStatus.current:
+        return 'CURRENT';
+      case SemesterStatus.future:
+        return 'UPCOMING';
+      case SemesterStatus.archived:
+        return 'ARCHIVED';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('MMM d, y');
+    final gradientColors = _getGradientColors();
+    final statusLabel = _getStatusLabel();
 
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isArchived
-              ? [const Color(0xFF64748B), const Color(0xFF475569)]
-              : [const Color(0xFF0EA5E9), const Color(0xFF06B6D4)],
-        ),
+        gradient: LinearGradient(colors: gradientColors),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: (isArchived ? const Color(0xFF64748B) : const Color(0xFF0EA5E9))
-                .withOpacity(0.3),
+            color: gradientColors.first.withOpacity(0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -321,7 +377,7 @@ class _SemesterCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (isArchived)
+                if (statusLabel != null)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -332,7 +388,7 @@ class _SemesterCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      'ARCHIVED',
+                      statusLabel,
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -362,7 +418,7 @@ class _SemesterCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                if (!isArchived && onArchive != null)
+                if (status != SemesterStatus.archived && onArchive != null)
                   TextButton.icon(
                     onPressed: onArchive,
                     style: TextButton.styleFrom(
@@ -372,7 +428,7 @@ class _SemesterCard extends StatelessWidget {
                     icon: const Icon(Icons.archive_outlined, size: 18),
                     label: const Text('Archive'),
                   ),
-                if (isArchived && onRestore != null)
+                if (status == SemesterStatus.archived && onRestore != null)
                   TextButton.icon(
                     onPressed: onRestore,
                     style: TextButton.styleFrom(

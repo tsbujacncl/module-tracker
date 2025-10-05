@@ -89,12 +89,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         title: const Text('Create Account'),
       ),
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
+        child: SingleChildScrollView(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -285,7 +286,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           },
                     child: const Text('Already have an account? Sign In'),
                   ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

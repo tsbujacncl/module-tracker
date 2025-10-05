@@ -199,6 +199,13 @@ class LocalRepository {
     await box.delete(taskId);
   }
 
+  /// Update recurring task
+  Future<void> updateRecurringTask(
+      String userId, String moduleId, String taskId, RecurringTask task) async {
+    final box = await Hive.openBox<Map>(_tasksBox);
+    await box.put(taskId, task.toMap());
+  }
+
   // ========== ASSESSMENT OPERATIONS ==========
 
   /// Get assessments for a module

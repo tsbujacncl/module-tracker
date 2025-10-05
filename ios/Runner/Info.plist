@@ -45,6 +45,8 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIRequiresFullScreen</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

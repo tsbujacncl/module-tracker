@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:module_tracker/models/module.dart';
 import 'package:module_tracker/models/semester.dart';
 import 'package:module_tracker/models/recurring_task.dart';
@@ -51,6 +52,9 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
   final _nameController = TextEditingController();
   final _codeController = TextEditingController();
   final _creditsController = TextEditingController();
+  final _nameFocusNode = FocusNode();
+  final _codeFocusNode = FocusNode();
+  final _creditsFocusNode = FocusNode();
   bool _isLoading = false;
   String? _selectedSemesterId;
   Semester? _cachedSemester; // Cache the semester to avoid Firestore race conditions
@@ -131,8 +135,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
             ..endWeek = assessment.endWeek
             ..dayOfWeek = assessment.dayOfWeek
             ..submitTiming = assessment.submitTiming
-            ..time = assessment.time
-            ..showInCalendar = assessment.showInCalendar);
+            ..time = assessment.time);
         }
       });
 
@@ -147,6 +150,9 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
     _nameController.dispose();
     _codeController.dispose();
     _creditsController.dispose();
+    _nameFocusNode.dispose();
+    _codeFocusNode.dispose();
+    _creditsFocusNode.dispose();
     super.dispose();
   }
 
@@ -293,7 +299,12 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
       }
 
       // Sort recurring tasks by day of week (Monday to Sunday)
-      _recurringTasks.sort((a, b) => a.dayOfWeek.compareTo(b.dayOfWeek));
+      _recurringTasks.sort((a, b) {
+        if (a.dayOfWeek == null && b.dayOfWeek == null) return 0;
+        if (a.dayOfWeek == null) return 1;
+        if (b.dayOfWeek == null) return -1;
+        return a.dayOfWeek!.compareTo(b.dayOfWeek!);
+      });
 
       // Sort assessments by due date (earliest first)
       _assessments.sort((a, b) {
@@ -306,15 +317,15 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
 
       // Create recurring tasks (lectures/labs/tutorials)
       for (final taskInput in _recurringTasks) {
-        // Skip if time is not provided for scheduled items
-        if (taskInput.time == null || taskInput.time!.isEmpty) continue;
+        // Skip if time or day is not provided for scheduled items
+        if (taskInput.time == null || taskInput.time!.isEmpty || taskInput.dayOfWeek == null) continue;
 
         // Create the main scheduled item (lecture/lab/tutorial)
         final task = RecurringTask(
           id: '',
           moduleId: moduleId,
           type: taskInput.type,
-          dayOfWeek: taskInput.dayOfWeek,
+          dayOfWeek: taskInput.dayOfWeek!,
           time: taskInput.time,
           endTime: taskInput.endTime,
           name: taskInput.type.toString().split('.').last, // Use type as name
@@ -331,7 +342,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
             id: '',
             moduleId: moduleId,
             type: customTask.type,
-            dayOfWeek: taskInput.dayOfWeek, // Same day as parent
+            dayOfWeek: taskInput.dayOfWeek!, // Same day as parent
             time: null, // No specific time
             name: customTask.name,
             parentTaskId: taskId, // Link to parent
@@ -366,7 +377,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
           dayOfWeek: assessmentInput.dayOfWeek,
           submitTiming: assessmentInput.submitTiming,
           time: assessmentInput.time,
-          showInCalendar: assessmentInput.showInCalendar,
+          showInCalendar: true,
         );
 
         await repository.createAssessment(user.uid, moduleId, assessment);
@@ -432,11 +443,16 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _nameController,
+              focusNode: _nameFocusNode,
               decoration: const InputDecoration(
                 labelText: 'Module Name',
                 hintText: 'e.g., Computer Science',
                 border: OutlineInputBorder(),
               ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) {
+                FocusScope.of(context).requestFocus(_codeFocusNode);
+              },
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Please enter a module name';
@@ -447,21 +463,31 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _codeController,
+              focusNode: _codeFocusNode,
               decoration: const InputDecoration(
                 labelText: 'Module Code (Optional)',
                 hintText: 'e.g., CS101',
                 border: OutlineInputBorder(),
               ),
+              textInputAction: TextInputAction.next,
+              onFieldSubmitted: (_) {
+                FocusScope.of(context).requestFocus(_creditsFocusNode);
+              },
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _creditsController,
+              focusNode: _creditsFocusNode,
               decoration: const InputDecoration(
                 labelText: 'Credits',
                 hintText: 'e.g., 15',
                 border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) {
+                FocusScope.of(context).unfocus();
+              },
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Please enter the number of credits';
@@ -652,7 +678,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
 class _RecurringTaskInput {
   String name = '';
   RecurringTaskType type = RecurringTaskType.lecture;
-  int dayOfWeek = 1; // Monday
+  int? dayOfWeek; // No default - user must select
   String? time;
   String? endTime;
   String? location;
@@ -738,58 +764,62 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
             // Header with type and delete
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: widget.task.type == RecurringTaskType.lecture
-                        ? const Color(0xFF3B82F6).withOpacity(0.1)
-                        : const Color(0xFF10B981).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        widget.task.type == RecurringTaskType.lecture
-                            ? Icons.school
-                            : Icons.science,
-                        size: 16,
-                        color: widget.task.type == RecurringTaskType.lecture
-                            ? const Color(0xFF3B82F6)
-                            : const Color(0xFF10B981),
-                      ),
-                      const SizedBox(width: 6),
-                      DropdownButton<RecurringTaskType>(
-                        value: widget.task.type,
-                        underline: const SizedBox(),
-                        isDense: true,
-                        items: [
-                          RecurringTaskType.lecture,
-                          RecurringTaskType.lab,
-                          RecurringTaskType.tutorial,
-                        ].map((type) {
-                          return DropdownMenuItem(
-                            value: type,
-                            child: Text(
-                              type.toString().split('.').last.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: type == RecurringTaskType.lecture
-                                    ? const Color(0xFF3B82F6)
-                                    : const Color(0xFF10B981),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: widget.task.type == RecurringTaskType.lecture
+                          ? const Color(0xFF3B82F6).withOpacity(0.1)
+                          : const Color(0xFF10B981).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          widget.task.type == RecurringTaskType.lecture
+                              ? Icons.school
+                              : Icons.science,
+                          size: 16,
+                          color: widget.task.type == RecurringTaskType.lecture
+                              ? const Color(0xFF3B82F6)
+                              : const Color(0xFF10B981),
+                        ),
+                        const SizedBox(width: 6),
+                        DropdownButton<RecurringTaskType>(
+                          value: widget.task.type,
+                          underline: const SizedBox(),
+                          isDense: true,
+                          borderRadius: BorderRadius.circular(12),
+                          items: [
+                            RecurringTaskType.lecture,
+                            RecurringTaskType.lab,
+                            RecurringTaskType.tutorial,
+                          ].map((type) {
+                            return DropdownMenuItem(
+                              value: type,
+                              child: Text(
+                                type.toString().split('.').last.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: type == RecurringTaskType.lecture
+                                      ? const Color(0xFF3B82F6)
+                                      : const Color(0xFF10B981),
+                                ),
                               ),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => widget.task.type = value);
-                            widget.onChanged();
-                          }
-                        },
-                      ),
-                    ],
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => widget.task.type = value);
+                              widget.onChanged();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const Spacer(),
@@ -806,20 +836,37 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
               style: Theme.of(context).textTheme.labelMedium,
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
+            Row(
               children: List.generate(7, (index) {
                 final dayOfWeek = index + 1;
                 final isSelected = widget.task.dayOfWeek == dayOfWeek;
-                return ChoiceChip(
-                  label: Text(days[index]),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    if (selected) {
-                      setState(() => widget.task.dayOfWeek = dayOfWeek);
-                      widget.onChanged();
-                    }
-                  },
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: index < 6 ? 6 : 0),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() => widget.task.dayOfWeek = dayOfWeek);
+                        widget.onChanged();
+                      },
+                      child: Container(
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF10B981) : Theme.of(context).colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Center(
+                          child: Text(
+                            days[index],
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isSelected ? Colors.white : Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 );
               }),
             ),
@@ -833,10 +880,22 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
                       final TimeOfDay? picked = await showTimePicker(
                         context: context,
                         initialTime: _parseTimeOfDay(widget.task.time) ?? const TimeOfDay(hour: 9, minute: 0),
+                        builder: (BuildContext context, Widget? child) {
+                          return MediaQuery(
+                            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+                            child: child!,
+                          );
+                        },
                       );
                       if (picked != null) {
                         setState(() {
                           widget.task.time = _formatTimeOfDay(picked);
+                          // Automatically set end time to 1 hour later
+                          final endTime = TimeOfDay(
+                            hour: (picked.hour + 1) % 24,
+                            minute: picked.minute,
+                          );
+                          widget.task.endTime = _formatTimeOfDay(endTime);
                           widget.onChanged();
                         });
                       }
@@ -863,6 +922,12 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
                       final TimeOfDay? picked = await showTimePicker(
                         context: context,
                         initialTime: _parseTimeOfDay(widget.task.endTime) ?? const TimeOfDay(hour: 10, minute: 0),
+                        builder: (BuildContext context, Widget? child) {
+                          return MediaQuery(
+                            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+                            child: child!,
+                          );
+                        },
                       );
                       if (picked != null) {
                         setState(() {
@@ -965,7 +1030,6 @@ class _AssessmentInput {
   int? dayOfWeek;
   SubmitTiming? submitTiming;
   String? time;
-  bool showInCalendar = false;
 }
 
 class _AssessmentCard extends StatefulWidget {
@@ -984,21 +1048,168 @@ class _AssessmentCard extends StatefulWidget {
 }
 
 class _AssessmentCardState extends State<_AssessmentCard> {
+  // Parse time string (e.g., "09:00") to TimeOfDay
+  TimeOfDay? _parseTimeOfDay(String? timeString) {
+    if (timeString == null || timeString.isEmpty) return null;
+    try {
+      final parts = timeString.split(':');
+      if (parts.length == 2) {
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+        return TimeOfDay(hour: hour, minute: minute);
+      }
+    } catch (e) {
+      // Invalid format, return null
+    }
+    return null;
+  }
+
+  // Format TimeOfDay to string (e.g., "09:00")
+  String _formatTimeOfDay(TimeOfDay time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: () {
+            switch (widget.assessment.type) {
+              case AssessmentType.coursework:
+                return const Color(0xFF8B5CF6);
+              case AssessmentType.exam:
+                return const Color(0xFFEF4444);
+              case AssessmentType.weekly:
+                return const Color(0xFF3B82F6);
+            }
+          }(),
+          width: 2,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header with type and delete
+            Row(
+              children: [
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: () {
+                        switch (widget.assessment.type) {
+                          case AssessmentType.coursework:
+                            return const Color(0xFF8B5CF6).withOpacity(0.1);
+                          case AssessmentType.exam:
+                            return const Color(0xFFEF4444).withOpacity(0.1);
+                          case AssessmentType.weekly:
+                            return const Color(0xFF3B82F6).withOpacity(0.1);
+                        }
+                      }(),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          widget.assessment.type == AssessmentType.exam
+                              ? Icons.assignment
+                              : widget.assessment.type == AssessmentType.weekly
+                                  ? Icons.event_repeat
+                                  : Icons.book,
+                          size: 16,
+                          color: () {
+                            switch (widget.assessment.type) {
+                              case AssessmentType.coursework:
+                                return const Color(0xFF8B5CF6);
+                              case AssessmentType.exam:
+                                return const Color(0xFFEF4444);
+                              case AssessmentType.weekly:
+                                return const Color(0xFF3B82F6);
+                            }
+                          }(),
+                        ),
+                        const SizedBox(width: 6),
+                        DropdownButton<AssessmentType>(
+                          value: widget.assessment.type,
+                          underline: const SizedBox(),
+                          isDense: true,
+                          borderRadius: BorderRadius.circular(12),
+                          items: AssessmentType.values.map((type) {
+                            final typeName = type.toString().split('.').last;
+                            final capitalizedName = typeName[0].toUpperCase() + typeName.substring(1);
+                            Color getColor() {
+                              switch (type) {
+                                case AssessmentType.coursework:
+                                  return const Color(0xFF8B5CF6);
+                                case AssessmentType.exam:
+                                  return const Color(0xFFEF4444);
+                                case AssessmentType.weekly:
+                                  return const Color(0xFF3B82F6);
+                              }
+                            }
+                            return DropdownMenuItem(
+                              value: type,
+                              child: Text(
+                                capitalizedName.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: getColor(),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                widget.assessment.type = value;
+                                // Clear week range if switching away from weekly
+                                if (value != AssessmentType.weekly) {
+                                  widget.assessment.startWeek = null;
+                                  widget.assessment.endWeek = null;
+                                  widget.assessment.dayOfWeek = null;
+                                  widget.assessment.submitTiming = null;
+                                } else {
+                                  // Set defaults when switching to weekly
+                                  widget.assessment.submitTiming ??= SubmitTiming.startOfNextWeek;
+                                  widget.assessment.dayOfWeek ??= 1; // Default to Monday
+                                }
+                              });
+                              widget.onChanged();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: widget.onRemove,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Assessment Name and Weighting on same line
             Row(
               children: [
                 Expanded(
+                  flex: 2,
                   child: TextFormField(
                     initialValue: widget.assessment.name,
                     decoration: const InputDecoration(
-                      labelText: 'Assessment Name',
+                      labelText: 'Name',
                       border: OutlineInputBorder(),
                     ),
                     onChanged: (value) {
@@ -1007,57 +1218,12 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                     },
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: widget.onRemove,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<AssessmentType>(
-                    value: widget.assessment.type,
-                    decoration: const InputDecoration(
-                      labelText: 'Type',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: AssessmentType.values.map((type) {
-                      final typeName = type.toString().split('.').last;
-                      final capitalizedName = typeName[0].toUpperCase() + typeName.substring(1);
-                      return DropdownMenuItem(
-                        value: type,
-                        child: Text(capitalizedName),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          widget.assessment.type = value;
-                          // Clear week range if switching away from weekly
-                          if (value != AssessmentType.weekly) {
-                            widget.assessment.startWeek = null;
-                            widget.assessment.endWeek = null;
-                            widget.assessment.dayOfWeek = null;
-                            widget.assessment.submitTiming = null;
-                          } else {
-                            // Set defaults when switching to weekly
-                            widget.assessment.submitTiming ??= SubmitTiming.startOfNextWeek;
-                            widget.assessment.dayOfWeek ??= 1; // Default to Monday
-                          }
-                        });
-                        widget.onChanged();
-                      }
-                    },
-                  ),
-                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextFormField(
                     initialValue: widget.assessment.weighting?.toString(),
                     decoration: const InputDecoration(
-                      labelText: 'Weighting %',
+                      labelText: 'Weight %',
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
@@ -1109,10 +1275,14 @@ class _AssessmentCardState extends State<_AssessmentCard> {
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 value: widget.assessment.dayOfWeek,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Day of Week',
-                  border: OutlineInputBorder(),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 ),
+                borderRadius: BorderRadius.circular(12),
                 items: const [
                   DropdownMenuItem(value: 1, child: Text('Monday')),
                   DropdownMenuItem(value: 2, child: Text('Tuesday')),
@@ -1132,10 +1302,14 @@ class _AssessmentCardState extends State<_AssessmentCard> {
               const SizedBox(height: 12),
               DropdownButtonFormField<SubmitTiming>(
                 value: widget.assessment.submitTiming,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'When Due',
-                  border: OutlineInputBorder(),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 ),
+                borderRadius: BorderRadius.circular(12),
                 items: const [
                   DropdownMenuItem(
                     value: SubmitTiming.startOfNextWeek,
@@ -1167,18 +1341,6 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                   widget.onChanged();
                 },
               ),
-              const SizedBox(height: 12),
-              CheckboxListTile(
-                title: const Text('Show in Calendar'),
-                subtitle: const Text('Display this assessment in the weekly calendar view'),
-                value: widget.assessment.showInCalendar,
-                onChanged: (value) {
-                  setState(() {
-                    widget.assessment.showInCalendar = value ?? false;
-                  });
-                  widget.onChanged();
-                },
-              ),
             ],
             // Only show Due Date field for non-weekly assessments
             if (widget.assessment.type != AssessmentType.weekly) ...[
@@ -1186,6 +1348,7 @@ class _AssessmentCardState extends State<_AssessmentCard> {
               Row(
                 children: [
                   Expanded(
+                    flex: 2,
                     child: ListTile(
                       title: const Text('Due Date'),
                       subtitle: Text(
@@ -1229,33 +1392,41 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                       },
                       tooltip: 'Clear date',
                     ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () async {
+                        final TimeOfDay? picked = await showTimePicker(
+                          context: context,
+                          initialTime: _parseTimeOfDay(widget.assessment.time) ?? const TimeOfDay(hour: 17, minute: 0),
+                          builder: (BuildContext context, Widget? child) {
+                            return MediaQuery(
+                              data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+                              child: child!,
+                            );
+                          },
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            widget.assessment.time = _formatTimeOfDay(picked);
+                            widget.onChanged();
+                          });
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Time',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.access_time),
+                        ),
+                        child: Text(
+                          widget.assessment.time?.isNotEmpty == true ? widget.assessment.time! : '',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                initialValue: widget.assessment.time,
-                decoration: const InputDecoration(
-                  labelText: 'Time',
-                  hintText: 'e.g., 17:00',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.access_time),
-                ),
-                onChanged: (value) {
-                  widget.assessment.time = value;
-                  widget.onChanged();
-                },
-              ),
-              const SizedBox(height: 12),
-              CheckboxListTile(
-                title: const Text('Show in Calendar'),
-                subtitle: const Text('Display this assessment in the weekly calendar view'),
-                value: widget.assessment.showInCalendar,
-                onChanged: (value) {
-                  setState(() {
-                    widget.assessment.showInCalendar = value ?? false;
-                  });
-                  widget.onChanged();
-                },
               ),
             ],
             const SizedBox(height: 12),

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:module_tracker/services/sync_queue_service.dart';
-import 'package:module_tracker/repositories/firestore_repository.dart';
 import 'package:module_tracker/models/sync_queue_item.dart';
 
 /// Connection status

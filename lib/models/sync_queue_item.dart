@@ -1,35 +1,13 @@
-import 'package:hive/hive.dart';
-
-part 'sync_queue_item.g.dart';
-
 /// Represents a pending sync operation
-@HiveType(typeId: 10)
 class SyncQueueItem {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final SyncOperation operation;
-
-  @HiveField(2)
   final SyncEntityType entityType;
-
-  @HiveField(3)
   final String entityId;
-
-  @HiveField(4)
   final Map<String, dynamic> data;
-
-  @HiveField(5)
   final DateTime timestamp;
-
-  @HiveField(6)
   final int retryCount;
-
-  @HiveField(7)
   final String? parentId; // For nested entities (e.g., assessment under module)
-
-  @HiveField(8)
   final String userId;
 
   const SyncQueueItem({
@@ -98,27 +76,17 @@ class SyncQueueItem {
 }
 
 /// Type of sync operation
-@HiveType(typeId: 11)
 enum SyncOperation {
-  @HiveField(0)
   create,
-  @HiveField(1)
   update,
-  @HiveField(2)
   delete,
 }
 
 /// Type of entity being synced
-@HiveType(typeId: 12)
 enum SyncEntityType {
-  @HiveField(0)
   semester,
-  @HiveField(1)
   module,
-  @HiveField(2)
   weeklyTask,
-  @HiveField(3)
   assessment,
-  @HiveField(4)
   taskCompletion,
 }

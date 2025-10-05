@@ -58,8 +58,8 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   timezone: ^0.9.4
 
-  # Background tasks
-  workmanager: ^0.5.2
+  # Connectivity
+  connectivity_plus: ^6.1.2
 
 dev_dependencies:
   flutter_test:
@@ -128,7 +128,8 @@ flutter:
 # App icon configuration
 flutter_launcher_icons:
   android: true
-  ios: false
+  ios: true
+  remove_alpha_ios: true
   web:
     generate: true
     image_path: "assets/images/module_tracker_logo.png"

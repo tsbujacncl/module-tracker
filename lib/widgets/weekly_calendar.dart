@@ -9,27 +9,43 @@ import 'package:module_tracker/models/assessment.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/module_provider.dart';
+import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
 
 class WeeklyCalendar extends ConsumerWidget {
-  final Semester semester;
+  final Semester? semester;
   final int currentWeek;
   final List<Module> modules;
   final Map<String, List<RecurringTask>> tasksByModule;
   final Map<String, List<Assessment>> assessmentsByModule;
+  final DateTime? weekStartDate;
 
   const WeeklyCalendar({
     super.key,
-    required this.semester,
+    this.semester,
     required this.currentWeek,
     required this.modules,
     required this.tasksByModule,
     required this.assessmentsByModule,
+    this.weekStartDate,
   });
 
   // Get the week start date (Monday)
   DateTime getWeekStartDate() {
-    return semester.startDate.add(Duration(days: (currentWeek - 1) * 7));
+    // If weekStartDate is provided, use it
+    if (weekStartDate != null) {
+      return weekStartDate!;
+    }
+
+    // If semester is provided, calculate from semester start
+    if (semester != null) {
+      return semester!.startDate.add(Duration(days: (currentWeek - 1) * 7));
+    }
+
+    // Otherwise, use current week's Monday
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    return DateTime(monday.year, monday.month, monday.day);
   }
 
   // Get color for task type
@@ -103,6 +119,9 @@ class WeeklyCalendar extends ConsumerWidget {
     final currentDate = weekStart.add(Duration(days: dayOfWeek - 1));
     final assessments = <AssessmentWithModule>[];
 
+    // If no semester, no assessments to show
+    if (semester == null) return assessments;
+
     for (final entry in assessmentsByModule.entries) {
       final moduleId = entry.key;
       final moduleAssessments = entry.value;
@@ -117,7 +136,7 @@ class WeeklyCalendar extends ConsumerWidget {
 
           if (assessment.type == AssessmentType.weekly) {
             // Get all due dates for this weekly assessment
-            final dueDates = assessment.getWeeklyDueDates(semester.startDate);
+            final dueDates = assessment.getWeeklyDueDates(semester!.startDate);
 
             // Check if any due date matches the current date
             for (final dueDate in dueDates) {
@@ -244,8 +263,10 @@ class WeeklyCalendar extends ConsumerWidget {
     final endHour = timeRange.$2;
     final totalHours = endHour - startHour;
 
-    // Calculate pixels per hour to fill 40% of screen height
-    final maxHeight = MediaQuery.of(context).size.height * 0.4;
+    // Calculate pixels per hour to fill screen height (more on narrow screens)
+    final screenWidth = MediaQuery.of(context).size.width;
+    final heightRatio = screenWidth < 400 ? 0.5 : 0.45;
+    final maxHeight = MediaQuery.of(context).size.height * heightRatio;
     final pixelsPerHour = maxHeight / totalHours;
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -272,7 +293,7 @@ class WeeklyCalendar extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
-              color: headerColor,
+              color: legendColor,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
@@ -281,7 +302,7 @@ class WeeklyCalendar extends ConsumerWidget {
             child: Row(
               children: [
                 // Time column header (empty space)
-                const SizedBox(width: 60),
+                const SizedBox(width: 32),
                 // Day headers (Monday to Friday only)
                 ...List.generate(5, (index) {
                   final date = weekStart.add(Duration(days: index));
@@ -449,7 +470,7 @@ class WeeklyCalendar extends ConsumerWidget {
                   children: [
                     // Time column
                     SizedBox(
-                      width: 60,
+                      width: 32,
                       height: totalHeight,
                       child: Column(
                         children: List.generate(totalHours, (index) {
@@ -458,14 +479,16 @@ class WeeklyCalendar extends ConsumerWidget {
                           return Container(
                             height: pixelsPerHour * multiplier,
                             alignment: Alignment.topRight,
-                            padding: const EdgeInsets.only(right: 8, top: 4),
+                            padding: const EdgeInsets.only(right: 4, top: 4),
                             child: Text(
                               '${hour.toString().padLeft(2, '0')}:00',
                               style: GoogleFonts.inter(
-                                fontSize: 11,
+                                fontSize: 9,
                                 color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                                 fontWeight: FontWeight.w500,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.visible,
                             ),
                           );
                         }),
@@ -586,13 +609,15 @@ class WeeklyCalendar extends ConsumerWidget {
                       if (event.isTask) {
                         allItems.add(Positioned(
                           top: itemTop,
-                          left: 4,
-                          right: 4,
+                          left: 2,
+                          right: 2,
                           child: _TimetableTaskBox(
                             task: event.taskWithModule!.task,
                             module: event.taskWithModule!.module,
                             height: itemHeight,
                             weekNumber: currentWeek,
+                            dayOfWeek: dayOfWeek,
+                            semester: semester!,
                             getTaskColor: getTaskColor,
                             getTaskTypeName: getTaskTypeName,
                           ),
@@ -600,13 +625,15 @@ class WeeklyCalendar extends ConsumerWidget {
                       } else {
                         allItems.add(Positioned(
                           top: itemTop,
-                          left: 4,
-                          right: 4,
+                          left: 2,
+                          right: 2,
                           child: _TimetableAssessmentBox(
                             assessment: event.assessmentWithModule!.assessment,
                             module: event.assessmentWithModule!.module,
                             height: itemHeight,
                             weekNumber: currentWeek,
+                            dayOfWeek: dayOfWeek,
+                            semester: semester!,
                           ),
                         ));
                       }
@@ -798,12 +825,16 @@ class _TimetableAssessmentBox extends ConsumerWidget {
   final Module module;
   final double height;
   final int weekNumber;
+  final int dayOfWeek;
+  final Semester semester;
 
   const _TimetableAssessmentBox({
     required this.assessment,
     required this.module,
     required this.height,
     required this.weekNumber,
+    required this.dayOfWeek,
+    required this.semester,
   });
 
   @override
@@ -827,177 +858,135 @@ class _TimetableAssessmentBox extends ConsumerWidget {
 
         final isCompleted = completion.status == TaskStatus.complete;
 
-        return Container(
-          height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-          decoration: BoxDecoration(
-            color: const Color(0xFFEF4444).withOpacity(isCompleted ? 0.3 : 0.15), // Red color
-            borderRadius: BorderRadius.circular(6),
-            border: const Border(
-              left: BorderSide(
-                color: Color(0xFFEF4444), // Red
-                width: 3,
+        return GestureDetector(
+          onTap: () async {
+            final user = ref.read(currentUserProvider);
+            if (user == null) return;
+
+            final repository = ref.read(firestoreRepositoryProvider);
+
+            // Simple 2-state toggle by default
+            final newStatus = !isCompleted
+                ? TaskStatus.complete
+                : TaskStatus.notStarted;
+
+            final now = DateTime.now();
+
+            final newCompletion = TaskCompletion(
+              id: completion.id,
+              moduleId: module.id,
+              taskId: assessment.id,
+              weekNumber: weekNumber,
+              status: newStatus,
+              completedAt: newStatus == TaskStatus.complete ? now : null,
+            );
+
+            await repository.upsertTaskCompletion(
+              user.uid,
+              module.id,
+              newCompletion,
+            );
+          },
+          onLongPress: () {
+            // Calculate the date for this assessment based on day of week
+            final weekStart = semester.startDate.add(Duration(days: (weekNumber - 1) * 7));
+            final assessmentDate = weekStart.add(Duration(days: dayOfWeek - 1));
+
+            showDialog(
+              context: context,
+              builder: (context) => _AssessmentDetailsDialog(
+                assessment: assessment,
+                module: module,
+                completion: completion,
+                weekNumber: weekNumber,
+                date: assessmentDate,
+              ),
+            );
+          },
+          child: Container(
+            height: height,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEF4444).withOpacity(isCompleted ? 0.3 : 0.15), // Red color
+              borderRadius: BorderRadius.circular(6),
+              border: const Border(
+                left: BorderSide(
+                  color: Color(0xFFEF4444), // Red
+                  width: 3,
+                ),
               ),
             ),
-          ),
-          child: ClipRect(
             child: Stack(
               children: [
-                // Assessment content
-                Padding(
-                  padding: const EdgeInsets.only(right: 26),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        assessment.time!,
-                        style: GoogleFonts.inter(
-                          fontSize: 8,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFFEF4444),
-                          height: 1.0,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                // Assessment content - full width
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      module.code.isNotEmpty ? module.code : module.name,
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                        height: 1.2,
                       ),
-                      Text(
-                        module.code.isNotEmpty ? module.code : module.name,
-                        style: GoogleFonts.inter(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-                          height: 1.1,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      assessment.type.toString().split('.').last[0].toUpperCase() +
+                          assessment.type.toString().split('.').last.substring(1),
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w500,
+                        color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        height: 1.2,
                       ),
-                      Text(
-                        assessment.type.toString().split('.').last[0].toUpperCase() +
-                            assessment.type.toString().split('.').last.substring(1),
-                        style: GoogleFonts.inter(
-                          fontSize: 8,
-                          fontWeight: FontWeight.w500,
-                          color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                          height: 1.0,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                    ),
+                  ],
                 ),
-              // Circular checkbox centered vertically on the right
-              Positioned(
+                // Circular checkbox at right center (visual indicator only)
+                Positioned(
                 right: 4,
-                top: 0,
-                bottom: 0,
-                child: Center(
-                  child: GestureDetector(
-                    onTap: () async {
-                      final user = ref.read(currentUserProvider);
-                      if (user == null) return;
-
-                      final repository = ref.read(firestoreRepositoryProvider);
-
-                      // Simple 2-state toggle by default
-                      final newStatus = !isCompleted
-                          ? TaskStatus.complete
-                          : TaskStatus.notStarted;
-
-                      final now = DateTime.now();
-
-                      final newCompletion = TaskCompletion(
-                        id: completion.id,
-                        moduleId: module.id,
-                        taskId: assessment.id,
-                        weekNumber: weekNumber,
-                        status: newStatus,
-                        completedAt: newStatus == TaskStatus.complete ? now : null,
-                      );
-
-                      await repository.upsertTaskCompletion(
-                        user.uid,
-                        module.id,
-                        newCompletion,
-                      );
-                    },
-                    onLongPress: () async {
-                      final user = ref.read(currentUserProvider);
-                      if (user == null) return;
-
-                      final preferences = ref.read(userPreferencesProvider);
-                      if (!preferences.enableThreeStateTaskToggle) return;
-
-                      final repository = ref.read(firestoreRepositoryProvider);
-
-                      // Cycle through 3 states: notStarted -> inProgress -> complete -> notStarted
-                      TaskStatus newStatus;
-                      switch (completion.status) {
-                        case TaskStatus.notStarted:
-                          newStatus = TaskStatus.inProgress;
-                          break;
-                        case TaskStatus.inProgress:
-                          newStatus = TaskStatus.complete;
-                          break;
-                        case TaskStatus.complete:
-                          newStatus = TaskStatus.notStarted;
-                          break;
-                      }
-
-                      final now = DateTime.now();
-
-                      final newCompletion = TaskCompletion(
-                        id: completion.id,
-                        moduleId: module.id,
-                        taskId: assessment.id,
-                        weekNumber: weekNumber,
-                        status: newStatus,
-                        completedAt: newStatus == TaskStatus.complete ? now : null,
-                      );
-
-                      await repository.upsertTaskCompletion(
-                        user.uid,
-                        module.id,
-                        newCompletion,
-                      );
-                    },
-                    child: Container(
-                      width: 18,
-                      height: 18,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: completion.status == TaskStatus.complete
-                            ? const Color(0xFFEF4444)
-                            : completion.status == TaskStatus.inProgress
-                                ? Colors.orange
-                                : Colors.white,
-                        border: Border.all(
-                          color: const Color(0xFFEF4444),
-                          width: 2,
-                        ),
-                      ),
-                      child: completion.status == TaskStatus.complete
-                          ? const Icon(
-                              Icons.check,
-                              size: 12,
-                              color: Colors.white,
-                            )
-                          : completion.status == TaskStatus.inProgress
-                              ? const Icon(
-                                  Icons.more_horiz,
-                                  size: 12,
-                                  color: Colors.white,
-                                )
-                              : null,
+                top: height / 2 - 8,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: completion.status == TaskStatus.complete
+                        ? const Color(0xFFEF4444)
+                        : completion.status == TaskStatus.inProgress
+                            ? Colors.orange
+                            : Colors.white,
+                    border: Border.all(
+                      color: const Color(0xFFEF4444),
+                      width: 2,
                     ),
                   ),
+                  child: completion.status == TaskStatus.complete
+                      ? const Icon(
+                          Icons.check,
+                          size: 10,
+                          color: Colors.white,
+                        )
+                      : completion.status == TaskStatus.inProgress
+                          ? const Icon(
+                              Icons.more_horiz,
+                              size: 10,
+                              color: Colors.white,
+                            )
+                          : null,
                 ),
               ),
             ],
           ),
         ),
-      );
+        );
       },
       loading: () => Container(
         height: height,
@@ -1038,6 +1027,8 @@ class _TimetableTaskBox extends ConsumerWidget {
   final Module module;
   final double height;
   final int weekNumber;
+  final int dayOfWeek;
+  final Semester semester;
   final Color Function(RecurringTaskType) getTaskColor;
   final String Function(RecurringTaskType) getTaskTypeName;
 
@@ -1046,6 +1037,8 @@ class _TimetableTaskBox extends ConsumerWidget {
     required this.module,
     required this.height,
     required this.weekNumber,
+    required this.dayOfWeek,
+    required this.semester,
     required this.getTaskColor,
     required this.getTaskTypeName,
   });
@@ -1071,276 +1064,199 @@ class _TimetableTaskBox extends ConsumerWidget {
 
         final isCompleted = completion.status == TaskStatus.complete;
 
-        return Container(
-          height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-          decoration: BoxDecoration(
-            color: getTaskColor(task.type).withOpacity(isCompleted ? 0.3 : 0.15),
-            borderRadius: BorderRadius.circular(6),
-            border: Border(
-              left: BorderSide(
-                color: getTaskColor(task.type),
-                width: 3,
+        return GestureDetector(
+          onTap: () async {
+            final user = ref.read(currentUserProvider);
+            if (user == null) return;
+
+            final repository = ref.read(firestoreRepositoryProvider);
+
+            // Simple 2-state toggle by default
+            final newStatus = !isCompleted
+                ? TaskStatus.complete
+                : TaskStatus.notStarted;
+
+            final now = DateTime.now();
+
+            final newCompletion = TaskCompletion(
+              id: completion.id,
+              moduleId: module.id,
+              taskId: task.id,
+              weekNumber: weekNumber,
+              status: newStatus,
+              completedAt: newStatus == TaskStatus.complete ? now : null,
+            );
+
+            await repository.upsertTaskCompletion(
+              user.uid,
+              module.id,
+              newCompletion,
+            );
+
+            // If completing a parent task, complete all its subtasks
+            if (newStatus == TaskStatus.complete) {
+              final allTasksAsync = ref.read(recurringTasksProvider(module.id));
+              final allTasks = allTasksAsync.value;
+
+              if (allTasks != null) {
+                final subtasks = allTasks.where((t) => t.parentTaskId == task.id).toList();
+
+                for (final subtask in subtasks) {
+                  final subtaskCompletion = completions.firstWhere(
+                    (c) => c.taskId == subtask.id,
+                    orElse: () => TaskCompletion(
+                      id: '',
+                      moduleId: module.id,
+                      taskId: subtask.id,
+                      weekNumber: weekNumber,
+                      status: TaskStatus.notStarted,
+                    ),
+                  );
+
+                  final newSubCompletion = TaskCompletion(
+                    id: subtaskCompletion.id,
+                    moduleId: module.id,
+                    taskId: subtask.id,
+                    weekNumber: weekNumber,
+                    status: TaskStatus.complete,
+                    completedAt: now,
+                  );
+
+                  await repository.upsertTaskCompletion(
+                    user.uid,
+                    module.id,
+                    newSubCompletion,
+                  );
+                }
+              }
+            }
+          },
+          onLongPress: () {
+            // Calculate the date for this task based on day of week
+            final weekStart = semester.startDate.add(Duration(days: (weekNumber - 1) * 7));
+            final taskDate = weekStart.add(Duration(days: dayOfWeek - 1));
+
+            showDialog(
+              context: context,
+              builder: (context) => _TaskDetailsDialog(
+                task: task,
+                module: module,
+                completion: completion,
+                completions: completions,
+                weekNumber: weekNumber,
+                getTaskColor: getTaskColor,
+                getTaskTypeName: getTaskTypeName,
+                date: taskDate,
+              ),
+            );
+          },
+          child: Container(
+            height: height,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: getTaskColor(task.type).withOpacity(isCompleted ? 0.3 : 0.15),
+              borderRadius: BorderRadius.circular(6),
+              border: Border(
+                left: BorderSide(
+                  color: getTaskColor(task.type),
+                  width: 3,
+                ),
               ),
             ),
-          ),
-          child: ClipRect(
             child: Stack(
               children: [
-                // Task content
-                Padding(
-                  padding: const EdgeInsets.only(right: 26),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${task.time!}${task.endTime != null ? " - ${task.endTime}" : ""}',
-                        style: GoogleFonts.inter(
-                          fontSize: 8,
-                          fontWeight: FontWeight.w600,
-                          color: getTaskColor(task.type),
-                          height: 1.0,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        module.code.isNotEmpty ? module.code : module.name,
-                        style: GoogleFonts.inter(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-                          height: 1.1,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        getTaskTypeName(task.type),
-                        style: GoogleFonts.inter(
-                          fontSize: 8,
-                          fontWeight: FontWeight.w500,
+                // Task content - full width
+                Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    module.code.isNotEmpty ? module.code : module.name,
+                    style: GoogleFonts.inter(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                      height: 1.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    getTaskTypeName(task.type),
+                    style: GoogleFonts.inter(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w500,
+                      color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      height: 1.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                  ),
+                  if (task.location != null && height > 80) ...[
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on,
+                          size: 7,
                           color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                          height: 1.0,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (task.location != null && height > 80) ...[
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.location_on,
-                              size: 7,
+                        const SizedBox(width: 2),
+                        Expanded(
+                          child: Text(
+                            task.location!,
+                            style: GoogleFonts.inter(
+                              fontSize: 7,
                               color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                              height: 1.0,
                             ),
-                            const SizedBox(width: 2),
-                            Expanded(
-                              child: Text(
-                                task.location!,
-                                style: GoogleFonts.inter(
-                                  fontSize: 7,
-                                  color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                                  height: 1.0,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
-                    ],
-                  ),
-                ),
-              // Circular checkbox centered vertically on the right
+                    ),
+                  ],
+                ],
+              ),
+              // Circular checkbox at right center (visual indicator only)
               Positioned(
                 right: 4,
-                top: 0,
-                bottom: 0,
-                child: Center(
-                  child: GestureDetector(
-                    onTap: () async {
-                      final user = ref.read(currentUserProvider);
-                      if (user == null) return;
-
-                      final repository = ref.read(firestoreRepositoryProvider);
-
-                      // Simple 2-state toggle by default
-                      final newStatus = !isCompleted
-                          ? TaskStatus.complete
-                          : TaskStatus.notStarted;
-
-                      final now = DateTime.now();
-
-                      final newCompletion = TaskCompletion(
-                        id: completion.id,
-                        moduleId: module.id,
-                        taskId: task.id,
-                        weekNumber: weekNumber,
-                        status: newStatus,
-                        completedAt: newStatus == TaskStatus.complete ? now : null,
-                      );
-
-                      await repository.upsertTaskCompletion(
-                        user.uid,
-                        module.id,
-                        newCompletion,
-                      );
-
-                      // If completing a parent task, complete all its subtasks
-                      if (newStatus == TaskStatus.complete) {
-                        final allTasksAsync = ref.read(recurringTasksProvider(module.id));
-                        final allTasks = allTasksAsync.value;
-
-                        if (allTasks != null) {
-                          final subtasks = allTasks.where((t) => t.parentTaskId == task.id).toList();
-
-                          for (final subtask in subtasks) {
-                            final subtaskCompletion = completions.firstWhere(
-                              (c) => c.taskId == subtask.id,
-                              orElse: () => TaskCompletion(
-                                id: '',
-                                moduleId: module.id,
-                                taskId: subtask.id,
-                                weekNumber: weekNumber,
-                                status: TaskStatus.notStarted,
-                              ),
-                            );
-
-                            final newSubCompletion = TaskCompletion(
-                              id: subtaskCompletion.id,
-                              moduleId: module.id,
-                              taskId: subtask.id,
-                              weekNumber: weekNumber,
-                              status: TaskStatus.complete,
-                              completedAt: now,
-                            );
-
-                            await repository.upsertTaskCompletion(
-                              user.uid,
-                              module.id,
-                              newSubCompletion,
-                            );
-                          }
-                        }
-                      }
-                    },
-                    onLongPress: () async {
-                      final user = ref.read(currentUserProvider);
-                      if (user == null) return;
-
-                      final preferences = ref.read(userPreferencesProvider);
-                      if (!preferences.enableThreeStateTaskToggle) return;
-
-                      final repository = ref.read(firestoreRepositoryProvider);
-
-                      // Cycle through 3 states: notStarted -> inProgress -> complete -> notStarted
-                      TaskStatus newStatus;
-                      switch (completion.status) {
-                        case TaskStatus.notStarted:
-                          newStatus = TaskStatus.inProgress;
-                          break;
-                        case TaskStatus.inProgress:
-                          newStatus = TaskStatus.complete;
-                          break;
-                        case TaskStatus.complete:
-                          newStatus = TaskStatus.notStarted;
-                          break;
-                      }
-
-                      final now = DateTime.now();
-
-                      final newCompletion = TaskCompletion(
-                        id: completion.id,
-                        moduleId: module.id,
-                        taskId: task.id,
-                        weekNumber: weekNumber,
-                        status: newStatus,
-                        completedAt: newStatus == TaskStatus.complete ? now : null,
-                      );
-
-                      await repository.upsertTaskCompletion(
-                        user.uid,
-                        module.id,
-                        newCompletion,
-                      );
-
-                      // If completing a parent task, complete all its subtasks
-                      if (newStatus == TaskStatus.complete) {
-                        final allTasksAsync = ref.read(recurringTasksProvider(module.id));
-                        final allTasks = allTasksAsync.value;
-
-                        if (allTasks != null) {
-                          final subtasks = allTasks.where((t) => t.parentTaskId == task.id).toList();
-
-                          for (final subtask in subtasks) {
-                            final subtaskCompletion = completions.firstWhere(
-                              (c) => c.taskId == subtask.id,
-                              orElse: () => TaskCompletion(
-                                id: '',
-                                moduleId: module.id,
-                                taskId: subtask.id,
-                                weekNumber: weekNumber,
-                                status: TaskStatus.notStarted,
-                              ),
-                            );
-
-                            final newSubCompletion = TaskCompletion(
-                              id: subtaskCompletion.id,
-                              moduleId: module.id,
-                              taskId: subtask.id,
-                              weekNumber: weekNumber,
-                              status: TaskStatus.complete,
-                              completedAt: now,
-                            );
-
-                            await repository.upsertTaskCompletion(
-                              user.uid,
-                              module.id,
-                              newSubCompletion,
-                            );
-                          }
-                        }
-                      }
-                    },
-                    child: Container(
-                      width: 18,
-                      height: 18,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: completion.status == TaskStatus.complete
-                            ? getTaskColor(task.type)
-                            : completion.status == TaskStatus.inProgress
-                                ? Colors.orange
-                                : Colors.white,
-                        border: Border.all(
-                          color: getTaskColor(task.type),
-                          width: 2,
-                        ),
-                      ),
-                      child: completion.status == TaskStatus.complete
-                          ? const Icon(
-                              Icons.check,
-                              size: 12,
-                              color: Colors.white,
-                            )
-                          : completion.status == TaskStatus.inProgress
-                              ? const Icon(
-                                  Icons.more_horiz,
-                                  size: 12,
-                                  color: Colors.white,
-                                )
-                              : null,
+                top: height / 2 - 8,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: completion.status == TaskStatus.complete
+                        ? getTaskColor(task.type)
+                        : completion.status == TaskStatus.inProgress
+                            ? Colors.orange
+                            : Colors.white,
+                    border: Border.all(
+                      color: getTaskColor(task.type),
+                      width: 2,
                     ),
                   ),
+                  child: completion.status == TaskStatus.complete
+                      ? const Icon(
+                          Icons.check,
+                          size: 10,
+                          color: Colors.white,
+                        )
+                      : completion.status == TaskStatus.inProgress
+                          ? const Icon(
+                              Icons.more_horiz,
+                              size: 10,
+                              color: Colors.white,
+                            )
+                          : null,
                 ),
               ),
             ],
           ),
         ),
-      );
+        );
       },
       loading: () => Container(
         height: height,
@@ -1429,4 +1345,955 @@ class _CalendarEvent {
     this.taskWithModule,
     this.assessmentWithModule,
   });
+}
+
+// Helper widget for displaying detail rows in popup dialog
+class _DetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          icon,
+          size: 18,
+          color: Theme.of(context).primaryColor,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Assessment details dialog
+class _AssessmentDetailsDialog extends ConsumerStatefulWidget {
+  final Assessment assessment;
+  final Module module;
+  final TaskCompletion completion;
+  final int weekNumber;
+  final DateTime date;
+
+  const _AssessmentDetailsDialog({
+    required this.assessment,
+    required this.module,
+    required this.completion,
+    required this.weekNumber,
+    required this.date,
+  });
+
+  @override
+  ConsumerState<_AssessmentDetailsDialog> createState() => _AssessmentDetailsDialogState();
+}
+
+class _AssessmentDetailsDialogState extends ConsumerState<_AssessmentDetailsDialog> {
+  late TaskStatus currentStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    currentStatus = widget.completion.status;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.module.name.isNotEmpty)
+            Text(
+              widget.module.name,
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          if (widget.module.code.isNotEmpty)
+            Text(
+              widget.module.code,
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.normal,
+                fontSize: 14,
+              ),
+            ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DetailRow(
+            icon: Icons.calendar_today,
+            label: 'Date',
+            value: '${_getWeekdayName(widget.date.weekday)} ${widget.date.day}${_getDaySuffix(widget.date.day)} ${_getMonthName(widget.date.month)} ${widget.date.year}',
+          ),
+          const SizedBox(height: 8),
+          _DetailRow(
+            icon: Icons.schedule,
+            label: 'Time',
+            value: widget.assessment.time!,
+          ),
+          const SizedBox(height: 8),
+          _DetailRow(
+            icon: Icons.assignment,
+            label: 'Type',
+            value: widget.assessment.type.toString().split('.').last[0].toUpperCase() +
+                widget.assessment.type.toString().split('.').last.substring(1),
+          ),
+          const SizedBox(height: 8),
+          _DetailRow(
+            icon: Icons.info_outline,
+            label: 'Name',
+            value: widget.assessment.name,
+          ),
+          if (widget.assessment.dueDate != null) ...[
+            const SizedBox(height: 8),
+            _DetailRow(
+              icon: Icons.event,
+              label: 'Due Date',
+              value: '${widget.assessment.dueDate!.day}/${widget.assessment.dueDate!.month}/${widget.assessment.dueDate!.year}',
+            ),
+          ],
+          if (widget.assessment.description != null && widget.assessment.description!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _DetailRow(
+              icon: Icons.notes,
+              label: 'Description',
+              value: widget.assessment.description!,
+            ),
+          ],
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () async {
+              final user = ref.read(currentUserProvider);
+              if (user == null) return;
+
+              final repository = ref.read(firestoreRepositoryProvider);
+
+              // Cycle through statuses: notStarted -> complete -> notStarted
+              TaskStatus newStatus;
+              if (currentStatus == TaskStatus.notStarted) {
+                newStatus = TaskStatus.complete;
+              } else if (currentStatus == TaskStatus.inProgress) {
+                newStatus = TaskStatus.complete;
+              } else {
+                newStatus = TaskStatus.notStarted;
+              }
+
+              final now = DateTime.now();
+
+              final newCompletion = TaskCompletion(
+                id: widget.completion.id,
+                moduleId: widget.module.id,
+                taskId: widget.assessment.id,
+                weekNumber: widget.weekNumber,
+                status: newStatus,
+                completedAt: newStatus == TaskStatus.complete ? now : null,
+              );
+
+              await repository.upsertTaskCompletion(
+                user.uid,
+                widget.module.id,
+                newCompletion,
+              );
+
+              setState(() {
+                currentStatus = newStatus;
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: currentStatus == TaskStatus.complete
+                    ? const Color(0xFF10B981).withOpacity(0.1)
+                    : const Color(0xFF0EA5E9).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    currentStatus == TaskStatus.complete
+                        ? Icons.check_circle
+                        : currentStatus == TaskStatus.inProgress
+                            ? Icons.timelapse
+                            : Icons.radio_button_unchecked,
+                    color: currentStatus == TaskStatus.complete
+                        ? const Color(0xFF10B981)
+                        : const Color(0xFF0EA5E9),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    currentStatus == TaskStatus.complete
+                        ? 'Completed'
+                        : currentStatus == TaskStatus.inProgress
+                            ? 'In Progress'
+                            : 'Not Started',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () async {
+            Navigator.pop(context);
+            final result = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(
+                  'Delete Assessment',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                ),
+                content: Text(
+                  'Are you sure you want to delete "${widget.assessment.name}"?',
+                  style: GoogleFonts.inter(),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red,
+                    ),
+                    child: const Text('Delete'),
+                  ),
+                ],
+              ),
+            );
+
+            if (result == true) {
+              final user = ref.read(currentUserProvider);
+              if (user == null) return;
+
+              final repository = ref.read(firestoreRepositoryProvider);
+              await repository.deleteAssessment(
+                user.uid,
+                widget.module.id,
+                widget.assessment.id,
+              );
+            }
+          },
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.red,
+          ),
+          child: const Text('Delete'),
+        ),
+        TextButton(
+          onPressed: () async {
+            Navigator.pop(context);
+            await showDialog(
+              context: context,
+              builder: (context) => _EditAssessmentDialog(
+                assessment: widget.assessment,
+                module: widget.module,
+              ),
+            );
+          },
+          child: const Text('Edit'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
+// Edit Assessment Dialog
+class _EditAssessmentDialog extends ConsumerStatefulWidget {
+  final Assessment assessment;
+  final Module module;
+
+  const _EditAssessmentDialog({
+    required this.assessment,
+    required this.module,
+  });
+
+  @override
+  ConsumerState<_EditAssessmentDialog> createState() => _EditAssessmentDialogState();
+}
+
+class _EditAssessmentDialogState extends ConsumerState<_EditAssessmentDialog> {
+  late TextEditingController _nameController;
+  late TextEditingController _descriptionController;
+  late TimeOfDay? _time;
+  late DateTime? _dueDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.assessment.name);
+    _descriptionController = TextEditingController(text: widget.assessment.description);
+    _dueDate = widget.assessment.dueDate;
+
+    if (widget.assessment.time != null) {
+      final parts = widget.assessment.time!.split(':');
+      _time = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    } else {
+      _time = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  String _formatTimeOfDay(TimeOfDay time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        'Edit Assessment',
+        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Name
+            TextField(
+              controller: _nameController,
+              decoration: InputDecoration(
+                labelText: 'Name',
+                labelStyle: GoogleFonts.inter(),
+                prefixIcon: const Icon(Icons.assignment),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Due Date
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.calendar_today),
+              title: Text(
+                'Due Date',
+                style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
+              ),
+              subtitle: Text(
+                _dueDate != null
+                    ? '${_dueDate!.day}/${_dueDate!.month}/${_dueDate!.year}'
+                    : 'Not set',
+                style: GoogleFonts.inter(fontSize: 14),
+              ),
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _dueDate ?? DateTime.now(),
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(2100),
+                );
+                if (date != null) {
+                  setState(() => _dueDate = date);
+                }
+              },
+            ),
+            // Time
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.access_time),
+              title: Text(
+                'Time',
+                style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
+              ),
+              subtitle: Text(
+                _time != null ? _formatTimeOfDay(_time!) : 'Not set',
+                style: GoogleFonts.inter(fontSize: 14),
+              ),
+              onTap: () async {
+                final time = await showTimePicker(
+                  context: context,
+                  initialTime: _time ?? TimeOfDay.now(),
+                );
+                if (time != null) {
+                  setState(() => _time = time);
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            // Description
+            TextField(
+              controller: _descriptionController,
+              decoration: InputDecoration(
+                labelText: 'Description',
+                labelStyle: GoogleFonts.inter(),
+                prefixIcon: const Icon(Icons.notes),
+                border: const OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () async {
+            final user = ref.read(currentUserProvider);
+            if (user == null) return;
+
+            final repository = ref.read(firestoreRepositoryProvider);
+            final selectedSemester = ref.read(selectedSemesterProvider);
+            if (selectedSemester == null) return;
+
+            final updatedData = {
+              'name': _nameController.text,
+              'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
+              'dueDate': _dueDate?.toIso8601String(),
+              'time': _time != null ? _formatTimeOfDay(_time!) : null,
+            };
+
+            await repository.updateAssessment(
+              user.uid,
+              selectedSemester.id,
+              widget.module.id,
+              widget.assessment.id,
+              updatedData,
+            );
+
+            if (context.mounted) {
+              Navigator.pop(context);
+            }
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+// Task details dialog
+class _TaskDetailsDialog extends ConsumerStatefulWidget {
+  final RecurringTask task;
+  final Module module;
+  final TaskCompletion completion;
+  final List<TaskCompletion> completions;
+  final int weekNumber;
+  final Color Function(RecurringTaskType) getTaskColor;
+  final String Function(RecurringTaskType) getTaskTypeName;
+  final DateTime date;
+
+  const _TaskDetailsDialog({
+    required this.task,
+    required this.module,
+    required this.completion,
+    required this.completions,
+    required this.weekNumber,
+    required this.getTaskColor,
+    required this.getTaskTypeName,
+    required this.date,
+  });
+
+  @override
+  ConsumerState<_TaskDetailsDialog> createState() => _TaskDetailsDialogState();
+}
+
+class _TaskDetailsDialogState extends ConsumerState<_TaskDetailsDialog> {
+  late TaskStatus currentStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    currentStatus = widget.completion.status;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.module.name.isNotEmpty)
+            Text(
+              widget.module.name,
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          if (widget.module.code.isNotEmpty)
+            Text(
+              widget.module.code,
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.normal,
+                fontSize: 14,
+              ),
+            ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DetailRow(
+            icon: Icons.calendar_today,
+            label: 'Date',
+            value: '${_getWeekdayName(widget.date.weekday)} ${widget.date.day}${_getDaySuffix(widget.date.day)} ${_getMonthName(widget.date.month)} ${widget.date.year}',
+          ),
+          const SizedBox(height: 8),
+          _DetailRow(
+            icon: Icons.schedule,
+            label: 'Time',
+            value: '${widget.task.time!}${widget.task.endTime != null ? " - ${widget.task.endTime}" : ""}',
+          ),
+          const SizedBox(height: 8),
+          _DetailRow(
+            icon: Icons.class_,
+            label: 'Type',
+            value: widget.getTaskTypeName(widget.task.type),
+          ),
+          if (widget.task.location != null) ...[
+            const SizedBox(height: 8),
+            _DetailRow(
+              icon: Icons.location_on,
+              label: 'Location',
+              value: widget.task.location!,
+            ),
+          ],
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () async {
+              final user = ref.read(currentUserProvider);
+              if (user == null) return;
+
+              final repository = ref.read(firestoreRepositoryProvider);
+
+              // Cycle through statuses: notStarted -> complete -> notStarted
+              TaskStatus newStatus;
+              if (currentStatus == TaskStatus.notStarted) {
+                newStatus = TaskStatus.complete;
+              } else if (currentStatus == TaskStatus.inProgress) {
+                newStatus = TaskStatus.complete;
+              } else {
+                newStatus = TaskStatus.notStarted;
+              }
+
+              final now = DateTime.now();
+
+              final newCompletion = TaskCompletion(
+                id: widget.completion.id,
+                moduleId: widget.module.id,
+                taskId: widget.task.id,
+                weekNumber: widget.weekNumber,
+                status: newStatus,
+                completedAt: newStatus == TaskStatus.complete ? now : null,
+              );
+
+              await repository.upsertTaskCompletion(
+                user.uid,
+                widget.module.id,
+                newCompletion,
+              );
+
+              // If completing a parent task, complete all its subtasks
+              if (newStatus == TaskStatus.complete) {
+                final allTasksAsync = ref.read(recurringTasksProvider(widget.module.id));
+                final allTasks = allTasksAsync.value;
+
+                if (allTasks != null) {
+                  final subtasks = allTasks.where((t) => t.parentTaskId == widget.task.id).toList();
+
+                  for (final subtask in subtasks) {
+                    final subtaskCompletion = widget.completions.firstWhere(
+                      (c) => c.taskId == subtask.id,
+                      orElse: () => TaskCompletion(
+                        id: '',
+                        moduleId: widget.module.id,
+                        taskId: subtask.id,
+                        weekNumber: widget.weekNumber,
+                        status: TaskStatus.notStarted,
+                      ),
+                    );
+
+                    final newSubCompletion = TaskCompletion(
+                      id: subtaskCompletion.id,
+                      moduleId: widget.module.id,
+                      taskId: subtask.id,
+                      weekNumber: widget.weekNumber,
+                      status: TaskStatus.complete,
+                      completedAt: now,
+                    );
+
+                    await repository.upsertTaskCompletion(
+                      user.uid,
+                      widget.module.id,
+                      newSubCompletion,
+                    );
+                  }
+                }
+              }
+
+              setState(() {
+                currentStatus = newStatus;
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: currentStatus == TaskStatus.complete
+                    ? const Color(0xFF10B981).withOpacity(0.1)
+                    : const Color(0xFF0EA5E9).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    currentStatus == TaskStatus.complete
+                        ? Icons.check_circle
+                        : currentStatus == TaskStatus.inProgress
+                            ? Icons.timelapse
+                            : Icons.radio_button_unchecked,
+                    color: currentStatus == TaskStatus.complete
+                        ? const Color(0xFF10B981)
+                        : const Color(0xFF0EA5E9),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    currentStatus == TaskStatus.complete
+                        ? 'Completed'
+                        : currentStatus == TaskStatus.inProgress
+                            ? 'In Progress'
+                            : 'Not Started',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () async {
+            Navigator.pop(context);
+            final result = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(
+                  'Delete Task',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                ),
+                content: Text(
+                  'Are you sure you want to delete this ${widget.getTaskTypeName(widget.task.type).toLowerCase()}?',
+                  style: GoogleFonts.inter(),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red,
+                    ),
+                    child: const Text('Delete'),
+                  ),
+                ],
+              ),
+            );
+
+            if (result == true) {
+              final user = ref.read(currentUserProvider);
+              if (user == null) return;
+
+              final repository = ref.read(firestoreRepositoryProvider);
+              await repository.deleteRecurringTask(
+                user.uid,
+                widget.module.id,
+                widget.task.id,
+              );
+            }
+          },
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.red,
+          ),
+          child: const Text('Delete'),
+        ),
+        TextButton(
+          onPressed: () async {
+            Navigator.pop(context);
+            await showDialog(
+              context: context,
+              builder: (context) => _EditTaskDialog(
+                task: widget.task,
+                module: widget.module,
+                getTaskTypeName: widget.getTaskTypeName,
+              ),
+            );
+          },
+          child: const Text('Edit'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
+// Edit Task Dialog
+class _EditTaskDialog extends ConsumerStatefulWidget {
+  final RecurringTask task;
+  final Module module;
+  final String Function(RecurringTaskType) getTaskTypeName;
+
+  const _EditTaskDialog({
+    required this.task,
+    required this.module,
+    required this.getTaskTypeName,
+  });
+
+  @override
+  ConsumerState<_EditTaskDialog> createState() => _EditTaskDialogState();
+}
+
+class _EditTaskDialogState extends ConsumerState<_EditTaskDialog> {
+  late TimeOfDay? _startTime;
+  late TimeOfDay? _endTime;
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (widget.task.time != null) {
+      final parts = widget.task.time!.split(':');
+      _startTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    } else {
+      _startTime = null;
+    }
+
+    if (widget.task.endTime != null) {
+      final parts = widget.task.endTime!.split(':');
+      _endTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    } else {
+      _endTime = null;
+    }
+  }
+
+  String _formatTimeOfDay(TimeOfDay time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        'Edit ${widget.getTaskTypeName(widget.task.type)}',
+        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Start Time
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.access_time),
+              title: Text(
+                'Start Time',
+                style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
+              ),
+              subtitle: Text(
+                _startTime != null ? _formatTimeOfDay(_startTime!) : 'Not set',
+                style: GoogleFonts.inter(fontSize: 14),
+              ),
+              onTap: () async {
+                final time = await showTimePicker(
+                  context: context,
+                  initialTime: _startTime ?? TimeOfDay.now(),
+                );
+                if (time != null) {
+                  setState(() => _startTime = time);
+                }
+              },
+            ),
+            // End Time
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.access_time_filled),
+              title: Text(
+                'End Time',
+                style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
+              ),
+              subtitle: Text(
+                _endTime != null ? _formatTimeOfDay(_endTime!) : 'Not set',
+                style: GoogleFonts.inter(fontSize: 14),
+              ),
+              onTap: () async {
+                final time = await showTimePicker(
+                  context: context,
+                  initialTime: _endTime ?? TimeOfDay.now(),
+                );
+                if (time != null) {
+                  setState(() => _endTime = time);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () async {
+            final user = ref.read(currentUserProvider);
+            if (user == null) return;
+
+            final repository = ref.read(firestoreRepositoryProvider);
+
+            final updatedTask = widget.task.copyWith(
+              time: _startTime != null ? _formatTimeOfDay(_startTime!) : null,
+              endTime: _endTime != null ? _formatTimeOfDay(_endTime!) : null,
+            );
+
+            await repository.updateRecurringTask(
+              user.uid,
+              widget.module.id,
+              widget.task.id,
+              updatedTask,
+            );
+
+            if (context.mounted) {
+              Navigator.pop(context);
+            }
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+// Helper function to get weekday name
+String _getWeekdayName(int weekday) {
+  switch (weekday) {
+    case 1:
+      return 'Monday';
+    case 2:
+      return 'Tuesday';
+    case 3:
+      return 'Wednesday';
+    case 4:
+      return 'Thursday';
+    case 5:
+      return 'Friday';
+    case 6:
+      return 'Saturday';
+    case 7:
+      return 'Sunday';
+    default:
+      return '';
+  }
+}
+
+// Helper function to get month name
+String _getMonthName(int month) {
+  switch (month) {
+    case 1:
+      return 'January';
+    case 2:
+      return 'February';
+    case 3:
+      return 'March';
+    case 4:
+      return 'April';
+    case 5:
+      return 'May';
+    case 6:
+      return 'June';
+    case 7:
+      return 'July';
+    case 8:
+      return 'August';
+    case 9:
+      return 'September';
+    case 10:
+      return 'October';
+    case 11:
+      return 'November';
+    case 12:
+      return 'December';
+    default:
+      return '';
+  }
+}
+
+// Helper function to get day suffix (st, nd, rd, th)
+String _getDaySuffix(int day) {
+  if (day >= 11 && day <= 13) {
+    return 'th';
+  }
+  switch (day % 10) {
+    case 1:
+      return 'st';
+    case 2:
+      return 'nd';
+    case 3:
+      return 'rd';
+    default:
+      return 'th';
+  }
 }

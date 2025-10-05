@@ -209,6 +209,20 @@ class FirestoreRepository {
         .delete();
   }
 
+  /// Update recurring task
+  Future<void> updateRecurringTask(
+      String userId, String moduleId, String taskId, RecurringTask task) async {
+    final data = task.toFirestore();
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('modules')
+        .doc(moduleId)
+        .collection('recurringTasks')
+        .doc(taskId)
+        .update(data);
+  }
+
   // ========== ASSESSMENT OPERATIONS ==========
 
   /// Get assessments for a module

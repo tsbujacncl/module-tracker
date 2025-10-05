@@ -13,9 +13,9 @@ class GradesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final modulesAsync = ref.watch(currentSemesterModulesProvider);
-    final semesterGrades = ref.watch(semesterGradesProvider);
     final semesterAverage = ref.watch(semesterAverageProvider);
-    final semesterGPA = ref.watch(semesterGPAProvider);
+    final overallAverage = ref.watch(overallAverageProvider);
+    final totalCredits = ref.watch(totalCreditsEarnedProvider);
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
@@ -106,8 +106,18 @@ class GradesScreen extends ConsumerWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           _SummaryItem(
-                            label: 'Average',
+                            label: 'Semester',
                             value: '${semesterAverage.toStringAsFixed(1)}%',
+                            icon: Icons.school,
+                          ),
+                          Container(
+                            width: 1,
+                            height: 40,
+                            color: Colors.white.withOpacity(0.3),
+                          ),
+                          _SummaryItem(
+                            label: 'Overall',
+                            value: '${overallAverage.toStringAsFixed(1)}%',
                             icon: Icons.trending_up,
                           ),
                           Container(
@@ -116,19 +126,9 @@ class GradesScreen extends ConsumerWidget {
                             color: Colors.white.withOpacity(0.3),
                           ),
                           _SummaryItem(
-                            label: 'GPA',
-                            value: semesterGPA.toStringAsFixed(2),
+                            label: 'Credits',
+                            value: '$totalCredits/360',
                             icon: Icons.star,
-                          ),
-                          Container(
-                            width: 1,
-                            height: 40,
-                            color: Colors.white.withOpacity(0.3),
-                          ),
-                          _SummaryItem(
-                            label: 'Modules',
-                            value: '${modules.length}',
-                            icon: Icons.school,
                           ),
                         ],
                       ),

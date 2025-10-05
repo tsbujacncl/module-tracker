@@ -10,7 +10,6 @@ import 'package:module_tracker/providers/theme_provider.dart';
 import 'package:module_tracker/screens/auth/login_screen.dart';
 import 'package:module_tracker/screens/home/home_screen.dart';
 import 'package:module_tracker/services/notification_service.dart';
-import 'package:module_tracker/services/background_task_service.dart';
 import 'package:module_tracker/theme/app_theme.dart';
 
 void main() async {
@@ -36,10 +35,6 @@ void main() async {
       await notificationService.initialize();
       await notificationService.requestPermissions();
       print('DEBUG: Notifications initialized');
-
-      // Register daily task check (5pm reminder)
-      await BackgroundTaskService.registerDailyTaskCheck();
-      print('DEBUG: Background tasks registered');
     } catch (e) {
       print('DEBUG: Error initializing notifications/background tasks: $e');
     }
