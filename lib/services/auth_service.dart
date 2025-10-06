@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
@@ -7,9 +7,9 @@ class AuthService {
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     // For iOS/Android: clientId is automatically read from GoogleService-Info.plist/google-services.json
     // For Web: specify the Web OAuth Client ID
-    clientId: Platform.isAndroid || Platform.isIOS
-        ? null
-        : '273321735011-bj356j68f07ish64c7g5qct2l9tqtlb5.apps.googleusercontent.com',
+    clientId: kIsWeb
+        ? '273321735011-bj356j68f07ish64c7g5qct2l9tqtlb5.apps.googleusercontent.com'
+        : null,
   );
 
   // Auth state stream

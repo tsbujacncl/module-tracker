@@ -28,7 +28,7 @@ class WeekNavigationBar extends StatelessWidget {
     final dateFormat = DateFormat('MMM d');
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -40,7 +40,7 @@ class WeekNavigationBar extends StatelessWidget {
                 Text(
                   'Week $currentWeek (${dateFormat.format(weekStart)} - ${dateFormat.format(weekEnd)})',
                   style: GoogleFonts.poppins(
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFF0F172A),
                   ),
@@ -48,7 +48,7 @@ class WeekNavigationBar extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 GestureDetector(
                   onLongPress: () {
                     Navigator.push(
@@ -63,7 +63,7 @@ class WeekNavigationBar extends StatelessWidget {
                   child: Text(
                     semester.name,
                     style: GoogleFonts.inter(
-                      fontSize: 12,
+                      fontSize: 11,
                       color: const Color(0xFF64748B),
                     ),
                     textAlign: TextAlign.center,

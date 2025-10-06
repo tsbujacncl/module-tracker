@@ -427,14 +427,17 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
         title: Text(
             widget.existingModule != null ? 'Edit Module' : 'Create Module'),
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 700),
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 700),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
             // Basic Info
             Text(
               'Module Information',
@@ -444,6 +447,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
             TextFormField(
               controller: _nameController,
               focusNode: _nameFocusNode,
+              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Module Name',
                 hintText: 'e.g., Computer Science',
@@ -464,6 +468,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
             TextFormField(
               controller: _codeController,
               focusNode: _codeFocusNode,
+              textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(
                 labelText: 'Module Code (Optional)',
                 hintText: 'e.g., CS101',
@@ -666,9 +671,11 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
                       ? 'Update Module'
                       : 'Create Module'),
             ),
-              ],
+                  ],
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -787,36 +794,47 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
                               : const Color(0xFF10B981),
                         ),
                         const SizedBox(width: 6),
-                        DropdownButton<RecurringTaskType>(
-                          value: widget.task.type,
-                          underline: const SizedBox(),
-                          isDense: true,
-                          borderRadius: BorderRadius.circular(12),
-                          items: [
-                            RecurringTaskType.lecture,
-                            RecurringTaskType.lab,
-                            RecurringTaskType.tutorial,
-                          ].map((type) {
-                            return DropdownMenuItem(
-                              value: type,
-                              child: Text(
-                                type.toString().split('.').last.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: type == RecurringTaskType.lecture
-                                      ? const Color(0xFF3B82F6)
-                                      : const Color(0xFF10B981),
+                        Theme(
+                          data: Theme.of(context).copyWith(
+                            canvasColor: Colors.transparent,
+                            hoverColor: Colors.transparent,
+                            focusColor: Colors.transparent,
+                            highlightColor: Colors.transparent,
+                            splashColor: Colors.transparent,
+                          ),
+                          child: DropdownButton<RecurringTaskType>(
+                            value: widget.task.type,
+                            underline: const SizedBox(),
+                            isDense: true,
+                            borderRadius: BorderRadius.circular(12),
+                            dropdownColor: Theme.of(context).cardColor,
+                            focusColor: Colors.transparent,
+                            items: [
+                              RecurringTaskType.lecture,
+                              RecurringTaskType.lab,
+                              RecurringTaskType.tutorial,
+                            ].map((type) {
+                              return DropdownMenuItem(
+                                value: type,
+                                child: Text(
+                                  type.toString().split('.').last.toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: type == RecurringTaskType.lecture
+                                        ? const Color(0xFF3B82F6)
+                                        : const Color(0xFF10B981),
+                                  ),
                                 ),
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => widget.task.type = value);
-                              widget.onChanged();
-                            }
-                          },
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() => widget.task.type = value);
+                                widget.onChanged();
+                              }
+                            },
+                          ),
                         ),
                       ],
                     ),
@@ -1139,55 +1157,66 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                           }(),
                         ),
                         const SizedBox(width: 6),
-                        DropdownButton<AssessmentType>(
-                          value: widget.assessment.type,
-                          underline: const SizedBox(),
-                          isDense: true,
-                          borderRadius: BorderRadius.circular(12),
-                          items: AssessmentType.values.map((type) {
-                            final typeName = type.toString().split('.').last;
-                            final capitalizedName = typeName[0].toUpperCase() + typeName.substring(1);
-                            Color getColor() {
-                              switch (type) {
-                                case AssessmentType.coursework:
-                                  return const Color(0xFF8B5CF6);
-                                case AssessmentType.exam:
-                                  return const Color(0xFFEF4444);
-                                case AssessmentType.weekly:
-                                  return const Color(0xFF3B82F6);
-                              }
-                            }
-                            return DropdownMenuItem(
-                              value: type,
-                              child: Text(
-                                capitalizedName.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: getColor(),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                widget.assessment.type = value;
-                                // Clear week range if switching away from weekly
-                                if (value != AssessmentType.weekly) {
-                                  widget.assessment.startWeek = null;
-                                  widget.assessment.endWeek = null;
-                                  widget.assessment.dayOfWeek = null;
-                                  widget.assessment.submitTiming = null;
-                                } else {
-                                  // Set defaults when switching to weekly
-                                  widget.assessment.submitTiming ??= SubmitTiming.startOfNextWeek;
-                                  widget.assessment.dayOfWeek ??= 1; // Default to Monday
+                        Theme(
+                          data: Theme.of(context).copyWith(
+                            canvasColor: Colors.transparent,
+                            hoverColor: Colors.transparent,
+                            focusColor: Colors.transparent,
+                            highlightColor: Colors.transparent,
+                            splashColor: Colors.transparent,
+                          ),
+                          child: DropdownButton<AssessmentType>(
+                            value: widget.assessment.type,
+                            underline: const SizedBox(),
+                            isDense: true,
+                            borderRadius: BorderRadius.circular(12),
+                            dropdownColor: Theme.of(context).cardColor,
+                            focusColor: Colors.transparent,
+                            items: AssessmentType.values.map((type) {
+                              final typeName = type.toString().split('.').last;
+                              final capitalizedName = typeName[0].toUpperCase() + typeName.substring(1);
+                              Color getColor() {
+                                switch (type) {
+                                  case AssessmentType.coursework:
+                                    return const Color(0xFF8B5CF6);
+                                  case AssessmentType.exam:
+                                    return const Color(0xFFEF4444);
+                                  case AssessmentType.weekly:
+                                    return const Color(0xFF3B82F6);
                                 }
-                              });
-                              widget.onChanged();
-                            }
-                          },
+                              }
+                              return DropdownMenuItem(
+                                value: type,
+                                child: Text(
+                                  capitalizedName.toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: getColor(),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() {
+                                  widget.assessment.type = value;
+                                  // Clear week range if switching away from weekly
+                                  if (value != AssessmentType.weekly) {
+                                    widget.assessment.startWeek = null;
+                                    widget.assessment.endWeek = null;
+                                    widget.assessment.dayOfWeek = null;
+                                    widget.assessment.submitTiming = null;
+                                  } else {
+                                    // Set defaults when switching to weekly
+                                    widget.assessment.submitTiming ??= SubmitTiming.startOfNextWeek;
+                                    widget.assessment.dayOfWeek ??= 1; // Default to Monday
+                                  }
+                                });
+                                widget.onChanged();
+                              }
+                            },
+                          ),
                         ),
                       ],
                     ),
@@ -1208,6 +1237,7 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                   flex: 2,
                   child: TextFormField(
                     initialValue: widget.assessment.name,
+                    textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
                       labelText: 'Name',
                       border: OutlineInputBorder(),
@@ -1432,6 +1462,7 @@ class _AssessmentCardState extends State<_AssessmentCard> {
             const SizedBox(height: 12),
             TextFormField(
               initialValue: widget.assessment.description,
+              textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 labelText: 'Description (Optional)',
                 hintText: 'e.g., Written, 2 hours. Covers all lecture content.',
@@ -1471,6 +1502,10 @@ class _SemesterSelectionField extends ConsumerWidget {
 
     return semestersAsync.when(
       data: (semesters) {
+        // Sort semesters chronologically by start date (oldest first)
+        final sortedSemesters = [...semesters]
+          ..sort((a, b) => a.startDate.compareTo(b.startDate));
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1506,7 +1541,7 @@ class _SemesterSelectionField extends ConsumerWidget {
                 ),
               )
             else
-              ...semesters.map((semester) {
+              ...sortedSemesters.map((semester) {
                 final isSelected = selectedSemesterId == semester.id;
                 return Card(
                   color: isSelected ? Theme.of(context).colorScheme.primaryContainer : null,
@@ -1739,6 +1774,7 @@ class _CreateSemesterDialogState extends ConsumerState<_CreateSemesterDialog> {
                   children: [
                     TextFormField(
                       controller: _nameController,
+                      textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
                         labelText: 'Semester Name',
                         hintText: 'e.g., Semester 1 2024/25',

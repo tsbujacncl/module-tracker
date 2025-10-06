@@ -216,31 +216,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _showFontSizeDialog(FontSize current) async {
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Font Size'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: FontSize.values.map((size) {
-            return RadioListTile<FontSize>(
-              title: Text(size.displayName),
-              value: size,
-              groupValue: current,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(customizationProvider.notifier).setFontSize(value);
-                  Navigator.pop(context);
-                }
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
   Future<void> _showWeekStartDialog(WeekStartDay current) async {
     await showDialog(
       context: context,
@@ -256,31 +231,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onChanged: (value) {
                 if (value != null) {
                   ref.read(customizationProvider.notifier).setWeekStartDay(value);
-                  Navigator.pop(context);
-                }
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showTaskViewDialog(TaskView current) async {
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Default Task View'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: TaskView.values.map((view) {
-            return RadioListTile<TaskView>(
-              title: Text(view.displayName),
-              value: view,
-              groupValue: current,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(customizationProvider.notifier).setDefaultTaskView(value);
                   Navigator.pop(context);
                 }
               },
@@ -312,6 +262,112 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             );
           }).toList(),
         ),
+      ),
+    );
+  }
+
+  Future<void> _showColorPickerDialog(String type, Color? currentColor) async {
+    final availableColors = [
+      const Color(0xFFF44336), // Red
+      const Color(0xFFFF9800), // Orange
+      const Color(0xFFFFEB3B), // Yellow
+      const Color(0xFF4CAF50), // Green
+      const Color(0xFF03A9F4), // Light Blue
+      const Color(0xFF1565C0), // Dark Blue
+      const Color(0xFF9C27B0), // Purple
+      const Color(0xFFE91E63), // Pink
+      const Color(0xFF795548), // Brown
+      const Color(0xFF9E9E9E), // Grey
+    ];
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Choose Colour for $type',
+          style: GoogleFonts.inter(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: SizedBox(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // First row (5 colors)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: availableColors.sublist(0, 5).map((color) {
+                  return InkWell(
+                    onTap: () {
+                      if (type == 'Lecture') {
+                        ref.read(userPreferencesProvider.notifier).setLectureColor(color);
+                      } else if (type == 'Lab/Tutorial') {
+                        ref.read(userPreferencesProvider.notifier).setLabTutorialColor(color);
+                      } else if (type == 'Assignment') {
+                        ref.read(userPreferencesProvider.notifier).setAssignmentColor(color);
+                      }
+                      Navigator.of(context).pop();
+                    },
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: currentColor == color ? Colors.black : Colors.grey.shade300,
+                          width: currentColor == color ? 3 : 2,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              // Second row (5 colors)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: availableColors.sublist(5, 10).map((color) {
+                  return InkWell(
+                    onTap: () {
+                      if (type == 'Lecture') {
+                        ref.read(userPreferencesProvider.notifier).setLectureColor(color);
+                      } else if (type == 'Lab/Tutorial') {
+                        ref.read(userPreferencesProvider.notifier).setLabTutorialColor(color);
+                      } else if (type == 'Assignment') {
+                        ref.read(userPreferencesProvider.notifier).setAssignmentColor(color);
+                      }
+                      Navigator.of(context).pop();
+                    },
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: currentColor == color ? Colors.black : Colors.grey.shade300,
+                          width: currentColor == color ? 3 : 2,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -419,110 +475,78 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
-                // Account Information
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Account',
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            const Icon(Icons.email_outlined, size: 20),
-                            const SizedBox(width: 12),
-                            Text(
-                              user?.email ?? 'Not logged in',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Settings Options
+                // Account Section
                 Card(
                   child: Column(
                     children: [
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF8B5CF6).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            currentTheme.icon,
-                            color: const Color(0xFF8B5CF6),
-                            size: 20,
-                          ),
-                        ),
-                        title: const Text('Theme'),
-                        subtitle: Text(currentTheme.displayName),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _showThemeDialog,
-                      ),
-                      const Divider(height: 1),
-                      SwitchListTile(
-                        secondary: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF10B981).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.task_alt,
-                            color: Color(0xFF10B981),
-                            size: 20,
-                          ),
-                        ),
-                        title: const Text('Advanced Task Status'),
-                        subtitle: const Text('Enable 3-state toggle (not started, in progress, complete)'),
-                        value: userPreferences.enableThreeStateTaskToggle,
-                        onChanged: (value) {
-                          ref.read(userPreferencesProvider.notifier).setThreeStateTaskToggle(value);
-                        },
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF8B5CF6).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.notifications_outlined,
-                            color: Color(0xFF8B5CF6),
-                            size: 20,
-                          ),
-                        ),
-                        title: const Text('Notifications'),
-                        subtitle: const Text('Manage reminders and alerts'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const NotificationSettingsScreen(),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0EA5E9).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.account_circle_outlined,
+                                color: Color(0xFF0EA5E9),
+                                size: 20,
+                              ),
                             ),
-                          );
-                        },
+                            const SizedBox(width: 12),
+                            Text(
+                              'Account',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.email_outlined),
+                        title: Text(user?.email ?? 'Not logged in'),
+                        subtitle: const Text('Email address'),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.lock_outline),
+                        title: const Text('Change Password'),
+                        subtitle: const Text('Update your account password'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: _showChangePasswordDialog,
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.logout_outlined),
+                        title: const Text('Log Out'),
+                        subtitle: const Text('Sign out of your account'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: _showLogoutDialog,
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(
+                          Icons.delete_outline,
+                          color: Color(0xFFEF4444),
+                        ),
+                        title: const Text(
+                          'Delete Account',
+                          style: TextStyle(color: Color(0xFFEF4444)),
+                        ),
+                        subtitle: const Text('Permanently delete your account'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: _showDeleteAccountDialog,
                       ),
                     ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                // Customization Section
+                  const SizedBox(height: 24),
+                // Customisation Section
                 Card(
                   child: Column(
                     children: [
@@ -544,7 +568,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              'Customization',
+                              'Customisation',
                               style: GoogleFonts.poppins(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -555,11 +579,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       const Divider(height: 1),
                       ListTile(
-                        leading: const Icon(Icons.text_fields),
-                        title: const Text('Font Size'),
-                        subtitle: Text(customizationPrefs.fontSize.displayName),
+                        leading: Icon(currentTheme.icon),
+                        title: const Text('Theme'),
+                        subtitle: Text(currentTheme.displayName),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _showFontSizeDialog(customizationPrefs.fontSize),
+                        onTap: _showThemeDialog,
                       ),
                       const Divider(height: 1),
                       ListTile(
@@ -571,90 +595,75 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       const Divider(height: 1),
                       ListTile(
-                        leading: const Icon(Icons.view_agenda),
-                        title: const Text('Default Task View'),
-                        subtitle: Text(customizationPrefs.defaultTaskView.displayName),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _showTaskViewDialog(customizationPrefs.defaultTaskView),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
                         leading: const Icon(Icons.grade),
                         title: const Text('Grade Display Format'),
                         subtitle: Text(customizationPrefs.gradeDisplayFormat.displayName),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => _showGradeFormatDialog(customizationPrefs.gradeDisplayFormat),
                       ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.notifications_outlined),
+                        title: const Text('Notifications'),
+                        subtitle: const Text('Manage reminders and alerts'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const NotificationSettingsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: userPreferences.customLectureColor ?? const Color(0xFF1565C0),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        title: const Text('Lecture Colour'),
+                        subtitle: const Text('Colour for lecture events'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _showColorPickerDialog('Lecture', userPreferences.customLectureColor),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: userPreferences.customLabTutorialColor ?? const Color(0xFF4CAF50),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        title: const Text('Lab/Tutorial Colour'),
+                        subtitle: const Text('Colour for lab and tutorial events'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _showColorPickerDialog('Lab/Tutorial', userPreferences.customLabTutorialColor),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: userPreferences.customAssignmentColor ?? const Color(0xFFF44336),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        title: const Text('Assignment Colour'),
+                        subtitle: const Text('Colour for assignment events'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _showColorPickerDialog('Assignment', userPreferences.customAssignmentColor),
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
-                // Security Section
-                Card(
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0EA5E9).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.lock_outline,
-                            color: Color(0xFF0EA5E9),
-                            size: 20,
-                          ),
-                        ),
-                        title: const Text('Change Password'),
-                        subtitle: const Text('Update your account password'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _showChangePasswordDialog,
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF59E0B).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.logout_outlined,
-                            color: Color(0xFFF59E0B),
-                            size: 20,
-                          ),
-                        ),
-                        title: const Text('Log Out'),
-                        subtitle: const Text('Sign out of your account'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _showLogoutDialog,
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEF4444).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.delete_outline,
-                            color: Color(0xFFEF4444),
-                            size: 20,
-                          ),
-                        ),
-                        title: const Text(
-                          'Delete Account',
-                          style: TextStyle(color: Color(0xFFEF4444)),
-                        ),
-                        subtitle: const Text('Permanently delete your account'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _showDeleteAccountDialog,
-                      ),
-                    ],
-                    ),
-                  ),
                   const SizedBox(height: 24),
                   // Support Section
                   Card(

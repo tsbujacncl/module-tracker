@@ -60,7 +60,7 @@ class HomeScreen extends ConsumerWidget {
                 child: Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: 10,
-                    vertical: 4,
+                    vertical: 2,
                   ),
                   child: Row(
                     children: [
@@ -93,7 +93,7 @@ class HomeScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      SizedBox(width: 10),
+                      SizedBox(width: 6),
                       // Title next to logo - dynamically sized
                       Expanded(
                         child: ShaderMask(
@@ -124,7 +124,7 @@ class HomeScreen extends ConsumerWidget {
                         scaleFactor,
                         onTap: () => _showAddMenu(context),
                       ),
-                      SizedBox(width: 5),
+                      SizedBox(width: 3),
                       _buildScaledActionIcon(
                         context,
                         Icons.archive_outlined,
@@ -137,7 +137,7 @@ class HomeScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      SizedBox(width: 5),
+                      SizedBox(width: 3),
                       _buildScaledActionIcon(
                         context,
                         Icons.assessment_outlined,
@@ -150,7 +150,7 @@ class HomeScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      SizedBox(width: 5),
+                      SizedBox(width: 3),
                       _buildScaledActionIcon(
                         context,
                         Icons.settings_outlined,
@@ -512,7 +512,7 @@ class HomeScreen extends ConsumerWidget {
                             );
                           },
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 8),
                         // Weekly Calendar - always show
                         Builder(
                           builder: (context) {

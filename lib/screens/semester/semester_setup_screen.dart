@@ -252,14 +252,17 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
       appBar: AppBar(
         title: Text(_isEditMode ? 'Edit Semester' : 'Create Semester'),
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
             Text(
               'Semester Information',
               style: Theme.of(context).textTheme.headlineSmall,
@@ -274,6 +277,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
             const SizedBox(height: 32),
             TextFormField(
               controller: _nameController,
+              textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 labelText: 'Semester Name',
                 hintText: 'e.g., Semester 1 2024/25',
@@ -475,9 +479,11 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                     )
                   : Text(_isEditMode ? 'Update Semester' : 'Create Semester'),
             ),
-              ],
+                  ],
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

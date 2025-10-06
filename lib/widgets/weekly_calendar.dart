@@ -1,4 +1,6 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:module_tracker/models/module.dart';
@@ -12,7 +14,7 @@ import 'package:module_tracker/providers/module_provider.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
 
-class WeeklyCalendar extends ConsumerWidget {
+class WeeklyCalendar extends ConsumerStatefulWidget {
   final Semester? semester;
   final int currentWeek;
   final List<Module> modules;
@@ -34,16 +36,29 @@ class WeeklyCalendar extends ConsumerWidget {
     this.isSwipeable = false,
   });
 
+  @override
+  ConsumerState<WeeklyCalendar> createState() => _WeeklyCalendarState();
+}
+
+class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
+  // Track selected events during drag
+  final Set<String> _selectedEventIds = {};
+  bool _isDragging = false;
+  bool _isCompleting = true; // true = completing, false = uncompleting
+  final Map<String, TaskStatus> _temporaryCompletions = {}; // For instant visual feedback
+  String? _firstTouchedEventId; // Track first box touched, waiting for drag confirmation
+  TaskStatus? _firstTouchedStatus;
+
   // Get the week start date (Monday)
   DateTime getWeekStartDate() {
     // If weekStartDate is provided, use it
-    if (weekStartDate != null) {
-      return weekStartDate!;
+    if (widget.weekStartDate != null) {
+      return widget.weekStartDate!;
     }
 
     // If semester is provided, calculate from semester start
-    if (semester != null) {
-      return semester!.startDate.add(Duration(days: (currentWeek - 1) * 7));
+    if (widget.semester != null) {
+      return widget.semester!.startDate.add(Duration(days: (widget.currentWeek - 1) * 7));
     }
 
     // Otherwise, use current week's Monday
@@ -54,16 +69,24 @@ class WeeklyCalendar extends ConsumerWidget {
 
   // Get color for task type
   Color getTaskColor(RecurringTaskType type) {
+    final preferences = ref.watch(userPreferencesProvider);
+
     switch (type) {
       case RecurringTaskType.lecture:
-        return const Color(0xFF3B82F6); // Blue
+        return preferences.customLectureColor ?? const Color(0xFF1565C0); // Dark Blue
       case RecurringTaskType.lab:
       case RecurringTaskType.tutorial:
-        return const Color(0xFF10B981); // Green for labs and tutorials
+        return preferences.customLabTutorialColor ?? const Color(0xFF4CAF50); // Green for labs and tutorials
       case RecurringTaskType.flashcards:
       case RecurringTaskType.custom:
         return const Color(0xFF8B5CF6); // Purple for custom tasks
     }
+  }
+
+  // Get color for assessments
+  Color getAssessmentColor() {
+    final preferences = ref.watch(userPreferencesProvider);
+    return preferences.customAssignmentColor ?? const Color(0xFFF44336); // Red
   }
 
   // Get display name for task type
@@ -85,7 +108,7 @@ class WeeklyCalendar extends ConsumerWidget {
   // Get module by ID
   Module? getModule(String moduleId) {
     try {
-      return modules.firstWhere((m) => m.id == moduleId);
+      return widget.modules.firstWhere((m) => m.id == moduleId);
     } catch (e) {
       return null;
     }
@@ -95,7 +118,7 @@ class WeeklyCalendar extends ConsumerWidget {
   List<TaskWithModule> getTasksForDay(int dayOfWeek) {
     final tasks = <TaskWithModule>[];
 
-    for (final entry in tasksByModule.entries) {
+    for (final entry in widget.tasksByModule.entries) {
       final moduleId = entry.key;
       final moduleTasks = entry.value;
       final module = getModule(moduleId);
@@ -124,9 +147,9 @@ class WeeklyCalendar extends ConsumerWidget {
     final assessments = <AssessmentWithModule>[];
 
     // If no semester, no assessments to show
-    if (semester == null) return assessments;
+    if (widget.semester == null) return assessments;
 
-    for (final entry in assessmentsByModule.entries) {
+    for (final entry in widget.assessmentsByModule.entries) {
       final moduleId = entry.key;
       final moduleAssessments = entry.value;
       final module = getModule(moduleId);
@@ -140,7 +163,7 @@ class WeeklyCalendar extends ConsumerWidget {
 
           if (assessment.type == AssessmentType.weekly) {
             // Get all due dates for this weekly assessment
-            final dueDates = assessment.getWeeklyDueDates(semester!.startDate);
+            final dueDates = assessment.getWeeklyDueDates(widget.semester!.startDate);
 
             // Check if any due date matches the current date
             for (final dueDate in dueDates) {
@@ -201,40 +224,40 @@ class WeeklyCalendar extends ConsumerWidget {
 
   // Get the earliest and latest times from all tasks and assessments
   (int startHour, int endHour) getTimeRange() {
-    int earliestHour = 24;
-    int latestEndMinutes = 0;
+    int earliestHour = 24;  // Start with impossibly late hour
+    int latestEndMinutes = 0;  // Start with impossibly early time
 
     // Check tasks
-    for (final tasks in tasksByModule.values) {
+    for (final tasks in widget.tasksByModule.values) {
       for (final task in tasks) {
         if (task.time != null) {
           final startMinutes = parseTimeToMinutes(task.time!);
           final startH = startMinutes ~/ 60;
-          earliestHour = earliestHour < startH ? earliestHour : startH;
+          earliestHour = math.min(earliestHour, startH);
 
           if (task.endTime != null) {
             final endMinutes = parseTimeToMinutes(task.endTime!);
-            latestEndMinutes = latestEndMinutes > endMinutes ? latestEndMinutes : endMinutes;
+            latestEndMinutes = math.max(latestEndMinutes, endMinutes);
           } else {
             // If no end time, assume 1 hour duration
             final endMinutes = startMinutes + 60;
-            latestEndMinutes = latestEndMinutes > endMinutes ? latestEndMinutes : endMinutes;
+            latestEndMinutes = math.max(latestEndMinutes, endMinutes);
           }
         }
       }
     }
 
     // Check assessments
-    for (final assessments in assessmentsByModule.values) {
+    for (final assessments in widget.assessmentsByModule.values) {
       for (final assessment in assessments) {
         if (assessment.time != null) {
           final startMinutes = parseTimeToMinutes(assessment.time!);
           final startH = startMinutes ~/ 60;
-          earliestHour = earliestHour < startH ? earliestHour : startH;
+          earliestHour = math.min(earliestHour, startH);
 
           // Assessments default to 1 hour duration
           final endMinutes = startMinutes + 60;
-          latestEndMinutes = latestEndMinutes > endMinutes ? latestEndMinutes : endMinutes;
+          latestEndMinutes = math.max(latestEndMinutes, endMinutes);
         }
       }
     }
@@ -252,6 +275,9 @@ class WeeklyCalendar extends ConsumerWidget {
     } else {
       latestHour = (latestEndMinutes / 60).ceil();
     }
+
+    // Debug: Print the calculated range
+    print('DEBUG CALENDAR: Time range calculated - Start: ${earliestHour}:00, End: ${latestHour}:00');
 
     return (earliestHour, latestHour);
   }
@@ -348,7 +374,7 @@ class WeeklyCalendar extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final weekStart = getWeekStartDate();
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']; // Only weekdays
 
@@ -360,7 +386,7 @@ class WeeklyCalendar extends ConsumerWidget {
 
     // Calculate pixels per hour to fill screen height (more on narrow screens)
     final screenWidth = MediaQuery.of(context).size.width;
-    final heightRatio = screenWidth < 400 ? 0.5 : 0.45;
+    final heightRatio = screenWidth < 400 ? 0.40 : 0.38;
     final maxHeight = MediaQuery.of(context).size.height * heightRatio;
     final pixelsPerHour = maxHeight / totalHours;
 
@@ -370,23 +396,76 @@ class WeeklyCalendar extends ConsumerWidget {
     final legendColor = isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFFAFAFA);
     final borderColor = isDarkMode ? const Color(0xFF334155) : const Color(0xFFE0F2FE);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
+    return GestureDetector(
+      behavior: HitTestBehavior.deferToChild,
+      onPanStart: (details) {
+        // Drag is now confirmed - activate first touched box if exists
+        if (!_isDragging) {
+          setState(() {
+            _isDragging = true;
+          });
+
+          // Now select the first box that was touched
+          if (_firstTouchedEventId != null && _firstTouchedStatus != null) {
+            selectEvent(_firstTouchedEventId!, _firstTouchedStatus!);
+            _firstTouchedEventId = null;
+            _firstTouchedStatus = null;
+          }
+        }
+      },
+      onPanUpdate: (details) {
+        if (_isDragging) {
+          // Hit detection will be handled by individual event widgets via MouseRegion
+        }
+      },
+      onPanEnd: (details) {
+        if (_isDragging && _selectedEventIds.length >= 2) {
+          // Events are already completed immediately as dragged over
+          if (mounted) {
+            final action = _isCompleting ? 'Completed' : 'Uncompleted';
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('$action ${_selectedEventIds.length} events'),
+                duration: const Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+        setState(() {
+          _isDragging = false;
+          _selectedEventIds.clear();
+          // DON'T clear _temporaryCompletions - let automatic cleanup handle it when provider updates
+          _firstTouchedEventId = null;
+          _firstTouchedStatus = null;
+        });
+      },
+      onPanCancel: () {
+        setState(() {
+          _isDragging = false;
+          _selectedEventIds.clear();
+          // DON'T clear _temporaryCompletions - let automatic cleanup handle it when provider updates
+          _firstTouchedEventId = null;
+          _firstTouchedStatus = null;
+        });
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
           // Calendar header with days
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
               color: legendColor,
               borderRadius: const BorderRadius.only(
@@ -399,7 +478,7 @@ class WeeklyCalendar extends ConsumerWidget {
                 // Time column header (empty space) - FIXED
                 const SizedBox(width: 32),
                 // Day headers - SWIPEABLE or STATIC
-                if (isSwipeable)
+                if (widget.isSwipeable)
                   Expanded(
                     child: SizedBox(
                       height: 60, // Fixed height for header
@@ -409,7 +488,7 @@ class WeeklyCalendar extends ConsumerWidget {
                           minWidth: 0,
                           maxWidth: double.infinity,
                           child: Transform.translate(
-                          offset: Offset(dragOffset - (screenWidth - 32), 0),
+                          offset: Offset(widget.dragOffset - (screenWidth - 32), 0),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -567,13 +646,13 @@ class WeeklyCalendar extends ConsumerWidget {
                       top: 0,
                       bottom: 0,
                       child: ClipRect(
-                        child: isSwipeable
+                        child: widget.isSwipeable
                             ? OverflowBox(
                                 alignment: Alignment.centerLeft,
                                 minWidth: 0,
                                 maxWidth: double.infinity,
                                 child: Transform.translate(
-                                  offset: Offset(dragOffset - (screenWidth - 32), 0),
+                                  offset: Offset(widget.dragOffset - (screenWidth - 32), 0),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -719,11 +798,15 @@ class WeeklyCalendar extends ConsumerWidget {
                             task: event.taskWithModule!.task,
                             module: event.taskWithModule!.module,
                             height: itemHeight,
-                            weekNumber: currentWeek,
+                            weekNumber: widget.currentWeek,
                             dayOfWeek: dayOfWeek,
-                            semester: semester!,
+                            semester: widget.semester!,
                             getTaskColor: getTaskColor,
                             getTaskTypeName: getTaskTypeName,
+                            onTouchDown: onTouchDown,
+                            onSelectEvent: selectEvent,
+                            isEventSelected: isEventSelected,
+                            getTemporaryStatus: getTemporaryStatus,
                           ),
                         ));
                       } else {
@@ -735,9 +818,13 @@ class WeeklyCalendar extends ConsumerWidget {
                             assessment: event.assessmentWithModule!.assessment,
                             module: event.assessmentWithModule!.module,
                             height: itemHeight,
-                            weekNumber: currentWeek,
+                            weekNumber: widget.currentWeek,
                             dayOfWeek: dayOfWeek,
-                            semester: semester!,
+                            semester: widget.semester!,
+                            onTouchDown: onTouchDown,
+                            onSelectEvent: selectEvent,
+                            isEventSelected: isEventSelected,
+                            getTemporaryStatus: getTemporaryStatus,
                           ),
                         ));
                       }
@@ -971,11 +1058,15 @@ class WeeklyCalendar extends ConsumerWidget {
                                           task: event.taskWithModule!.task,
                                           module: event.taskWithModule!.module,
                                           height: itemHeight,
-                                          weekNumber: currentWeek,
+                                          weekNumber: widget.currentWeek,
                                           dayOfWeek: dayOfWeek,
-                                          semester: semester!,
+                                          semester: widget.semester!,
                                           getTaskColor: getTaskColor,
                                           getTaskTypeName: getTaskTypeName,
+                                          onTouchDown: onTouchDown,
+                                          onSelectEvent: selectEvent,
+                                          isEventSelected: isEventSelected,
+                                          getTemporaryStatus: getTemporaryStatus,
                                         ),
                                       ));
                                     } else {
@@ -987,9 +1078,13 @@ class WeeklyCalendar extends ConsumerWidget {
                                           assessment: event.assessmentWithModule!.assessment,
                                           module: event.assessmentWithModule!.module,
                                           height: itemHeight,
-                                          weekNumber: currentWeek,
+                                          weekNumber: widget.currentWeek,
                                           dayOfWeek: dayOfWeek,
-                                          semester: semester!,
+                                          semester: widget.semester!,
+                                          onTouchDown: onTouchDown,
+                                          onSelectEvent: selectEvent,
+                                          isEventSelected: isEventSelected,
+                                          getTemporaryStatus: getTemporaryStatus,
                                         ),
                                       ));
                                     }
@@ -1118,7 +1213,7 @@ class WeeklyCalendar extends ConsumerWidget {
           ),
           // Legend
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: legendColor,
               borderRadius: const BorderRadius.only(
@@ -1131,21 +1226,134 @@ class WeeklyCalendar extends ConsumerWidget {
               runSpacing: 8,
               children: [
                 _LegendItem(
-                  color: const Color(0xFF3B82F6),
+                  color: ref.watch(userPreferencesProvider).customLectureColor ?? const Color(0xFF1565C0),
                   label: 'Lecture',
+                  onTap: () => _showColorPicker(context, 'Lecture'),
                 ),
                 _LegendItem(
-                  color: const Color(0xFF10B981),
+                  color: ref.watch(userPreferencesProvider).customLabTutorialColor ?? const Color(0xFF4CAF50),
                   label: 'Lab/Tutorial',
+                  onTap: () => _showColorPicker(context, 'Lab/Tutorial'),
                 ),
                 _LegendItem(
-                  color: const Color(0xFFEF4444),
+                  color: ref.watch(userPreferencesProvider).customAssignmentColor ?? const Color(0xFFF44336),
                   label: 'Assignment',
+                  onTap: () => _showColorPicker(context, 'Assignment'),
                 ),
               ],
             ),
           ),
         ],
+        ),
+      ),
+    );
+  }
+
+  // Method to complete a single event immediately (as soon as it's touched)
+  Future<void> _completeEventImmediately(String eventId) async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return;
+
+    final repository = ref.read(firestoreRepositoryProvider);
+    final now = DateTime.now();
+    final targetStatus = _isCompleting ? TaskStatus.complete : TaskStatus.notStarted;
+
+    // Event ID format: "task_moduleId_taskId" or "assessment_moduleId_assessmentId"
+    final parts = eventId.split('_');
+    if (parts.length != 3) return;
+
+    final type = parts[0];
+    final moduleId = parts[1];
+    final itemId = parts[2];
+
+    final newCompletion = TaskCompletion(
+      id: '',
+      moduleId: moduleId,
+      taskId: itemId,
+      weekNumber: widget.currentWeek,
+      status: targetStatus,
+      completedAt: targetStatus == TaskStatus.complete ? now : null,
+    );
+
+    // Fire and forget - don't await to keep UI responsive
+    repository.upsertTaskCompletion(
+      user.uid,
+      moduleId,
+      newCompletion,
+    );
+  }
+
+  // Called when first touching a box (before drag confirmed)
+  void onTouchDown(String eventId, TaskStatus currentStatus) {
+    if (!_isDragging) {
+      _firstTouchedEventId = eventId;
+      _firstTouchedStatus = currentStatus;
+    }
+  }
+
+  // Method to select event when dragged over (only called during active drag)
+  void selectEvent(String eventId, TaskStatus currentStatus) {
+    // Only select during active drag
+    if (!_isDragging) return;
+
+    // Skip if already selected
+    if (_selectedEventIds.contains(eventId)) return;
+
+    setState(() {
+      // If this is the first event, determine if we're completing or uncompleting
+      if (_selectedEventIds.isEmpty) {
+        _isCompleting = currentStatus != TaskStatus.complete;
+      }
+
+      _selectedEventIds.add(eventId);
+
+      // Set temporary completion status for instant visual feedback
+      _temporaryCompletions[eventId] = _isCompleting ? TaskStatus.complete : TaskStatus.notStarted;
+    });
+
+    // Immediately update database (don't wait for drag release)
+    _completeEventImmediately(eventId);
+  }
+
+  // Check if event is selected
+  bool isEventSelected(String eventId) {
+    return _isDragging && _selectedEventIds.contains(eventId);
+  }
+
+  // Get temporary completion status for instant visual feedback
+  // Also cleans up if database has caught up
+  TaskStatus? getTemporaryStatus(String eventId, TaskStatus dbStatus) {
+    final tempStatus = _temporaryCompletions[eventId];
+
+    // If database has caught up to temporary status, remove from temp map
+    if (tempStatus != null && tempStatus == dbStatus) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _temporaryCompletions.remove(eventId);
+          });
+        }
+      });
+    }
+
+    return tempStatus;
+  }
+
+  // Show color picker dialog
+  void _showColorPicker(BuildContext context, String type) {
+    showDialog(
+      context: context,
+      builder: (context) => _ColorPickerDialog(
+        type: type,
+        onColorSelected: (color) {
+          if (type == 'Lecture') {
+            ref.read(userPreferencesProvider.notifier).setLectureColor(color);
+          } else if (type == 'Lab/Tutorial') {
+            ref.read(userPreferencesProvider.notifier).setLabTutorialColor(color);
+          } else if (type == 'Assignment') {
+            ref.read(userPreferencesProvider.notifier).setAssignmentColor(color);
+          }
+        },
       ),
     );
   }
@@ -1154,35 +1362,44 @@ class WeeklyCalendar extends ConsumerWidget {
 class _LegendItem extends StatelessWidget {
   final Color color;
   final String label;
+  final VoidCallback? onTap;
 
   const _LegendItem({
     required this.color,
     required this.label,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(3),
-          ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -1215,6 +1432,10 @@ class _TimetableAssessmentBox extends ConsumerWidget {
   final int weekNumber;
   final int dayOfWeek;
   final Semester semester;
+  final Function(String, TaskStatus) onTouchDown;
+  final Function(String, TaskStatus) onSelectEvent;
+  final bool Function(String) isEventSelected;
+  final TaskStatus? Function(String, TaskStatus) getTemporaryStatus;
 
   const _TimetableAssessmentBox({
     required this.assessment,
@@ -1223,6 +1444,10 @@ class _TimetableAssessmentBox extends ConsumerWidget {
     required this.weekNumber,
     required this.dayOfWeek,
     required this.semester,
+    required this.onTouchDown,
+    required this.onSelectEvent,
+    required this.isEventSelected,
+    required this.getTemporaryStatus,
   });
 
   @override
@@ -1244,66 +1469,73 @@ class _TimetableAssessmentBox extends ConsumerWidget {
           ),
         );
 
-        final isCompleted = completion.status == TaskStatus.complete;
+        final eventId = 'assessment_${module.id}_${assessment.id}';
+        final temporaryStatus = getTemporaryStatus(eventId, completion.status);
+        final currentStatus = temporaryStatus ?? completion.status;
+        final isCompleted = currentStatus == TaskStatus.complete;
 
-        return GestureDetector(
-          onTap: () async {
-            final user = ref.read(currentUserProvider);
-            if (user == null) return;
+        return Listener(
+          onPointerDown: (_) => onTouchDown(eventId, currentStatus),
+          child: MouseRegion(
+            onEnter: (_) => onSelectEvent(eventId, currentStatus),
+            child: GestureDetector(
+              onTap: () async {
+              final user = ref.read(currentUserProvider);
+              if (user == null) return;
 
-            final repository = ref.read(firestoreRepositoryProvider);
+              final repository = ref.read(firestoreRepositoryProvider);
 
-            // Simple 2-state toggle by default
-            final newStatus = !isCompleted
-                ? TaskStatus.complete
-                : TaskStatus.notStarted;
+              // Simple 2-state toggle by default
+              final newStatus = !isCompleted
+                  ? TaskStatus.complete
+                  : TaskStatus.notStarted;
 
-            final now = DateTime.now();
+              final now = DateTime.now();
 
-            final newCompletion = TaskCompletion(
-              id: completion.id,
-              moduleId: module.id,
-              taskId: assessment.id,
-              weekNumber: weekNumber,
-              status: newStatus,
-              completedAt: newStatus == TaskStatus.complete ? now : null,
-            );
-
-            await repository.upsertTaskCompletion(
-              user.uid,
-              module.id,
-              newCompletion,
-            );
-          },
-          onLongPress: () {
-            // Calculate the date for this assessment based on day of week
-            final weekStart = semester.startDate.add(Duration(days: (weekNumber - 1) * 7));
-            final assessmentDate = weekStart.add(Duration(days: dayOfWeek - 1));
-
-            showDialog(
-              context: context,
-              builder: (context) => _AssessmentDetailsDialog(
-                assessment: assessment,
-                module: module,
-                completion: completion,
+              final newCompletion = TaskCompletion(
+                id: completion.id,
+                moduleId: module.id,
+                taskId: assessment.id,
                 weekNumber: weekNumber,
-                date: assessmentDate,
-              ),
-            );
-          },
-          child: Container(
-            height: height,
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEF4444).withOpacity(isCompleted ? 0.3 : 0.15), // Red color
-              borderRadius: BorderRadius.circular(6),
-              border: const Border(
-                left: BorderSide(
-                  color: Color(0xFFEF4444), // Red
-                  width: 3,
+                status: newStatus,
+                completedAt: newStatus == TaskStatus.complete ? now : null,
+              );
+
+              await repository.upsertTaskCompletion(
+                user.uid,
+                module.id,
+                newCompletion,
+              );
+            },
+            onLongPress: () {
+              // Calculate the date for this assessment based on day of week
+              final weekStart = semester.startDate.add(Duration(days: (weekNumber - 1) * 7));
+              final assessmentDate = weekStart.add(Duration(days: dayOfWeek - 1));
+
+              showDialog(
+                context: context,
+                builder: (context) => _AssessmentDetailsDialog(
+                  assessment: assessment,
+                  module: module,
+                  completion: completion,
+                  weekNumber: weekNumber,
+                  date: assessmentDate,
+                ),
+              );
+            },
+            child: Container(
+              height: height,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withOpacity(isCompleted ? 0.3 : 0.15), // Red color
+                borderRadius: BorderRadius.circular(6),
+                border: const Border(
+                  left: BorderSide(
+                    color: Color(0xFFEF4444), // Red
+                    width: 3,
+                  ),
                 ),
               ),
-            ),
             child: Stack(
               children: [
                 // Assessment content - full width
@@ -1346,9 +1578,9 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                   height: 16,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: completion.status == TaskStatus.complete
+                    color: currentStatus == TaskStatus.complete
                         ? const Color(0xFFEF4444)
-                        : completion.status == TaskStatus.inProgress
+                        : currentStatus == TaskStatus.inProgress
                             ? Colors.orange
                             : Colors.white,
                     border: Border.all(
@@ -1356,13 +1588,13 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                       width: 2,
                     ),
                   ),
-                  child: completion.status == TaskStatus.complete
+                  child: currentStatus == TaskStatus.complete
                       ? const Icon(
                           Icons.check,
                           size: 10,
                           color: Colors.white,
                         )
-                      : completion.status == TaskStatus.inProgress
+                      : currentStatus == TaskStatus.inProgress
                           ? const Icon(
                               Icons.more_horiz,
                               size: 10,
@@ -1374,6 +1606,8 @@ class _TimetableAssessmentBox extends ConsumerWidget {
             ],
           ),
         ),
+              ),
+            ),
         );
       },
       loading: () => Container(
@@ -1419,6 +1653,10 @@ class _TimetableTaskBox extends ConsumerWidget {
   final Semester semester;
   final Color Function(RecurringTaskType) getTaskColor;
   final String Function(RecurringTaskType) getTaskTypeName;
+  final Function(String, TaskStatus) onTouchDown;
+  final Function(String, TaskStatus) onSelectEvent;
+  final bool Function(String) isEventSelected;
+  final TaskStatus? Function(String, TaskStatus) getTemporaryStatus;
 
   const _TimetableTaskBox({
     required this.task,
@@ -1429,6 +1667,10 @@ class _TimetableTaskBox extends ConsumerWidget {
     required this.semester,
     required this.getTaskColor,
     required this.getTaskTypeName,
+    required this.onTouchDown,
+    required this.onSelectEvent,
+    required this.isEventSelected,
+    required this.getTemporaryStatus,
   });
 
   @override
@@ -1450,10 +1692,17 @@ class _TimetableTaskBox extends ConsumerWidget {
           ),
         );
 
-        final isCompleted = completion.status == TaskStatus.complete;
+        final eventId = 'task_${module.id}_${task.id}';
+        final temporaryStatus = getTemporaryStatus(eventId, completion.status);
+        final currentStatus = temporaryStatus ?? completion.status;
+        final isCompleted = currentStatus == TaskStatus.complete;
 
-        return GestureDetector(
-          onTap: () async {
+        return Listener(
+          onPointerDown: (_) => onTouchDown(eventId, currentStatus),
+          child: MouseRegion(
+            onEnter: (_) => onSelectEvent(eventId, currentStatus),
+            child: GestureDetector(
+              onTap: () async {
             final user = ref.read(currentUserProvider);
             if (user == null) return;
 
@@ -1539,18 +1788,18 @@ class _TimetableTaskBox extends ConsumerWidget {
             );
           },
           child: Container(
-            height: height,
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: getTaskColor(task.type).withOpacity(isCompleted ? 0.3 : 0.15),
-              borderRadius: BorderRadius.circular(6),
-              border: Border(
-                left: BorderSide(
-                  color: getTaskColor(task.type),
-                  width: 3,
+              height: height,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: getTaskColor(task.type).withOpacity(isCompleted ? 0.3 : 0.15),
+                borderRadius: BorderRadius.circular(6),
+                border: Border(
+                  left: BorderSide(
+                    color: getTaskColor(task.type),
+                    width: 3,
+                  ),
                 ),
               ),
-            ),
             child: Stack(
               children: [
                 // Task content - full width
@@ -1616,9 +1865,9 @@ class _TimetableTaskBox extends ConsumerWidget {
                   height: 16,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: completion.status == TaskStatus.complete
+                    color: currentStatus == TaskStatus.complete
                         ? getTaskColor(task.type)
-                        : completion.status == TaskStatus.inProgress
+                        : currentStatus == TaskStatus.inProgress
                             ? Colors.orange
                             : Colors.white,
                     border: Border.all(
@@ -1626,13 +1875,13 @@ class _TimetableTaskBox extends ConsumerWidget {
                       width: 2,
                     ),
                   ),
-                  child: completion.status == TaskStatus.complete
+                  child: currentStatus == TaskStatus.complete
                       ? const Icon(
                           Icons.check,
                           size: 10,
                           color: Colors.white,
                         )
-                      : completion.status == TaskStatus.inProgress
+                      : currentStatus == TaskStatus.inProgress
                           ? const Icon(
                               Icons.more_horiz,
                               size: 10,
@@ -1644,6 +1893,8 @@ class _TimetableTaskBox extends ConsumerWidget {
             ],
           ),
         ),
+              ),
+            ),
         );
       },
       loading: () => Container(
@@ -2092,6 +2343,7 @@ class _EditAssessmentDialogState extends ConsumerState<_EditAssessmentDialog> {
             // Name
             TextField(
               controller: _nameController,
+              textCapitalization: TextCapitalization.words,
               decoration: InputDecoration(
                 labelText: 'Name',
                 labelStyle: GoogleFonts.inter(),
@@ -2152,6 +2404,7 @@ class _EditAssessmentDialogState extends ConsumerState<_EditAssessmentDialog> {
             // Description
             TextField(
               controller: _descriptionController,
+              textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 labelText: 'Description',
                 labelStyle: GoogleFonts.inter(),
@@ -2683,5 +2936,108 @@ String _getDaySuffix(int day) {
       return 'rd';
     default:
       return 'th';
+  }
+}
+
+// Color picker dialog
+class _ColorPickerDialog extends StatelessWidget {
+  final String type;
+  final Function(Color) onColorSelected;
+
+  const _ColorPickerDialog({
+    required this.type,
+    required this.onColorSelected,
+  });
+
+  static final List<Color> availableColors = [
+    const Color(0xFFF44336), // Red
+    const Color(0xFFFF9800), // Orange
+    const Color(0xFFFFEB3B), // Yellow
+    const Color(0xFF4CAF50), // Green
+    const Color(0xFF03A9F4), // Light Blue
+    const Color(0xFF1565C0), // Dark Blue
+    const Color(0xFF9C27B0), // Purple
+    const Color(0xFFE91E63), // Pink
+    const Color(0xFF795548), // Brown
+    const Color(0xFF9E9E9E), // Grey
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        'Choose Colour for $type',
+        style: GoogleFonts.inter(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      content: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // First row (5 colors)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: availableColors.sublist(0, 5).map((color) {
+                return InkWell(
+                  onTap: () {
+                    onColorSelected(color);
+                    Navigator.of(context).pop();
+                  },
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.grey.shade300,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 12),
+            // Second row (5 colors)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: availableColors.sublist(5, 10).map((color) {
+                return InkWell(
+                  onTap: () {
+                    onColorSelected(color);
+                    Navigator.of(context).pop();
+                  },
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.grey.shade300,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Cancel',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      ],
+    );
   }
 }

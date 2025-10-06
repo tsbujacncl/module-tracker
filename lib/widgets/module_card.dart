@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:module_tracker/models/module.dart';
 import 'package:module_tracker/models/recurring_task.dart';
@@ -10,9 +11,8 @@ import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/screens/module/module_form_screen.dart';
-import 'package:module_tracker/screens/module/module_detail_screen.dart';
 
-class ModuleCard extends ConsumerWidget {
+class ModuleCard extends ConsumerStatefulWidget {
   final Module module;
   final int weekNumber;
   final int totalModules;
@@ -25,6 +25,79 @@ class ModuleCard extends ConsumerWidget {
     this.totalModules = 1,
     this.isMobileStacked = false,
   });
+
+  @override
+  ConsumerState<ModuleCard> createState() => _ModuleCardState();
+}
+
+class _ModuleCardState extends ConsumerState<ModuleCard> {
+  // Track selected tasks during drag
+  final Set<String> _selectedTaskIds = {};
+  bool _isDragging = false;
+  bool _isCompleting = true;
+  final Map<String, TaskStatus> _temporaryCompletions = {};
+  String? _firstTouchedTaskId;
+  TaskStatus? _firstTouchedStatus;
+
+  void onTouchDown(String taskId, TaskStatus currentStatus) {
+    if (!_isDragging) {
+      _firstTouchedTaskId = taskId;
+      _firstTouchedStatus = currentStatus;
+    }
+  }
+
+  void selectTask(String taskId, TaskStatus currentStatus) {
+    if (!_isDragging) return;
+    if (_selectedTaskIds.contains(taskId)) return;
+
+    setState(() {
+      if (_selectedTaskIds.isEmpty) {
+        _isCompleting = currentStatus != TaskStatus.complete;
+      }
+      _selectedTaskIds.add(taskId);
+      _temporaryCompletions[taskId] = _isCompleting ? TaskStatus.complete : TaskStatus.notStarted;
+    });
+
+    _completeTaskImmediately(taskId);
+  }
+
+  Future<void> _completeTaskImmediately(String taskId) async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return;
+
+    final repository = ref.read(firestoreRepositoryProvider);
+    final now = DateTime.now();
+    final targetStatus = _isCompleting ? TaskStatus.complete : TaskStatus.notStarted;
+
+    final newCompletion = TaskCompletion(
+      id: '',
+      moduleId: widget.module.id,
+      taskId: taskId,
+      weekNumber: widget.weekNumber,
+      status: targetStatus,
+      completedAt: targetStatus == TaskStatus.complete ? now : null,
+    );
+
+    // Fire and forget - don't await
+    repository.upsertTaskCompletion(user.uid, widget.module.id, newCompletion);
+  }
+
+  TaskStatus? getTemporaryStatus(String taskId, TaskStatus dbStatus) {
+    final tempStatus = _temporaryCompletions[taskId];
+
+    // If database has caught up to temporary status, remove from temp map
+    if (tempStatus != null && tempStatus == dbStatus) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _temporaryCompletions.remove(taskId);
+          });
+        }
+      });
+    }
+
+    return tempStatus;
+  }
 
   // Get display name for task type
   String getTaskTypeName(RecurringTaskType type) {
@@ -42,8 +115,32 @@ class ModuleCard extends ConsumerWidget {
     }
   }
 
-  // Generate smart task name with occurrence count
-  String generateTaskName(RecurringTask task, List<RecurringTask> allTasks) {
+  // Helper function to format date as "Mon 6th", "Tue 7th", etc.
+  String formatTaskDate(DateTime date) {
+    final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final dayOfWeek = dayNames[date.weekday - 1];
+    final day = date.day;
+
+    String getOrdinalSuffix(int day) {
+      if (day >= 11 && day <= 13) return 'th';
+      switch (day % 10) {
+        case 1: return 'st';
+        case 2: return 'nd';
+        case 3: return 'rd';
+        default: return 'th';
+      }
+    }
+
+    return '$dayOfWeek $day${getOrdinalSuffix(day)}';
+  }
+
+  // Generate smart task name with date or occurrence count
+  String generateTaskName(
+    RecurringTask task,
+    List<RecurringTask> allTasks,
+    DateTime semesterStartDate,
+    int weekNumber,
+  ) {
     // For custom tasks with names, just use the name
     if (task.type == RecurringTaskType.custom ||
         task.type == RecurringTaskType.flashcards) {
@@ -65,16 +162,7 @@ class ModuleCard extends ConsumerWidget {
       return (a.time ?? '').compareTo(b.time ?? '');
     });
 
-    // Find the index of this task (1-based)
-    final index = tasksOfSameType.indexWhere(
-      (t) =>
-          t.id == task.id ||
-          (t.dayOfWeek == task.dayOfWeek && t.time == task.time),
-    );
-
-    final occurrenceNumber = index + 1;
     final totalOfType = tasksOfSameType.length;
-
     final typeName = getTaskTypeName(task.type);
 
     // If only one of this type, just show type
@@ -82,8 +170,11 @@ class ModuleCard extends ConsumerWidget {
       return typeName;
     }
 
-    // If multiple, show occurrence number
-    return '$typeName ($occurrenceNumber)';
+    // If 2 or more, show date instead of occurrence number
+    final weekStartDate = semesterStartDate.add(Duration(days: (weekNumber - 1) * 7));
+    final taskDate = weekStartDate.add(Duration(days: task.dayOfWeek - 1));
+
+    return '$typeName (${formatTaskDate(taskDate)})';
   }
 
   // Get all assessments that are due in the given week
@@ -125,12 +216,12 @@ class ModuleCard extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final semester = ref.watch(currentSemesterProvider);
-    final recurringTasksAsync = ref.watch(recurringTasksProvider(module.id));
-    final assessmentsAsync = ref.watch(assessmentsProvider(module.id));
+    final recurringTasksAsync = ref.watch(recurringTasksProvider(widget.module.id));
+    final assessmentsAsync = ref.watch(assessmentsProvider(widget.module.id));
     final completionsAsync = ref.watch(
-      taskCompletionsProvider((moduleId: module.id, weekNumber: weekNumber)),
+      taskCompletionsProvider((moduleId: widget.module.id, weekNumber: widget.weekNumber)),
     );
 
     // Calculate responsive scale factor based on screen width and module count
@@ -143,20 +234,20 @@ class ModuleCard extends ConsumerWidget {
 
     // Additional scaling based on number of modules
     // Only apply on desktop when modules share horizontal space
-    final moduleCountScale = isMobileStacked
+    final moduleCountScale = widget.isMobileStacked
         ? 1.0 // No extra scaling needed - full width on mobile
-        : totalModules <= 2
+        : widget.totalModules <= 2
         ? 1.0
-        : totalModules == 3
+        : widget.totalModules == 3
         ? 0.90
-        : totalModules == 4
+        : widget.totalModules == 4
         ? 0.80
         : 0.70;
 
     final scaleFactor = baseScaleFactor * moduleCountScale;
 
     // Adjust padding based on layout mode
-    final cardPadding = isMobileStacked
+    final cardPadding = widget.isMobileStacked
         ? 12.0 // More padding when full width on mobile
         : screenWidth < 400
         ? 4.0
@@ -182,7 +273,7 @@ class ModuleCard extends ConsumerWidget {
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: [
                           Text(
-                            module.name,
+                            widget.module.name,
                             style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(
                                   fontWeight: FontWeight.bold,
@@ -194,9 +285,9 @@ class ModuleCard extends ConsumerWidget {
                                       scaleFactor,
                                 ),
                           ),
-                          if (module.code.isNotEmpty)
+                          if (widget.module.code.isNotEmpty)
                             Text(
-                              module.code,
+                              widget.module.code,
                               style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(
                                     color: Colors.grey[600],
@@ -209,7 +300,7 @@ class ModuleCard extends ConsumerWidget {
                                   ),
                             ),
                           Text(
-                            'Week $weekNumber',
+                            'Week ${widget.weekNumber}',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
                                   color: Colors.grey[500],
@@ -237,7 +328,7 @@ class ModuleCard extends ConsumerWidget {
                               ? getAssessmentsForWeek(
                                   assessments,
                                   semester.startDate,
-                                  weekNumber,
+                                  widget.weekNumber,
                                 )
                               : <Assessment>[];
 
@@ -297,10 +388,42 @@ class ModuleCard extends ConsumerWidget {
                                 }
                               }
 
-                              return Column(
-                                children: [
-                                  // Recurring tasks
-                                  ...parentTasks.expand((task) {
+                              return GestureDetector(
+                                behavior: HitTestBehavior.deferToChild,
+                                onPanStart: (details) {
+                                  if (!_isDragging) {
+                                    setState(() {
+                                      _isDragging = true;
+                                    });
+                                    // Now select the first task that was touched
+                                    if (_firstTouchedTaskId != null && _firstTouchedStatus != null) {
+                                      selectTask(_firstTouchedTaskId!, _firstTouchedStatus!);
+                                      _firstTouchedTaskId = null;
+                                      _firstTouchedStatus = null;
+                                    }
+                                  }
+                                },
+                                onPanEnd: (details) {
+                                  setState(() {
+                                    _isDragging = false;
+                                    _selectedTaskIds.clear();
+                                    // DON'T clear _temporaryCompletions - let automatic cleanup handle it
+                                    _firstTouchedTaskId = null;
+                                    _firstTouchedStatus = null;
+                                  });
+                                },
+                                onPanCancel: () {
+                                  setState(() {
+                                    _isDragging = false;
+                                    _selectedTaskIds.clear();
+                                    _firstTouchedTaskId = null;
+                                    _firstTouchedStatus = null;
+                                  });
+                                },
+                                child: Column(
+                                  children: [
+                                    // Recurring tasks
+                                    ...parentTasks.expand((task) {
                                     final completion = completionMap[task.id];
                                     final status =
                                         completion?.status ??
@@ -310,6 +433,8 @@ class ModuleCard extends ConsumerWidget {
                                     final displayName = generateTaskName(
                                       task,
                                       tasks,
+                                      semester!.startDate,
+                                      widget.weekNumber,
                                     );
 
                                     final subtasks =
@@ -318,9 +443,13 @@ class ModuleCard extends ConsumerWidget {
                                     return [
                                       _TaskItem(
                                         taskName: displayName,
+                                        taskId: task.id,
                                         status: status,
                                         completedAt: completion?.completedAt,
                                         scaleFactor: scaleFactor,
+                                        onTouchDown: onTouchDown,
+                                        onSelectTask: selectTask,
+                                        getTemporaryStatus: getTemporaryStatus,
                                         onStatusChanged: (newStatus) async {
                                           final user = ref.read(
                                             currentUserProvider,
@@ -335,9 +464,9 @@ class ModuleCard extends ConsumerWidget {
                                           // Update parent task
                                           final newCompletion = TaskCompletion(
                                             id: completion?.id ?? '',
-                                            moduleId: module.id,
+                                            moduleId: widget.module.id,
                                             taskId: task.id,
-                                            weekNumber: weekNumber,
+                                            weekNumber: widget.weekNumber,
                                             status: newStatus,
                                             completedAt:
                                                 newStatus == TaskStatus.complete
@@ -347,7 +476,7 @@ class ModuleCard extends ConsumerWidget {
 
                                           await repository.upsertTaskCompletion(
                                             user.uid,
-                                            module.id,
+                                            widget.module.id,
                                             newCompletion,
                                           );
 
@@ -361,16 +490,16 @@ class ModuleCard extends ConsumerWidget {
                                               final newSubCompletion =
                                                   TaskCompletion(
                                                     id: subCompletion?.id ?? '',
-                                                    moduleId: module.id,
+                                                    moduleId: widget.module.id,
                                                     taskId: subtask.id,
-                                                    weekNumber: weekNumber,
+                                                    weekNumber: widget.weekNumber,
                                                     status: TaskStatus.complete,
                                                     completedAt: now,
                                                   );
                                               await repository
                                                   .upsertTaskCompletion(
                                                     user.uid,
-                                                    module.id,
+                                                    widget.module.id,
                                                     newSubCompletion,
                                                   );
                                             }
@@ -387,11 +516,15 @@ class ModuleCard extends ConsumerWidget {
 
                                         return _TaskItem(
                                           taskName: subtask.name,
+                                          taskId: subtask.id,
                                           status: subStatus,
                                           completedAt:
                                               subCompletion?.completedAt,
                                           isSubtask: true,
                                           scaleFactor: scaleFactor,
+                                          onTouchDown: onTouchDown,
+                                          onSelectTask: selectTask,
+                                          getTemporaryStatus: getTemporaryStatus,
                                           onStatusChanged: (newStatus) async {
                                             final user = ref.read(
                                               currentUserProvider,
@@ -404,9 +537,9 @@ class ModuleCard extends ConsumerWidget {
                                             final newCompletion =
                                                 TaskCompletion(
                                                   id: subCompletion?.id ?? '',
-                                                  moduleId: module.id,
+                                                  moduleId: widget.module.id,
                                                   taskId: subtask.id,
-                                                  weekNumber: weekNumber,
+                                                  weekNumber: widget.weekNumber,
                                                   status: newStatus,
                                                   completedAt:
                                                       newStatus ==
@@ -418,7 +551,7 @@ class ModuleCard extends ConsumerWidget {
                                             await repository
                                                 .upsertTaskCompletion(
                                                   user.uid,
-                                                  module.id,
+                                                  widget.module.id,
                                                   newCompletion,
                                                 );
                                           },
@@ -436,9 +569,13 @@ class ModuleCard extends ConsumerWidget {
 
                                     return _TaskItem(
                                       taskName: assessment.name,
+                                      taskId: assessment.id,
                                       status: status,
                                       completedAt: completion?.completedAt,
                                       scaleFactor: scaleFactor,
+                                      onTouchDown: onTouchDown,
+                                      onSelectTask: selectTask,
+                                      getTemporaryStatus: getTemporaryStatus,
                                       onStatusChanged: (newStatus) async {
                                         final user = ref.read(
                                           currentUserProvider,
@@ -450,9 +587,9 @@ class ModuleCard extends ConsumerWidget {
                                         );
                                         final newCompletion = TaskCompletion(
                                           id: completion?.id ?? '',
-                                          moduleId: module.id,
+                                          moduleId: widget.module.id,
                                           taskId: assessment.id,
-                                          weekNumber: weekNumber,
+                                          weekNumber: widget.weekNumber,
                                           status: newStatus,
                                           completedAt:
                                               newStatus == TaskStatus.complete
@@ -462,13 +599,14 @@ class ModuleCard extends ConsumerWidget {
 
                                         await repository.upsertTaskCompletion(
                                           user.uid,
-                                          module.id,
+                                          widget.module.id,
                                           newCompletion,
                                         );
                                       },
                                     );
                                   }),
-                                ],
+                                  ],
+                                ),
                               );
                             },
                             loading: () => const CircularProgressIndicator(),
@@ -547,8 +685,8 @@ class ModuleCard extends ConsumerWidget {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => ModuleFormScreen(
-                                  existingModule: module,
-                                  semesterId: module.semesterId,
+                                  existingModule: widget.module,
+                                  semesterId: widget.module.semesterId,
                                 ),
                               ),
                             );
@@ -576,7 +714,7 @@ class ModuleCard extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Archive Module'),
-        content: Text('Are you sure you want to archive "${module.name}"?'),
+        content: Text('Are you sure you want to archive "${widget.module.name}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -588,7 +726,7 @@ class ModuleCard extends ConsumerWidget {
               if (user == null) return;
 
               final repository = ref.read(firestoreRepositoryProvider);
-              await repository.toggleModuleArchive(user.uid, module.id, false);
+              await repository.toggleModuleArchive(user.uid, widget.module.id, false);
 
               if (context.mounted) {
                 Navigator.pop(context);
@@ -610,19 +748,27 @@ class ModuleCard extends ConsumerWidget {
 
 class _TaskItem extends ConsumerStatefulWidget {
   final String taskName;
+  final String taskId;
   final TaskStatus status;
   final Function(TaskStatus) onStatusChanged;
   final bool isSubtask;
   final DateTime? completedAt;
   final double scaleFactor;
+  final Function(String, TaskStatus)? onTouchDown;
+  final Function(String, TaskStatus)? onSelectTask;
+  final TaskStatus? Function(String, TaskStatus)? getTemporaryStatus;
 
   const _TaskItem({
     required this.taskName,
+    required this.taskId,
     required this.status,
     required this.onStatusChanged,
     this.isSubtask = false,
     this.completedAt,
     this.scaleFactor = 1.0,
+    this.onTouchDown,
+    this.onSelectTask,
+    this.getTemporaryStatus,
   });
 
   @override
@@ -637,61 +783,71 @@ class _TaskItemState extends ConsumerState<_TaskItem> {
   Widget build(BuildContext context) {
     final preferences = ref.watch(userPreferencesProvider);
 
-    return InkWell(
-      onTap: () {
-        final now = DateTime.now();
-        final isDoubleTap =
-            _lastTapTime != null &&
-            now.difference(_lastTapTime!) < _doubleTapWindow;
+    // Use temporary status if available, otherwise use the actual status
+    final temporaryStatus = widget.getTemporaryStatus?.call(widget.taskId, widget.status);
+    final currentStatus = temporaryStatus ?? widget.status;
 
-        // Only allow double tap if 3-state mode is enabled
-        final effectiveDoubleTap =
-            isDoubleTap && preferences.enableThreeStateTaskToggle;
+    return Listener(
+      onPointerDown: (_) => widget.onTouchDown?.call(widget.taskId, currentStatus),
+      child: MouseRegion(
+        onEnter: (_) => widget.onSelectTask?.call(widget.taskId, currentStatus),
+        child: InkWell(
+          onTap: () {
+            final now = DateTime.now();
+            final isDoubleTap =
+                _lastTapTime != null &&
+                now.difference(_lastTapTime!) < _doubleTapWindow;
 
-        final nextStatus = _getNextStatus(effectiveDoubleTap);
-        _lastTapTime = now;
-        widget.onStatusChanged(nextStatus);
-      },
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: widget.isSubtask ? 32.0 * widget.scaleFactor : 0.0,
-          top: 8 * widget.scaleFactor,
-          bottom: 8 * widget.scaleFactor,
-        ),
-        child: Row(
-          children: [
-            _StatusIcon(status: widget.status, scaleFactor: widget.scaleFactor),
-            SizedBox(width: 12 * widget.scaleFactor),
-            Expanded(
-              child: Text(
-                widget.taskName,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  decoration: widget.status == TaskStatus.complete
-                      ? TextDecoration.lineThrough
-                      : null,
-                  fontSize:
-                      (Theme.of(context).textTheme.bodyLarge?.fontSize ?? 16) *
-                      widget.scaleFactor,
-                ),
-              ),
+            // Only allow double tap if 3-state mode is enabled
+            final effectiveDoubleTap =
+                isDoubleTap && preferences.enableThreeStateTaskToggle;
+
+            final nextStatus = _getNextStatus(effectiveDoubleTap, currentStatus);
+            _lastTapTime = now;
+            widget.onStatusChanged(nextStatus);
+          },
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: widget.isSubtask ? 32.0 * widget.scaleFactor : 0.0,
+              top: 8 * widget.scaleFactor,
+              bottom: 8 * widget.scaleFactor,
             ),
-          ],
+            child: Row(
+              children: [
+                _StatusIcon(status: currentStatus, scaleFactor: widget.scaleFactor),
+                SizedBox(width: 12 * widget.scaleFactor),
+                Expanded(
+                  child: Text(
+                    widget.taskName,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      decoration: currentStatus == TaskStatus.complete
+                          ? TextDecoration.lineThrough
+                          : null,
+                      fontSize:
+                          (Theme.of(context).textTheme.bodyLarge?.fontSize ?? 16) *
+                          widget.scaleFactor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  TaskStatus _getNextStatus(bool isDoubleTap) {
+  TaskStatus _getNextStatus(bool isDoubleTap, TaskStatus currentStatus) {
     if (!isDoubleTap) {
       // Single tap: if complete, go to empty; otherwise go to complete
-      if (widget.status == TaskStatus.complete) {
+      if (currentStatus == TaskStatus.complete) {
         return TaskStatus.notStarted;
       }
       return TaskStatus.complete;
     }
 
     // Double tap cycles through states (only when 3-state mode is enabled)
-    switch (widget.status) {
+    switch (currentStatus) {
       case TaskStatus.notStarted:
         return TaskStatus.inProgress;
 
