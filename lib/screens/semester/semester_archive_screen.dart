@@ -5,6 +5,7 @@ import 'package:module_tracker/models/semester.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
+import 'package:module_tracker/screens/semester/semester_setup_screen.dart';
 import 'package:intl/intl.dart';
 
 class SemesterArchiveScreen extends ConsumerStatefulWidget {
@@ -195,6 +196,14 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
                     status: SemesterStatus.current,
                     onArchive: () =>
                         _archiveSemester(context, ref, currentSemester),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SemesterSetupScreen(
+                          semesterToEdit: currentSemester,
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 32),
                 ],
@@ -217,6 +226,14 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
                         status: SemesterStatus.future,
                         onArchive: () =>
                             _archiveSemester(context, ref, semester),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SemesterSetupScreen(
+                              semesterToEdit: semester,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -264,6 +281,14 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
                         status: SemesterStatus.archived,
                         onRestore: () =>
                             _restoreSemester(context, ref, semester),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SemesterSetupScreen(
+                              semesterToEdit: semester,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -312,12 +337,14 @@ class _SemesterCard extends StatelessWidget {
   final SemesterStatus status;
   final VoidCallback? onArchive;
   final VoidCallback? onRestore;
+  final VoidCallback? onTap;
 
   const _SemesterCard({
     required this.semester,
     required this.status,
     this.onArchive,
     this.onRestore,
+    this.onTap,
   });
 
   List<Color> _getGradientColors() {
@@ -348,19 +375,21 @@ class _SemesterCard extends StatelessWidget {
     final gradientColors = _getGradientColors();
     final statusLabel = _getStatusLabel();
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: gradientColors),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: gradientColors.first.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: gradientColors),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: gradientColors.first.withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -442,6 +471,7 @@ class _SemesterCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

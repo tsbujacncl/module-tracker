@@ -7,6 +7,7 @@ import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/providers/customization_provider.dart';
 import 'package:module_tracker/models/customization_preferences.dart';
 import 'package:module_tracker/screens/settings/notification_settings_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -654,6 +655,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ],
                     ),
                   ),
+                  const SizedBox(height: 24),
+                  // Support Section
+                  Card(
+                    child: ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.coffee_outlined,
+                          color: Color(0xFFF59E0B),
+                          size: 20,
+                        ),
+                      ),
+                      title: const Text('Buy Me a Coffee'),
+                      subtitle: const Text('Support the development'),
+                      trailing: const Icon(Icons.open_in_new, size: 20),
+                      onTap: () async {
+                        final url = Uri.parse('https://buymeacoffee.com/tyrbujac');
+                        if (await canLaunchUrl(url)) {
+                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  // Designer credit
+                  Text(
+                    'Designed by Tyr @ tyrbujac.com',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),

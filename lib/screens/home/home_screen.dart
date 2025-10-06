@@ -42,9 +42,133 @@ class HomeScreen extends ConsumerWidget {
         screenWidth < 600; // Increased threshold to catch more devices
     print('DEBUG: Screen width: $screenWidth, isMobile: $isMobile');
 
+    // Dynamic scaling based on screen width - balanced approach
+    final scaleFactor = screenWidth < 360
+        ? 0.8  // Very small screens: reduce slightly
+        : screenWidth < 380
+            ? 0.9  // Small screens (e.g., iPhone SE): moderate reduction
+            : screenWidth < 420
+                ? 0.95 // Medium-small screens: slight reduction
+                : 1.0; // Normal and larger screens: full size
+
     return Scaffold(
       appBar: isMobile
           ? AppBar(
+              automaticallyImplyLeading: false,
+              toolbarHeight: kToolbarHeight * 1.1, // 10% taller (not too much)
+              flexibleSpace: SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    children: [
+                      // Logo on left - balanced size
+                      GestureDetector(
+                        onTap: () {
+                          ref.read(selectedWeekStartDateProvider.notifier).state =
+                              ref.read(currentWeekStartDateProvider);
+                        },
+                        child: Container(
+                          width: 40 * scaleFactor,
+                          height: 40 * scaleFactor,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4)],
+                            ),
+                            borderRadius: BorderRadius.circular(9 * scaleFactor),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF0EA5E9).withOpacity(0.25),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.school_rounded,
+                            size: 23 * scaleFactor,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      // Title next to logo - dynamically sized
+                      Expanded(
+                        child: ShaderMask(
+                          shaderCallback: (bounds) => const LinearGradient(
+                            colors: [
+                              Color(0xFF0EA5E9),
+                              Color(0xFF06B6D4),
+                              Color(0xFF10B981),
+                            ],
+                          ).createShader(bounds),
+                          child: Text(
+                            'Module Tracker',
+                            style: GoogleFonts.poppins(
+                              fontSize: 19 * scaleFactor,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ),
+                      // 4 Icons on right - balanced size
+                      _buildScaledActionIcon(
+                        context,
+                        Icons.add_rounded,
+                        const Color(0xFF10B981),
+                        scaleFactor,
+                        onTap: () => _showAddMenu(context),
+                      ),
+                      SizedBox(width: 5),
+                      _buildScaledActionIcon(
+                        context,
+                        Icons.archive_outlined,
+                        const Color(0xFFF59E0B),
+                        scaleFactor,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SemesterArchiveScreen(),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 5),
+                      _buildScaledActionIcon(
+                        context,
+                        Icons.assessment_outlined,
+                        const Color(0xFF8B5CF6),
+                        scaleFactor,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AssignmentsScreen(),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 5),
+                      _buildScaledActionIcon(
+                        context,
+                        Icons.settings_outlined,
+                        const Color(0xFF0EA5E9),
+                        scaleFactor,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SettingsScreen(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          : AppBar(
               automaticallyImplyLeading: false,
               toolbarHeight: kToolbarHeight,
               flexibleSpace: SafeArea(
@@ -53,7 +177,8 @@ class HomeScreen extends ConsumerWidget {
                     // Main layout matching calendar structure
                     Row(
                       children: [
-                        const SizedBox(width: 32), // Time column spacer
+                        // Match calendar structure: 32px + 5 columns
+                        const SizedBox(width: 32),
                         const Expanded(child: SizedBox.shrink()), // Mon
                         const Expanded(child: SizedBox.shrink()), // Tue
                         Expanded(
@@ -69,85 +194,54 @@ class HomeScreen extends ConsumerWidget {
                               child: Text(
                                 'Module Tracker',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 20,
+                                  fontSize: 22,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
-                        ), // Wed - centered with title
+                        ), // Wed - centered
                         const Expanded(child: SizedBox.shrink()), // Thu
                         const Expanded(child: SizedBox.shrink()), // Fri
                       ],
                     ),
-                    // Icons overlaid on right
+                    // Logo on left
                     Positioned(
-                      right: 8,
+                      left: 8,
                       top: 0,
                       bottom: 0,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildActionIcon(
-                            context,
-                            Icons.add_rounded,
-                            const Color(0xFF10B981),
-                            onTap: () => _showAddMenu(context),
-                          ),
-                          const SizedBox(width: 4),
-                          _buildActionIcon(
-                            context,
-                            Icons.settings_outlined,
-                            const Color(0xFF0EA5E9),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const SettingsScreen(),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : AppBar(
-              automaticallyImplyLeading: false,
-              toolbarHeight: kToolbarHeight,
-              flexibleSpace: SafeArea(
-                child: Row(
-                  children: [
-                    // Match calendar structure: 32px + 5 columns
-                    const SizedBox(width: 32),
-                    const Expanded(child: SizedBox.shrink()), // Mon
-                    const Expanded(child: SizedBox.shrink()), // Tue
-                    Expanded(
                       child: Center(
-                        child: ShaderMask(
-                          shaderCallback: (bounds) => const LinearGradient(
-                            colors: [
-                              Color(0xFF0EA5E9),
-                              Color(0xFF06B6D4),
-                              Color(0xFF10B981),
-                            ],
-                          ).createShader(bounds),
-                          child: Text(
-                            'Module Tracker',
-                            style: GoogleFonts.poppins(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
+                        child: GestureDetector(
+                          onTap: () {
+                            ref.read(selectedWeekStartDateProvider.notifier).state =
+                                ref.read(currentWeekStartDateProvider);
+                          },
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4)],
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF0EA5E9).withOpacity(0.25),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.school_rounded,
+                              size: 22,
                               color: Colors.white,
                             ),
                           ),
                         ),
                       ),
-                    ), // Wed - centered
-                    const Expanded(child: SizedBox.shrink()), // Thu
-                    const Expanded(child: SizedBox.shrink()), // Fri
+                    ),
                   ],
                 ),
               ),
@@ -420,13 +514,34 @@ class HomeScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 16),
                         // Weekly Calendar - always show
-                        WeeklyCalendar(
-                          semester: selectedSemester,
-                          currentWeek: selectedWeek,
-                          modules: modules,
-                          tasksByModule: tasksByModule,
-                          assessmentsByModule: assessmentsByModule,
-                          weekStartDate: ref.watch(selectedWeekStartDateProvider),
+                        Builder(
+                          builder: (context) {
+                            final screenWidth = MediaQuery.of(context).size.width;
+                            final isMobileOrTablet = screenWidth < 1024; // Enable swipe on mobile/tablet only
+
+                            if (isMobileOrTablet) {
+                              return _SwipeableCalendar(
+                                semester: selectedSemester,
+                                currentWeek: selectedWeek,
+                                modules: modules,
+                                tasksByModule: tasksByModule,
+                                assessmentsByModule: assessmentsByModule,
+                                weekStartDate: ref.watch(selectedWeekStartDateProvider),
+                                onWeekChanged: (newDate) {
+                                  ref.read(selectedWeekStartDateProvider.notifier).state = newDate;
+                                },
+                              );
+                            }
+
+                            return WeeklyCalendar(
+                              semester: selectedSemester,
+                              currentWeek: selectedWeek,
+                              modules: modules,
+                              tasksByModule: tasksByModule,
+                              assessmentsByModule: assessmentsByModule,
+                              weekStartDate: ref.watch(selectedWeekStartDateProvider),
+                            );
+                          },
                         ),
                         const SizedBox(height: 24),
                         // Module Cards Section
@@ -562,6 +677,27 @@ class HomeScreen extends ConsumerWidget {
           borderRadius: BorderRadius.circular(4),
         ),
         child: Icon(icon, size: 16, color: color),
+      ),
+    );
+  }
+
+  Widget _buildScaledActionIcon(
+    BuildContext context,
+    IconData icon,
+    Color color,
+    double scaleFactor, {
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(7 * scaleFactor),
+      child: Container(
+        padding: EdgeInsets.all(6.5 * scaleFactor),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(7 * scaleFactor),
+        ),
+        child: Icon(icon, size: 20 * scaleFactor, color: color),
       ),
     );
   }
@@ -718,30 +854,143 @@ class _WeekNavigationWrapper extends StatelessWidget {
             right: 0,
             top: 0,
             bottom: 0,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextButton(
-                  onPressed: onTodayPressed,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                  child: Text(
-                    'Today',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () => onWeekChanged(selectedWeek + 1),
-                ),
-              ],
+            child: IconButton(
+              icon: const Icon(Icons.chevron_right),
+              onPressed: () => onWeekChanged(selectedWeek + 1),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Swipeable Calendar Widget with real-time drag feedback
+class _SwipeableCalendar extends StatefulWidget {
+  final Semester? semester;
+  final int currentWeek;
+  final List<Module> modules;
+  final Map<String, List<RecurringTask>> tasksByModule;
+  final Map<String, List<Assessment>> assessmentsByModule;
+  final DateTime weekStartDate;
+  final Function(DateTime) onWeekChanged;
+
+  const _SwipeableCalendar({
+    required this.semester,
+    required this.currentWeek,
+    required this.modules,
+    required this.tasksByModule,
+    required this.assessmentsByModule,
+    required this.weekStartDate,
+    required this.onWeekChanged,
+  });
+
+  @override
+  State<_SwipeableCalendar> createState() => _SwipeableCalendarState();
+}
+
+class _SwipeableCalendarState extends State<_SwipeableCalendar> with SingleTickerProviderStateMixin {
+  double _dragOffset = 0.0;
+  late AnimationController _animationController;
+  late Animation<double> _animation;
+  bool _isAnimating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+    _animation = Tween<double>(begin: 0, end: 0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+    )..addListener(() {
+        setState(() {
+          _dragOffset = _animation.value;
+        });
+      })..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          setState(() {
+            _isAnimating = false;
+            _dragOffset = 0.0;
+          });
+        }
+      });
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    if (_isAnimating) return;
+    setState(() {
+      _dragOffset += details.delta.dx;
+      // Limit drag to screen width
+      final screenWidth = MediaQuery.of(context).size.width;
+      _dragOffset = _dragOffset.clamp(-screenWidth.toDouble(), screenWidth.toDouble());
+    });
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    if (_isAnimating) return;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final threshold = screenWidth * 0.25; // 25% threshold
+
+    // Check if we should snap to next/previous week
+    if (_dragOffset.abs() > threshold) {
+      // Commit the swipe - capture direction before animation
+      _isAnimating = true;
+      final isSwipingRight = _dragOffset > 0;
+      final targetOffset = _dragOffset > 0 ? screenWidth : -screenWidth;
+
+      _animation = Tween<double>(
+        begin: _dragOffset,
+        end: targetOffset.toDouble(),
+      ).animate(
+        CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+      );
+
+      _animationController.forward(from: 0).then((_) {
+        // Update the week
+        if (isSwipingRight) {
+          // Swiped left-to-right → go to previous week
+          widget.onWeekChanged(widget.weekStartDate.subtract(const Duration(days: 7)));
+        } else {
+          // Swiped right-to-left → go to next week
+          widget.onWeekChanged(widget.weekStartDate.add(const Duration(days: 7)));
+        }
+      });
+    } else {
+      // Snap back to current week
+      _isAnimating = true;
+      _animation = Tween<double>(
+        begin: _dragOffset,
+        end: 0,
+      ).animate(
+        CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+      );
+      _animationController.forward(from: 0);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onHorizontalDragUpdate: _handleDragUpdate,
+      onHorizontalDragEnd: _handleDragEnd,
+      child: WeeklyCalendar(
+        semester: widget.semester,
+        currentWeek: widget.currentWeek,
+        modules: widget.modules,
+        tasksByModule: widget.tasksByModule,
+        assessmentsByModule: widget.assessmentsByModule,
+        weekStartDate: widget.weekStartDate,
+        dragOffset: _dragOffset,
+        isSwipeable: true,
       ),
     );
   }

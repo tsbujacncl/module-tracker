@@ -7,7 +7,9 @@ import 'package:module_tracker/utils/date_utils.dart' as utils;
 import 'package:module_tracker/utils/date_picker_utils.dart';
 
 class SemesterSetupScreen extends ConsumerStatefulWidget {
-  const SemesterSetupScreen({super.key});
+  final Semester? semesterToEdit;
+
+  const SemesterSetupScreen({super.key, this.semesterToEdit});
 
   @override
   ConsumerState<SemesterSetupScreen> createState() =>
@@ -19,7 +21,26 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
   final _nameController = TextEditingController();
   DateTime? _startDate;
   DateTime? _endDate;
+  DateTime? _examPeriodStart;
+  DateTime? _examPeriodEnd;
+  DateTime? _readingWeekStart;
   bool _isLoading = false;
+
+  bool get _isEditMode => widget.semesterToEdit != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-populate fields if editing
+    if (_isEditMode) {
+      _nameController.text = widget.semesterToEdit!.name;
+      _startDate = widget.semesterToEdit!.startDate;
+      _endDate = widget.semesterToEdit!.endDate;
+      _examPeriodStart = widget.semesterToEdit!.examPeriodStart;
+      _examPeriodEnd = widget.semesterToEdit!.examPeriodEnd;
+      _readingWeekStart = widget.semesterToEdit!.readingWeekStart;
+    }
+  }
 
   @override
   void dispose() {
@@ -59,12 +80,58 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
     }
   }
 
+  Future<void> _selectExamPeriodStart() async {
+    final picked = await showMondayFirstDatePicker(
+      context: context,
+      initialDate: _examPeriodStart ?? _startDate ?? DateTime.now(),
+      firstDate: _startDate ?? DateTime(2020),
+      lastDate: _endDate ?? DateTime(2030),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _examPeriodStart = picked;
+      });
+    }
+  }
+
+  Future<void> _selectExamPeriodEnd() async {
+    final picked = await showMondayFirstDatePicker(
+      context: context,
+      initialDate: _examPeriodEnd ?? _examPeriodStart ?? _startDate ?? DateTime.now(),
+      firstDate: _examPeriodStart ?? _startDate ?? DateTime(2020),
+      lastDate: _endDate ?? DateTime(2030),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _examPeriodEnd = picked;
+      });
+    }
+  }
+
+  Future<void> _selectReadingWeekStart() async {
+    final picked = await showMondayFirstDatePicker(
+      context: context,
+      initialDate: _readingWeekStart ?? _startDate ?? DateTime.now(),
+      firstDate: _startDate ?? DateTime(2020),
+      lastDate: _endDate ?? DateTime(2030),
+    );
+
+    if (picked != null) {
+      setState(() {
+        // Ensure it's a Monday
+        _readingWeekStart = utils.DateUtils.getMonday(picked);
+      });
+    }
+  }
+
   int get numberOfWeeks {
     if (_startDate == null || _endDate == null) return 0;
     return utils.DateUtils.calculateWeeksBetween(_startDate!, _endDate!);
   }
 
-  Future<void> _createSemester() async {
+  Future<void> _saveSemester() async {
     if (!_formKey.currentState!.validate()) return;
     if (_startDate == null || _endDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -82,48 +149,87 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
       final user = ref.read(currentUserProvider);
       if (user == null) throw Exception('User not logged in');
 
-      print('DEBUG SEMESTER: Creating semester for user: ${user.uid}');
-      print('DEBUG SEMESTER: User email: ${user.email}');
-      print('DEBUG SEMESTER: User is anonymous: ${user.isAnonymous}');
-      print('DEBUG SEMESTER: Auth provider: ${user.providerData.map((p) => p.providerId).join(", ")}');
-
       final repository = ref.read(firestoreRepositoryProvider);
-      final semester = Semester(
-        id: '',
-        name: _nameController.text.trim(),
-        startDate: _startDate!,
-        endDate: _endDate!,
-        numberOfWeeks: numberOfWeeks,
-        examPeriodStart: null,
-        examPeriodEnd: null,
-        readingWeekStart: null,
-        readingWeekEnd: null,
-        createdAt: DateTime.now(),
-      );
 
-      print('DEBUG SEMESTER: Calling createSemester...');
+      if (_isEditMode) {
+        // Update existing semester
+        print('DEBUG SEMESTER: Updating semester ${widget.semesterToEdit!.id}');
 
-      // Add timeout to prevent hanging
-      await repository.createSemester(user.uid, semester).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('Semester creation timed out. Please check your internet connection and Firestore security rules.');
-        },
-      );
-
-      print('DEBUG SEMESTER: Semester created successfully!');
-
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Semester created successfully!'),
-            backgroundColor: Colors.green,
-          ),
+        final updatedSemester = widget.semesterToEdit!.copyWith(
+          name: _nameController.text.trim(),
+          startDate: _startDate!,
+          endDate: _endDate!,
+          numberOfWeeks: numberOfWeeks,
+          examPeriodStart: _examPeriodStart,
+          examPeriodEnd: _examPeriodEnd,
+          readingWeekStart: _readingWeekStart,
+          readingWeekEnd: _readingWeekStart != null
+              ? _readingWeekStart!.add(const Duration(days: 6)) // Auto-calculate Sunday
+              : null,
         );
+
+        await repository.updateSemester(
+          user.uid,
+          widget.semesterToEdit!.id,
+          updatedSemester.toFirestore(),
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception('Semester update timed out. Please check your internet connection.');
+          },
+        );
+
+        print('DEBUG SEMESTER: Semester updated successfully!');
+
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Semester updated successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        // Create new semester
+        print('DEBUG SEMESTER: Creating semester for user: ${user.uid}');
+
+        final semester = Semester(
+          id: '',
+          name: _nameController.text.trim(),
+          startDate: _startDate!,
+          endDate: _endDate!,
+          numberOfWeeks: numberOfWeeks,
+          examPeriodStart: _examPeriodStart,
+          examPeriodEnd: _examPeriodEnd,
+          readingWeekStart: _readingWeekStart,
+          readingWeekEnd: _readingWeekStart != null
+              ? _readingWeekStart!.add(const Duration(days: 6)) // Auto-calculate Sunday
+              : null,
+          createdAt: DateTime.now(),
+        );
+
+        await repository.createSemester(user.uid, semester).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception('Semester creation timed out. Please check your internet connection and Firestore security rules.');
+          },
+        );
+
+        print('DEBUG SEMESTER: Semester created successfully!');
+
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Semester created successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
     } catch (e) {
-      print('DEBUG SEMESTER: Error creating semester - $e');
+      print('DEBUG SEMESTER: Error saving semester - $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -144,7 +250,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create Semester'),
+        title: Text(_isEditMode ? 'Edit Semester' : 'Create Semester'),
       ),
       body: Center(
         child: ConstrainedBox(
@@ -210,6 +316,127 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                 side: BorderSide(color: Colors.grey[300]!),
               ),
             ),
+            const SizedBox(height: 32),
+            Text(
+              'Exam Period (Optional)',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Set the exam period dates for this semester',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              title: const Text('Exam Period Start'),
+              subtitle: Text(
+                _examPeriodStart != null
+                    ? '${_examPeriodStart!.day}/${_examPeriodStart!.month}/${_examPeriodStart!.year}'
+                    : 'Not selected',
+              ),
+              trailing: _examPeriodStart != null
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.calendar_today),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.clear, size: 20),
+                          onPressed: () {
+                            setState(() {
+                              _examPeriodStart = null;
+                            });
+                          },
+                        ),
+                      ],
+                    )
+                  : const Icon(Icons.calendar_today),
+              onTap: _selectExamPeriodStart,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: Colors.grey[300]!),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              title: const Text('Exam Period End'),
+              subtitle: Text(
+                _examPeriodEnd != null
+                    ? '${_examPeriodEnd!.day}/${_examPeriodEnd!.month}/${_examPeriodEnd!.year}'
+                    : 'Not selected',
+              ),
+              trailing: _examPeriodEnd != null
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.calendar_today),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.clear, size: 20),
+                          onPressed: () {
+                            setState(() {
+                              _examPeriodEnd = null;
+                            });
+                          },
+                        ),
+                      ],
+                    )
+                  : const Icon(Icons.calendar_today),
+              onTap: _selectExamPeriodEnd,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: Colors.grey[300]!),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              'Reading Week (Optional)',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Select the Monday that reading week starts',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              title: const Text('Reading Week Start (Monday)'),
+              subtitle: Text(
+                _readingWeekStart != null
+                    ? '${_readingWeekStart!.day}/${_readingWeekStart!.month}/${_readingWeekStart!.year} - ${_readingWeekStart!.add(const Duration(days: 6)).day}/${_readingWeekStart!.add(const Duration(days: 6)).month}/${_readingWeekStart!.add(const Duration(days: 6)).year}'
+                    : 'Not selected',
+              ),
+              trailing: _readingWeekStart != null
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.calendar_today),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.clear, size: 20),
+                          onPressed: () {
+                            setState(() {
+                              _readingWeekStart = null;
+                            });
+                          },
+                        ),
+                      ],
+                    )
+                  : const Icon(Icons.calendar_today),
+              onTap: _selectReadingWeekStart,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: Colors.grey[300]!),
+              ),
+            ),
             const SizedBox(height: 24),
             if (_startDate != null && _endDate != null)
               Card(
@@ -236,7 +463,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
               ),
             const SizedBox(height: 32),
             FilledButton(
-              onPressed: _isLoading ? null : _createSemester,
+              onPressed: _isLoading ? null : _saveSemester,
               child: _isLoading
                   ? const SizedBox(
                       height: 20,
@@ -246,7 +473,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : const Text('Create Semester'),
+                  : Text(_isEditMode ? 'Update Semester' : 'Create Semester'),
             ),
               ],
             ),

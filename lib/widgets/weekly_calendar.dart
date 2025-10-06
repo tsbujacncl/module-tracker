@@ -19,6 +19,8 @@ class WeeklyCalendar extends ConsumerWidget {
   final Map<String, List<RecurringTask>> tasksByModule;
   final Map<String, List<Assessment>> assessmentsByModule;
   final DateTime? weekStartDate;
+  final double dragOffset;
+  final bool isSwipeable;
 
   const WeeklyCalendar({
     super.key,
@@ -28,6 +30,8 @@ class WeeklyCalendar extends ConsumerWidget {
     required this.tasksByModule,
     required this.assessmentsByModule,
     this.weekStartDate,
+    this.dragOffset = 0.0,
+    this.isSwipeable = false,
   });
 
   // Get the week start date (Monday)
@@ -252,6 +256,97 @@ class WeeklyCalendar extends ConsumerWidget {
     return (earliestHour, latestHour);
   }
 
+  // Helper to build day headers for a specific week
+  Widget _buildDayHeaders(DateTime weekStartForHeaders, BuildContext context) {
+    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Row(
+      children: List.generate(5, (index) {
+        final date = weekStartForHeaders.add(Duration(days: index));
+        final isToday = DateTime.now().day == date.day &&
+            DateTime.now().month == date.month &&
+            DateTime.now().year == date.year;
+
+        return Expanded(
+          child: Column(
+            children: [
+              Text(
+                days[index],
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isToday
+                      ? const Color(0xFF0EA5E9)
+                      : (isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: isToday
+                      ? const Color(0xFF0EA5E9)
+                      : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    '${date.day}',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isToday
+                          ? Colors.white
+                          : (isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
+  }
+
+  // Helper to build empty day columns (for prev/next weeks during swipe)
+  List<Widget> _buildDayColumnsForWeek(
+    DateTime weekStartForColumns,
+    int startHour,
+    int endHour,
+    int totalHours,
+    double pixelsPerHour,
+    bool isDarkMode,
+    Color borderColor,
+  ) {
+    // Calculate total height
+    double totalHeight = pixelsPerHour * totalHours;
+
+    return List.generate(5, (index) {
+      return Expanded(
+        child: Container(
+          height: totalHeight,
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color: borderColor.withOpacity(0.5),
+                width: 1,
+              ),
+              right: index == 4
+                  ? BorderSide(
+                      color: borderColor.withOpacity(0.5),
+                      width: 1,
+                    )
+                  : BorderSide.none,
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final weekStart = getWeekStartDate();
@@ -301,55 +396,53 @@ class WeeklyCalendar extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                // Time column header (empty space)
+                // Time column header (empty space) - FIXED
                 const SizedBox(width: 32),
-                // Day headers (Monday to Friday only)
-                ...List.generate(5, (index) {
-                  final date = weekStart.add(Duration(days: index));
-                  final isToday = DateTime.now().day == date.day &&
-                      DateTime.now().month == date.month &&
-                      DateTime.now().year == date.year;
-
-                  return Expanded(
-                    child: Column(
-                      children: [
-                        Text(
-                          days[index],
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isToday
-                                ? const Color(0xFF0EA5E9)
-                                : (isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: isToday
-                                ? const Color(0xFF0EA5E9)
-                                : Colors.transparent,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${date.day}',
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: isToday
-                                    ? Colors.white
-                                    : (isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A)),
+                // Day headers - SWIPEABLE or STATIC
+                if (isSwipeable)
+                  Expanded(
+                    child: SizedBox(
+                      height: 60, // Fixed height for header
+                      child: ClipRect(
+                        child: OverflowBox(
+                          alignment: Alignment.centerLeft,
+                          minWidth: 0,
+                          maxWidth: double.infinity,
+                          child: Transform.translate(
+                          offset: Offset(dragOffset - (screenWidth - 32), 0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Previous week headers
+                              SizedBox(
+                                width: screenWidth - 32,
+                                child: _buildDayHeaders(
+                                  weekStart.subtract(const Duration(days: 7)),
+                                  context,
+                                ),
                               ),
-                            ),
+                              // Current week headers
+                              SizedBox(
+                                width: screenWidth - 32,
+                                child: _buildDayHeaders(weekStart, context),
+                              ),
+                              // Next week headers
+                              SizedBox(
+                                width: screenWidth - 32,
+                                child: _buildDayHeaders(
+                                  weekStart.add(const Duration(days: 7)),
+                                  context,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
+                        ),
+                      ),
                     ),
-                  );
-                }),
+                  )
+                else
+                  Expanded(child: _buildDayHeaders(weekStart, context)),
               ],
             ),
           ),
@@ -465,37 +558,48 @@ class WeeklyCalendar extends ConsumerWidget {
 
               return SizedBox(
                 height: totalHeight,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Stack(
                   children: [
-                    // Time column
-                    SizedBox(
-                      width: 32,
-                      height: totalHeight,
-                      child: Column(
-                        children: List.generate(totalHours, (index) {
-                          final hour = startHour + index;
-                          final multiplier = hourMultipliers[hour] ?? 1;
-                          return Container(
-                            height: pixelsPerHour * multiplier,
-                            alignment: Alignment.topRight,
-                            padding: const EdgeInsets.only(right: 4, top: 4),
-                            child: Text(
-                              '${hour.toString().padLeft(2, '0')}:00',
-                              style: GoogleFonts.inter(
-                                fontSize: 9,
-                                color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                                fontWeight: FontWeight.w500,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.visible,
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-                  // Day columns (Monday to Friday only)
-                  ...List.generate(5, (index) {
+                    // Day columns - SWIPEABLE (will be clipped and translated)
+                    Positioned(
+                      left: 32, // Leave space for time column
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      child: ClipRect(
+                        child: isSwipeable
+                            ? OverflowBox(
+                                alignment: Alignment.centerLeft,
+                                minWidth: 0,
+                                maxWidth: double.infinity,
+                                child: Transform.translate(
+                                  offset: Offset(dragOffset - (screenWidth - 32), 0),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Previous week placeholder
+                                      SizedBox(
+                                        width: screenWidth - 32,
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: _buildDayColumnsForWeek(
+                                            weekStart.subtract(const Duration(days: 7)),
+                                            startHour,
+                                            endHour,
+                                            totalHours,
+                                            pixelsPerHour,
+                                            isDarkMode,
+                                            borderColor,
+                                          ),
+                                        ),
+                                      ),
+                                      // Current week (actual data)
+                                      SizedBox(
+                                        width: screenWidth - 32,
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: List.generate(5, (index) {
                     final dayOfWeek = index + 1; // 1 = Monday
                     final tasksForDay = getTasksForDay(dayOfWeek);
                     final assessmentsForDay = getAssessmentsForDay(dayOfWeek);
@@ -723,9 +827,293 @@ class WeeklyCalendar extends ConsumerWidget {
                       ),
                     );
                   }),
-                ],
-              ),
-            );
+                                        ),
+                                      ),
+                                      // Next week placeholder
+                                      SizedBox(
+                                        width: screenWidth - 32,
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: _buildDayColumnsForWeek(
+                                            weekStart.add(const Duration(days: 7)),
+                                            startHour,
+                                            endHour,
+                                            totalHours,
+                                            pixelsPerHour,
+                                            isDarkMode,
+                                            borderColor,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: List.generate(5, (index) {
+                                  final dayOfWeek = index + 1; // 1 = Monday
+                                  final tasksForDay = getTasksForDay(dayOfWeek);
+                                  final assessmentsForDay = getAssessmentsForDay(dayOfWeek);
+
+                                  // Separate assessments with and without time
+                                  final allDayAssessments = <AssessmentWithModule>[];
+                                  final timedAssessments = <AssessmentWithModule>[];
+
+                                  for (final assessmentWithModule in assessmentsForDay) {
+                                    final assessment = assessmentWithModule.assessment;
+                                    if (assessment.time != null) {
+                                      timedAssessments.add(assessmentWithModule);
+                                    } else {
+                                      allDayAssessments.add(assessmentWithModule);
+                                    }
+                                  }
+
+                                  // Create unified event list with tasks and assessments
+                                  final events = <_CalendarEvent>[];
+
+                                  // Add tasks
+                                  for (final taskWithModule in tasksForDay) {
+                                    final task = taskWithModule.task;
+                                    if (task.time == null) continue;
+
+                                    final taskMinutes = parseTimeToMinutes(task.time!);
+                                    final duration = calculateDuration(task.time, task.endTime);
+                                    final endMinutes = taskMinutes + duration;
+
+                                    events.add(_CalendarEvent(
+                                      startMinutes: taskMinutes,
+                                      endMinutes: endMinutes,
+                                      isTask: true,
+                                      taskWithModule: taskWithModule,
+                                    ));
+                                  }
+
+                                  // Add assessments
+                                  for (final assessmentWithModule in timedAssessments) {
+                                    final assessment = assessmentWithModule.assessment;
+                                    final assessmentMinutes = parseTimeToMinutes(assessment.time!);
+                                    final endMinutes = assessmentMinutes + 60; // Default 1 hour
+
+                                    events.add(_CalendarEvent(
+                                      startMinutes: assessmentMinutes,
+                                      endMinutes: endMinutes,
+                                      isTask: false,
+                                      assessmentWithModule: assessmentWithModule,
+                                    ));
+                                  }
+
+                                  // Calculate height multiplier for each hour based on overlaps
+                                  final hourMultipliers = <int, int>{};
+                                  for (int hour = startHour; hour < endHour; hour++) {
+                                    final hourStart = hour * 60;
+                                    final hourEnd = (hour + 1) * 60;
+
+                                    // Count events that overlap this hour
+                                    int maxConcurrent = 0;
+                                    for (final event in events) {
+                                      // Check if event overlaps with this hour
+                                      if (event.startMinutes < hourEnd && event.endMinutes > hourStart) {
+                                        // Count concurrent events at the start of this event
+                                        int concurrent = events.where((e) =>
+                                          e.startMinutes < event.endMinutes &&
+                                          e.endMinutes > event.startMinutes
+                                        ).length;
+                                        maxConcurrent = maxConcurrent > concurrent ? maxConcurrent : concurrent;
+                                      }
+                                    }
+                                    hourMultipliers[hour] = maxConcurrent > 0 ? maxConcurrent : 1;
+                                  }
+
+                                  // Build positioned widgets with adjusted positions
+                                  final allItems = <Widget>[];
+
+                                  for (final event in events) {
+                                    final startMinutes = startHour * 60;
+                                    final offsetMinutes = event.startMinutes - startMinutes;
+
+                                    if (offsetMinutes < 0) continue;
+
+                                    // Calculate position considering hour multipliers
+                                    double topPosition = 0;
+                                    final eventHour = event.startMinutes ~/ 60;
+
+                                    // Sum heights of all hours before this event's hour
+                                    for (int h = startHour; h < eventHour; h++) {
+                                      topPosition += pixelsPerHour * (hourMultipliers[h] ?? 1);
+                                    }
+
+                                    // Add partial hour offset
+                                    final minutesIntoHour = event.startMinutes % 60;
+                                    topPosition += (minutesIntoHour / 60) * pixelsPerHour * (hourMultipliers[eventHour] ?? 1);
+
+                                    final duration = event.endMinutes - event.startMinutes;
+                                    final height = (duration / 60) * pixelsPerHour * (hourMultipliers[eventHour] ?? 1);
+
+                                    // Find which position in stack (0 = first, 1 = second, etc.)
+                                    final overlappingEvents = events.where((e) =>
+                                      e.startMinutes < event.endMinutes &&
+                                      e.endMinutes > event.startMinutes
+                                    ).toList();
+                                    overlappingEvents.sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+                                    final stackPosition = overlappingEvents.indexOf(event);
+                                    final totalInStack = overlappingEvents.length;
+
+                                    final itemHeight = (height - 4) / totalInStack;
+                                    final itemTop = topPosition + (stackPosition * itemHeight);
+
+                                    if (event.isTask) {
+                                      allItems.add(Positioned(
+                                        top: itemTop,
+                                        left: 2,
+                                        right: 2,
+                                        child: _TimetableTaskBox(
+                                          task: event.taskWithModule!.task,
+                                          module: event.taskWithModule!.module,
+                                          height: itemHeight,
+                                          weekNumber: currentWeek,
+                                          dayOfWeek: dayOfWeek,
+                                          semester: semester!,
+                                          getTaskColor: getTaskColor,
+                                          getTaskTypeName: getTaskTypeName,
+                                        ),
+                                      ));
+                                    } else {
+                                      allItems.add(Positioned(
+                                        top: itemTop,
+                                        left: 2,
+                                        right: 2,
+                                        child: _TimetableAssessmentBox(
+                                          assessment: event.assessmentWithModule!.assessment,
+                                          module: event.assessmentWithModule!.module,
+                                          height: itemHeight,
+                                          weekNumber: currentWeek,
+                                          dayOfWeek: dayOfWeek,
+                                          semester: semester!,
+                                        ),
+                                      ));
+                                    }
+                                  }
+
+                                  return Expanded(
+                                    child: Column(
+                                      children: [
+                                        // All-day assessments section (at the top)
+                                        if (allDayAssessments.isNotEmpty)
+                                          Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color: isDarkMode ? const Color(0xFF7F1D1D) : const Color(0xFFFEF2F2),
+                                              border: Border(
+                                                left: BorderSide(
+                                                  color: borderColor.withOpacity(0.5),
+                                                  width: 1,
+                                                ),
+                                                right: index == 4
+                                                    ? BorderSide(
+                                                        color: borderColor.withOpacity(0.5),
+                                                        width: 1,
+                                                      )
+                                                    : BorderSide.none,
+                                                bottom: const BorderSide(
+                                                  color: Color(0xFFEF4444),
+                                                  width: 2,
+                                                ),
+                                              ),
+                                            ),
+                                            child: Column(
+                                              children: allDayAssessments.map((assessmentWithModule) {
+                                                return Padding(
+                                                  padding: const EdgeInsets.only(bottom: 2),
+                                                  child: _AllDayAssessmentChip(
+                                                    assessment: assessmentWithModule.assessment,
+                                                    module: assessmentWithModule.module,
+                                                  ),
+                                                );
+                                              }).toList(),
+                                            ),
+                                          ),
+                                        // Timetable section
+                                        Expanded(
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              border: Border(
+                                                left: BorderSide(
+                                                  color: borderColor.withOpacity(0.5),
+                                                  width: 1,
+                                                ),
+                                                right: index == 4
+                                                    ? BorderSide(
+                                                        color: borderColor.withOpacity(0.5),
+                                                        width: 1,
+                                                      )
+                                                    : BorderSide.none,
+                                              ),
+                                            ),
+                                            child: Stack(
+                                              children: [
+                                                // Hour separators
+                                                ...List.generate(totalHours, (hourIndex) {
+                                                  double topPosition = 0;
+                                                  for (int h = startHour; h < startHour + hourIndex; h++) {
+                                                    topPosition += pixelsPerHour * (hourMultipliers[h] ?? 1);
+                                                  }
+                                                  return Positioned(
+                                                    top: topPosition,
+                                                    left: 0,
+                                                    right: 0,
+                                                    child: Container(
+                                                      height: 1,
+                                                      color: borderColor.withOpacity(0.3),
+                                                    ),
+                                                  );
+                                                }),
+                                                ...allItems,
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ),
+                      ),
+                    ),
+                    // Time column - FIXED (always on top, not affected by swipe)
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      child: SizedBox(
+                        width: 32,
+                        height: totalHeight,
+                        child: Column(
+                          children: List.generate(totalHours, (index) {
+                            final hour = startHour + index;
+                            final multiplier = hourMultipliers[hour] ?? 1;
+                            return Container(
+                              height: pixelsPerHour * multiplier,
+                              alignment: Alignment.topRight,
+                              padding: const EdgeInsets.only(right: 4, top: 4),
+                              child: Text(
+                                '${hour.toString().padLeft(2, '0')}:00',
+                                style: GoogleFonts.inter(
+                                  fontSize: 9,
+                                  color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.visible,
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
             },
           ),
           // Legend

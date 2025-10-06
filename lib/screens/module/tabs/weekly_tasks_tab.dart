@@ -233,7 +233,7 @@ class _TaskCard extends ConsumerWidget {
             children: [
               // Checkbox
               GestureDetector(
-                onTap: () async {
+                onTap: () {
                   final user = ref.read(currentUserProvider);
                   if (user == null) return;
 
@@ -253,7 +253,8 @@ class _TaskCard extends ConsumerWidget {
                         : null,
                   );
 
-                  await repository.upsertTaskCompletion(
+                  // Optimistic update - don't await, update in background
+                  repository.upsertTaskCompletion(
                     user.uid,
                     module.id,
                     newCompletion,
