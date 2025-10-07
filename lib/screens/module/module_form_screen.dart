@@ -601,6 +601,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
                 final index = entry.key;
                 final task = entry.value;
                 return _RecurringTaskCard(
+                  key: ObjectKey(task),
                   task: task,
                   onRemove: () => _removeRecurringTask(index),
                   onChanged: () => setState(() {}),
@@ -650,6 +651,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
                 final index = entry.key;
                 final assessment = entry.value;
                 return _AssessmentCard(
+                  key: ObjectKey(assessment),
                   assessment: assessment,
                   onRemove: () => _removeAssessment(index),
                   onChanged: () => setState(() {}),
@@ -683,6 +685,8 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
 }
 
 class _RecurringTaskInput {
+  static int _counter = 0;
+  final String id;
   String name = '';
   RecurringTaskType type = RecurringTaskType.lecture;
   int? dayOfWeek; // No default - user must select
@@ -690,6 +694,8 @@ class _RecurringTaskInput {
   String? endTime;
   String? location;
   List<_CustomTaskInput> customTasks = []; // Tasks associated with this scheduled item
+
+  _RecurringTaskInput() : id = 'task_${DateTime.now().microsecondsSinceEpoch}_${_counter++}';
 }
 
 class _CustomTaskInput {
@@ -703,6 +709,7 @@ class _RecurringTaskCard extends StatefulWidget {
   final VoidCallback onChanged;
 
   const _RecurringTaskCard({
+    super.key,
     required this.task,
     required this.onRemove,
     required this.onChanged,
@@ -849,11 +856,6 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
             ),
             const SizedBox(height: 16),
             // Day selector
-            Text(
-              'Day',
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-            const SizedBox(height: 8),
             Row(
               children: List.generate(7, (index) {
                 final dayOfWeek = index + 1;
@@ -1038,6 +1040,8 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
 }
 
 class _AssessmentInput {
+  static int _counter = 0;
+  final String id;
   String name = '';
   AssessmentType type = AssessmentType.coursework;
   DateTime? dueDate;
@@ -1048,6 +1052,8 @@ class _AssessmentInput {
   int? dayOfWeek;
   SubmitTiming? submitTiming;
   String? time;
+
+  _AssessmentInput() : id = 'assessment_${DateTime.now().microsecondsSinceEpoch}_${_counter++}';
 }
 
 class _AssessmentCard extends StatefulWidget {
@@ -1056,6 +1062,7 @@ class _AssessmentCard extends StatefulWidget {
   final VoidCallback onChanged;
 
   const _AssessmentCard({
+    super.key,
     required this.assessment,
     required this.onRemove,
     required this.onChanged,
@@ -1066,6 +1073,48 @@ class _AssessmentCard extends StatefulWidget {
 }
 
 class _AssessmentCardState extends State<_AssessmentCard> {
+  late TextEditingController _nameController;
+  late TextEditingController _weightingController;
+  late TextEditingController _startWeekController;
+  late TextEditingController _endWeekController;
+  late TextEditingController _descriptionController;
+  late TextEditingController _timeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.assessment.name);
+    _weightingController = TextEditingController(text: widget.assessment.weighting?.toString() ?? '');
+    _startWeekController = TextEditingController(text: widget.assessment.startWeek?.toString() ?? '');
+    _endWeekController = TextEditingController(text: widget.assessment.endWeek?.toString() ?? '');
+    _descriptionController = TextEditingController(text: widget.assessment.description ?? '');
+    _timeController = TextEditingController(text: widget.assessment.time ?? '');
+  }
+
+  @override
+  void didUpdateWidget(_AssessmentCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.assessment != oldWidget.assessment) {
+      _nameController.text = widget.assessment.name;
+      _weightingController.text = widget.assessment.weighting?.toString() ?? '';
+      _startWeekController.text = widget.assessment.startWeek?.toString() ?? '';
+      _endWeekController.text = widget.assessment.endWeek?.toString() ?? '';
+      _descriptionController.text = widget.assessment.description ?? '';
+      _timeController.text = widget.assessment.time ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _weightingController.dispose();
+    _startWeekController.dispose();
+    _endWeekController.dispose();
+    _descriptionController.dispose();
+    _timeController.dispose();
+    super.dispose();
+  }
+
   // Parse time string (e.g., "09:00") to TimeOfDay
   TimeOfDay? _parseTimeOfDay(String? timeString) {
     if (timeString == null || timeString.isEmpty) return null;
@@ -1236,7 +1285,7 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                 Expanded(
                   flex: 2,
                   child: TextFormField(
-                    initialValue: widget.assessment.name,
+                    controller: _nameController,
                     textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
                       labelText: 'Name',
@@ -1251,7 +1300,7 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextFormField(
-                    initialValue: widget.assessment.weighting?.toString(),
+                    controller: _weightingController,
                     decoration: const InputDecoration(
                       labelText: 'Weight %',
                       border: OutlineInputBorder(),
@@ -1271,7 +1320,7 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                 children: [
                   Expanded(
                     child: TextFormField(
-                      initialValue: widget.assessment.startWeek?.toString(),
+                      controller: _startWeekController,
                       decoration: const InputDecoration(
                         labelText: 'Start Week',
                         hintText: 'e.g., 1',
@@ -1287,7 +1336,7 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: TextFormField(
-                      initialValue: widget.assessment.endWeek?.toString(),
+                      controller: _endWeekController,
                       decoration: const InputDecoration(
                         labelText: 'End Week',
                         hintText: 'e.g., 10',
@@ -1359,7 +1408,7 @@ class _AssessmentCardState extends State<_AssessmentCard> {
               ),
               const SizedBox(height: 12),
               TextFormField(
-                initialValue: widget.assessment.time,
+                controller: _timeController,
                 decoration: const InputDecoration(
                   labelText: 'Time',
                   hintText: 'e.g., 17:00',
@@ -1461,7 +1510,7 @@ class _AssessmentCardState extends State<_AssessmentCard> {
             ],
             const SizedBox(height: 12),
             TextFormField(
-              initialValue: widget.assessment.description,
+              controller: _descriptionController,
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 labelText: 'Description (Optional)',

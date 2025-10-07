@@ -5,6 +5,7 @@ import 'package:module_tracker/models/module.dart';
 import 'package:module_tracker/models/recurring_task.dart';
 import 'package:module_tracker/models/task_completion.dart';
 import 'package:module_tracker/models/assessment.dart';
+import 'package:module_tracker/models/semester.dart';
 import 'package:module_tracker/providers/module_provider.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
@@ -38,6 +39,12 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
   final Map<String, TaskStatus> _temporaryCompletions = {};
   String? _firstTouchedTaskId;
   TaskStatus? _firstTouchedStatus;
+
+  // Track expanded weeks
+  final Map<int, bool> _expandedWeeks = {};
+
+  // Track semester overview expansion (collapsed by default)
+  bool _isSemesterOverviewExpanded = false;
 
   void onTouchDown(String taskId, TaskStatus currentStatus) {
     if (!_isDragging) {
@@ -134,6 +141,17 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
     return '$dayOfWeek $day${getOrdinalSuffix(day)}';
   }
 
+  // Get ordinal suffix for a day number
+  String getOrdinalSuffix(int day) {
+    if (day >= 11 && day <= 13) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  }
+
   // Generate smart task name with date or occurrence count
   String generateTaskName(
     RecurringTask task,
@@ -162,19 +180,19 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
       return (a.time ?? '').compareTo(b.time ?? '');
     });
 
-    final totalOfType = tasksOfSameType.length;
+    // final totalOfType = tasksOfSameType.length;
     final typeName = getTaskTypeName(task.type);
 
-    // If only one of this type, just show type
-    if (totalOfType == 1) {
-      return typeName;
-    }
-
-    // If 2 or more, show date instead of occurrence number
+    // Calculate the actual date for this task in this week
     final weekStartDate = semesterStartDate.add(Duration(days: (weekNumber - 1) * 7));
     final taskDate = weekStartDate.add(Duration(days: task.dayOfWeek - 1));
 
-    return '$typeName (${formatTaskDate(taskDate)})';
+    // Format: "Lecture (Mon 29th)"
+    final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final dayOfWeek = dayNames[taskDate.weekday - 1];
+    final day = taskDate.day;
+
+    return '$typeName ($dayOfWeek $day${getOrdinalSuffix(day)})';
   }
 
   // Get all assessments that are due in the given week
@@ -263,48 +281,32 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Module header with fixed height for alignment
-                  ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: 75 * scaleFactor),
-                    child: Padding(
-                      padding: EdgeInsets.only(right: 8 * scaleFactor),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: [
+                  // Module header
+                  Padding(
+                    padding: EdgeInsets.only(right: 8 * scaleFactor),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.module.name,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                fontSize:
+                                    (Theme.of(
+                                          context,
+                                        ).textTheme.titleLarge?.fontSize ??
+                                        22) *
+                                    scaleFactor,
+                              ),
+                        ),
+                        if (widget.module.code.isNotEmpty)
                           Text(
-                            widget.module.name,
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize:
-                                      (Theme.of(
-                                            context,
-                                          ).textTheme.titleLarge?.fontSize ??
-                                          22) *
-                                      scaleFactor,
-                                ),
-                          ),
-                          if (widget.module.code.isNotEmpty)
-                            Text(
-                              widget.module.code,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: Colors.grey[600],
-                                    fontSize:
-                                        (Theme.of(
-                                              context,
-                                            ).textTheme.bodyMedium?.fontSize ??
-                                            14) *
-                                        scaleFactor,
-                                  ),
-                            ),
-                          Text(
-                            'Week ${widget.weekNumber}',
+                            widget.module.code,
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
-                                  color: Colors.grey[500],
-                                  fontStyle: FontStyle.italic,
+                                  color: Colors.grey[600],
                                   fontSize:
                                       (Theme.of(
                                             context,
@@ -313,11 +315,10 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                       scaleFactor,
                                 ),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
                   ),
-                  SizedBox(height: 16 * scaleFactor),
+                  SizedBox(height: 8 * scaleFactor),
                   // Tasks list (recurring tasks + weekly assessments)
                   recurringTasksAsync.when(
                     data: (tasks) {
@@ -395,6 +396,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                     setState(() {
                                       _isDragging = true;
                                     });
+                                    // Prevent parent scroll while dragging
+                                    ref.read(isDraggingCheckboxProvider.notifier).state = true;
                                     // Now select the first task that was touched
                                     if (_firstTouchedTaskId != null && _firstTouchedStatus != null) {
                                       selectTask(_firstTouchedTaskId!, _firstTouchedStatus!);
@@ -411,6 +414,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                     _firstTouchedTaskId = null;
                                     _firstTouchedStatus = null;
                                   });
+                                  // Re-enable parent scroll
+                                  ref.read(isDraggingCheckboxProvider.notifier).state = false;
                                 },
                                 onPanCancel: () {
                                   setState(() {
@@ -419,8 +424,11 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                     _firstTouchedTaskId = null;
                                     _firstTouchedStatus = null;
                                   });
+                                  // Re-enable parent scroll
+                                  ref.read(isDraggingCheckboxProvider.notifier).state = false;
                                 },
                                 child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     // Recurring tasks
                                     ...parentTasks.expand((task) {
@@ -474,7 +482,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                                 : null,
                                           );
 
-                                          await repository.upsertTaskCompletion(
+                                          // Optimistic update - don't await
+                                          repository.upsertTaskCompletion(
                                             user.uid,
                                             widget.module.id,
                                             newCompletion,
@@ -496,7 +505,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                                     status: TaskStatus.complete,
                                                     completedAt: now,
                                                   );
-                                              await repository
+                                              repository
                                                   .upsertTaskCompletion(
                                                     user.uid,
                                                     widget.module.id,
@@ -548,7 +557,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                                       : null,
                                                 );
 
-                                            await repository
+                                            // Optimistic update - don't await
+                                            repository
                                                 .upsertTaskCompletion(
                                                   user.uid,
                                                   widget.module.id,
@@ -567,11 +577,39 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                         completion?.status ??
                                         TaskStatus.notStarted;
 
+                                    // Calculate the due date for this assessment in this week
+                                    String dueDateStr = '';
+                                    if (assessment.dueDate != null) {
+                                      final dueDate = assessment.dueDate!;
+                                      final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                                      final dayOfWeek = dayNames[dueDate.weekday - 1];
+                                      final day = dueDate.day;
+                                      dueDateStr = ' ($dayOfWeek $day${getOrdinalSuffix(day)})';
+                                    } else if (assessment.type == AssessmentType.weekly &&
+                                               assessment.dayOfWeek != null) {
+                                      // For weekly assessments, calculate based on week
+                                      final weekStartDate = semester!.startDate.add(
+                                        Duration(days: (widget.weekNumber - 1) * 7),
+                                      );
+                                      DateTime dueDate;
+                                      if (assessment.submitTiming == SubmitTiming.startOfNextWeek) {
+                                        final nextWeekStart = weekStartDate.add(const Duration(days: 7));
+                                        dueDate = nextWeekStart.add(Duration(days: assessment.dayOfWeek! - 1));
+                                      } else {
+                                        dueDate = weekStartDate.add(Duration(days: assessment.dayOfWeek! - 1));
+                                      }
+                                      final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                                      final dayOfWeek = dayNames[dueDate.weekday - 1];
+                                      final day = dueDate.day;
+                                      dueDateStr = ' ($dayOfWeek $day${getOrdinalSuffix(day)})';
+                                    }
+
                                     return _TaskItem(
-                                      taskName: assessment.name,
+                                      taskName: '${assessment.name}$dueDateStr',
                                       taskId: assessment.id,
                                       status: status,
                                       completedAt: completion?.completedAt,
+                                      isAssessment: true,
                                       scaleFactor: scaleFactor,
                                       onTouchDown: onTouchDown,
                                       onSelectTask: selectTask,
@@ -597,7 +635,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                               : null,
                                         );
 
-                                        await repository.upsertTaskCompletion(
+                                        // Optimistic update - don't await
+                                        repository.upsertTaskCompletion(
                                           user.uid,
                                           widget.module.id,
                                           newCompletion,
@@ -605,8 +644,12 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                       },
                                     );
                                   }),
-                                  ],
-                                ),
+                                  // Add spacing to align Semester Overview across cards
+                                  SizedBox(
+                                    height: (parentTasks.length < 5 ? (5 - parentTasks.length) * 40 : 0) * scaleFactor,
+                                  ),
+                                ],
+                              ),
                               );
                             },
                             loading: () => const CircularProgressIndicator(),
@@ -619,6 +662,182 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                     },
                     loading: () => const CircularProgressIndicator(),
                     error: (error, stack) => Text('Error: $error'),
+                  ),
+                  // Semester Overview Section
+                  if (semester != null) ...[
+                    SizedBox(height: 16 * scaleFactor),
+                    Divider(height: 1, color: Colors.grey[300]),
+                    SizedBox(height: 12 * scaleFactor),
+                    _SemesterOverviewSection(
+                      semester: semester,
+                      module: widget.module,
+                      weekNumber: widget.weekNumber,
+                      scaleFactor: scaleFactor,
+                      isExpanded: _isSemesterOverviewExpanded,
+                      expandedWeeks: _expandedWeeks,
+                      onToggleExpansion: () {
+                        setState(() {
+                          _isSemesterOverviewExpanded = !_isSemesterOverviewExpanded;
+                        });
+                      },
+                      onToggleWeek: (weekNum) {
+                        setState(() {
+                          _expandedWeeks[weekNum] = !(_expandedWeeks[weekNum] ?? false);
+                        });
+                      },
+                    ),
+                  ],
+                  // Upcoming Assessments Section
+                  assessmentsAsync.when(
+                    data: (allAssessments) {
+                      final now = DateTime.now();
+
+                      // Separate upcoming assessments with dates and TBC assessments
+                      final upcomingWithDates = allAssessments
+                          .where((a) => a.dueDate != null && a.dueDate!.isAfter(now))
+                          .toList()
+                        ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+
+                      final tbcAssessments = allAssessments
+                          .where((a) => a.dueDate == null)
+                          .toList();
+
+                      // Combine: upcoming with dates first, then TBC
+                      final allUpcoming = [...upcomingWithDates, ...tbcAssessments];
+
+                      if (allUpcoming.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+
+                      // Take only next 3 assessments total
+                      final nextAssessments = allUpcoming.take(3).toList();
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(height: 16 * scaleFactor),
+                          Divider(height: 1, color: Colors.grey[300]),
+                          SizedBox(height: 12 * scaleFactor),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.assignment_outlined,
+                                size: 18 * scaleFactor,
+                                color: const Color(0xFF8B5CF6),
+                              ),
+                              SizedBox(width: 6 * scaleFactor),
+                              Text(
+                                'Upcoming Assessments',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: (Theme.of(context).textTheme.titleMedium?.fontSize ?? 16) * scaleFactor,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 8 * scaleFactor),
+                          ...nextAssessments.map((assessment) {
+                            // Handle TBC assessments (no due date)
+                            if (assessment.dueDate == null) {
+                              return Padding(
+                                padding: EdgeInsets.only(bottom: 6 * scaleFactor),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      '⚪',
+                                      style: TextStyle(fontSize: 14 * scaleFactor),
+                                    ),
+                                    SizedBox(width: 8 * scaleFactor),
+                                    Expanded(
+                                      child: Text(
+                                        assessment.name,
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                          fontSize: (Theme.of(context).textTheme.bodyMedium?.fontSize ?? 14) * scaleFactor,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 6 * scaleFactor,
+                                        vertical: 2 * scaleFactor,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF59E0B).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(4 * scaleFactor),
+                                        border: Border.all(
+                                          color: const Color(0xFFF59E0B).withOpacity(0.3),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'TBC',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: const Color(0xFFF59E0B),
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor * 0.9,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            // Handle assessments with dates
+                            final daysUntilDue = assessment.dueDate!.difference(now).inDays;
+                            Color urgencyColor;
+                            String urgencyIcon;
+
+                            if (daysUntilDue <= 3) {
+                              urgencyColor = const Color(0xFFEF4444); // Red
+                              urgencyIcon = '🔴';
+                            } else if (daysUntilDue <= 7) {
+                              urgencyColor = const Color(0xFFF59E0B); // Amber
+                              urgencyIcon = '🟡';
+                            } else {
+                              urgencyColor = const Color(0xFF10B981); // Green
+                              urgencyIcon = '🟢';
+                            }
+
+                            final dateFormat = '${assessment.dueDate!.month}/${assessment.dueDate!.day}';
+
+                            return Padding(
+                              padding: EdgeInsets.only(bottom: 6 * scaleFactor),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    urgencyIcon,
+                                    style: TextStyle(fontSize: 14 * scaleFactor),
+                                  ),
+                                  SizedBox(width: 8 * scaleFactor),
+                                  Expanded(
+                                    child: Text(
+                                      assessment.name,
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        fontSize: (Theme.of(context).textTheme.bodyMedium?.fontSize ?? 14) * scaleFactor,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    daysUntilDue == 0
+                                        ? 'Today'
+                                        : daysUntilDue == 1
+                                            ? 'Tomorrow'
+                                            : '$dateFormat (${daysUntilDue}d)',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: urgencyColor,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+                      );
+                    },
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
                   ),
                 ],
               ),
@@ -697,7 +916,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                       },
                       child: Padding(
                         padding: const EdgeInsets.all(4),
-                        child: Icon(Icons.more_vert, size: 16 * scaleFactor),
+                        child: Icon(Icons.more_vert, size: 28 * scaleFactor),
                       ),
                     ),
                   ),
@@ -752,6 +971,7 @@ class _TaskItem extends ConsumerStatefulWidget {
   final TaskStatus status;
   final Function(TaskStatus) onStatusChanged;
   final bool isSubtask;
+  final bool isAssessment;
   final DateTime? completedAt;
   final double scaleFactor;
   final Function(String, TaskStatus)? onTouchDown;
@@ -764,6 +984,7 @@ class _TaskItem extends ConsumerStatefulWidget {
     required this.status,
     required this.onStatusChanged,
     this.isSubtask = false,
+    this.isAssessment = false,
     this.completedAt,
     this.scaleFactor = 1.0,
     this.onTouchDown,
@@ -787,6 +1008,31 @@ class _TaskItemState extends ConsumerState<_TaskItem> {
     final temporaryStatus = widget.getTemporaryStatus?.call(widget.taskId, widget.status);
     final currentStatus = temporaryStatus ?? widget.status;
 
+    final taskContent = Row(
+      children: [
+        _StatusIcon(status: currentStatus, scaleFactor: widget.scaleFactor),
+        SizedBox(width: 12 * widget.scaleFactor),
+        Expanded(
+          child: Text(
+            widget.taskName,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              decoration: currentStatus == TaskStatus.complete
+                  ? TextDecoration.lineThrough
+                  : null,
+              fontSize:
+                  (Theme.of(context).textTheme.bodyLarge?.fontSize ?? 16) *
+                  widget.scaleFactor,
+              color: widget.isAssessment
+                  ? (currentStatus == TaskStatus.complete
+                      ? Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6)
+                      : const Color(0xFFB91C1C)) // Dark red for assessments
+                  : null,
+            ),
+          ),
+        ),
+      ],
+    );
+
     return Listener(
       onPointerDown: (_) => widget.onTouchDown?.call(widget.taskId, currentStatus),
       child: MouseRegion(
@@ -806,31 +1052,27 @@ class _TaskItemState extends ConsumerState<_TaskItem> {
             _lastTapTime = now;
             widget.onStatusChanged(nextStatus);
           },
-          child: Padding(
-            padding: EdgeInsets.only(
+          child: Container(
+            margin: EdgeInsets.only(
               left: widget.isSubtask ? 32.0 * widget.scaleFactor : 0.0,
-              top: 8 * widget.scaleFactor,
-              bottom: 8 * widget.scaleFactor,
+              top: 4 * widget.scaleFactor,
+              bottom: 4 * widget.scaleFactor,
             ),
-            child: Row(
-              children: [
-                _StatusIcon(status: currentStatus, scaleFactor: widget.scaleFactor),
-                SizedBox(width: 12 * widget.scaleFactor),
-                Expanded(
-                  child: Text(
-                    widget.taskName,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      decoration: currentStatus == TaskStatus.complete
-                          ? TextDecoration.lineThrough
-                          : null,
-                      fontSize:
-                          (Theme.of(context).textTheme.bodyLarge?.fontSize ?? 16) *
-                          widget.scaleFactor,
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.isAssessment ? 8 * widget.scaleFactor : 0,
+              vertical: widget.isAssessment ? 8 * widget.scaleFactor : 4 * widget.scaleFactor,
+            ),
+            decoration: widget.isAssessment
+                ? BoxDecoration(
+                    color: const Color(0xFFB91C1C).withOpacity(0.08), // Light red background
+                    borderRadius: BorderRadius.circular(8 * widget.scaleFactor),
+                    border: Border.all(
+                      color: const Color(0xFFB91C1C).withOpacity(0.2),
+                      width: 1,
                     ),
-                  ),
-                ),
-              ],
-            ),
+                  )
+                : null,
+            child: taskContent,
           ),
         ),
       ),
@@ -888,5 +1130,528 @@ class _StatusIcon extends StatelessWidget {
         size: iconSize,
       ),
     };
+  }
+}
+
+// Semester Overview Section Widget
+class _SemesterOverviewSection extends ConsumerWidget {
+  final Semester semester;
+  final Module module;
+  final int weekNumber;
+  final double scaleFactor;
+  final bool isExpanded;
+  final Map<int, bool> expandedWeeks;
+  final VoidCallback onToggleExpansion;
+  final Function(int) onToggleWeek;
+
+  const _SemesterOverviewSection({
+    required this.semester,
+    required this.module,
+    required this.weekNumber,
+    required this.scaleFactor,
+    required this.isExpanded,
+    required this.expandedWeeks,
+    required this.onToggleExpansion,
+    required this.onToggleWeek,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final recurringTasksAsync = ref.watch(recurringTasksProvider(module.id));
+    final assessmentsAsync = ref.watch(assessmentsProvider(module.id));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header (clickable to expand/collapse)
+        InkWell(
+          onTap: onToggleExpansion,
+          child: Row(
+            children: [
+              Icon(
+                Icons.calendar_today,
+                size: 18 * scaleFactor,
+                color: const Color(0xFF0EA5E9),
+              ),
+              SizedBox(width: 6 * scaleFactor),
+              Expanded(
+                child: Text(
+                  'Semester Overview',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: (Theme.of(context).textTheme.titleMedium?.fontSize ?? 16) * scaleFactor,
+                  ),
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 8 * scaleFactor,
+                  vertical: 4 * scaleFactor,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0EA5E9).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4 * scaleFactor),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      isExpanded ? 'Collapse' : 'Expand',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor,
+                        color: const Color(0xFF0EA5E9),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(width: 4 * scaleFactor),
+                    Icon(
+                      isExpanded ? Icons.expand_less : Icons.expand_more,
+                      size: 16 * scaleFactor,
+                      color: const Color(0xFF0EA5E9),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 8 * scaleFactor),
+        // Content (collapsed or expanded)
+        recurringTasksAsync.when(
+          data: (tasks) {
+            return assessmentsAsync.when(
+              data: (assessments) {
+                // Build a list to collect all week completion data
+                final weekCompletionsList = <AsyncValue<List<TaskCompletion>>>[];
+
+                // Watch all week providers at once
+                for (int week = 1; week <= semester.numberOfWeeks; week++) {
+                  weekCompletionsList.add(
+                    ref.watch(taskCompletionsProvider((moduleId: module.id, weekNumber: week))),
+                  );
+                }
+
+                // Check if any data is still loading
+                final isAnyLoading = weekCompletionsList.any((async) => async.isLoading);
+                if (isAnyLoading) {
+                  return const SizedBox.shrink();
+                }
+
+                // Calculate completion for each week
+                final weekCompletions = <int, Map<String, dynamic>>{};
+                int fullyCompleteWeeks = 0;
+                int overdueTasksCount = 0;
+
+                for (int week = 1; week <= semester.numberOfWeeks; week++) {
+                  final completionsAsync = weekCompletionsList[week - 1];
+
+                  completionsAsync.whenData((completions) {
+                    final completionMap = {for (var c in completions) c.taskId: c};
+
+                    // Add assessments for this week
+                    final weekAssessments = _getAssessmentsForWeek(
+                      assessments,
+                      semester.startDate,
+                      week,
+                    );
+
+                    // Build set of valid task IDs for this week
+                    final validTaskIds = <String>{
+                      ...tasks.map((t) => t.id),
+                      ...weekAssessments.map((a) => a.id),
+                    };
+
+                    // Count only tasks that are in our valid task list
+                    final completedTasks = completions
+                        .where((c) => validTaskIds.contains(c.taskId) && c.status == TaskStatus.complete)
+                        .length;
+
+                    final totalTasks = validTaskIds.length;
+
+                    weekCompletions[week] = {
+                      'total': totalTasks,
+                      'completed': completedTasks,
+                      'completions': completionMap,
+                    };
+
+                    // Calculate stats for past weeks
+                    if (week < weekNumber) {
+                      if (completedTasks == totalTasks && totalTasks > 0) {
+                        fullyCompleteWeeks++;
+                      } else {
+                        overdueTasksCount += (totalTasks - completedTasks);
+                      }
+                    }
+                  });
+                }
+
+                // Collect outstanding tasks
+                final outstandingTasks = <Map<String, dynamic>>[];
+                for (int week = 1; week < weekNumber; week++) {
+                  final weekData = weekCompletions[week];
+                  if (weekData != null) {
+                    final completionMap = weekData['completions'] as Map<String, TaskCompletion>;
+
+                    // Check recurring tasks
+                    for (final task in tasks) {
+                      final completion = completionMap[task.id];
+                      if (completion?.status != TaskStatus.complete) {
+                        outstandingTasks.add({
+                          'week': week,
+                          'name': task.name,
+                          'isAssessment': false,
+                        });
+                      }
+                    }
+
+                    // Check assessments for this week
+                    final weekAssessments = _getAssessmentsForWeek(assessments, semester.startDate, week);
+                    for (final assessment in weekAssessments) {
+                      final completion = completionMap[assessment.id];
+                      if (completion?.status != TaskStatus.complete) {
+                        outstandingTasks.add({
+                          'week': week,
+                          'name': assessment.name,
+                          'isAssessment': true,
+                        });
+                      }
+                    }
+                  }
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Stats (always visible)
+                    Text(
+                      'Complete: $fullyCompleteWeeks/${weekNumber - 1} weeks' +
+                          (overdueTasksCount > 0 ? ' | ⚠️ $overdueTasksCount overdue' : ''),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor,
+                        color: overdueTasksCount > 0
+                            ? const Color(0xFFF59E0B)
+                            : Colors.grey[600],
+                      ),
+                    ),
+
+                    // Collapsed view: show outstanding tasks
+                    if (!isExpanded && outstandingTasks.isNotEmpty) ...[
+                      SizedBox(height: 12 * scaleFactor),
+                      Text(
+                        'Outstanding Tasks:',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontSize: (Theme.of(context).textTheme.bodyMedium?.fontSize ?? 14) * scaleFactor,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFFF59E0B),
+                        ),
+                      ),
+                      SizedBox(height: 6 * scaleFactor),
+                      ...outstandingTasks.take(5).map((task) {
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: 4 * scaleFactor, left: 4 * scaleFactor),
+                          child: Row(
+                            children: [
+                              Text(
+                                '•',
+                                style: TextStyle(
+                                  fontSize: 14 * scaleFactor,
+                                  color: task['isAssessment']
+                                      ? const Color(0xFFB91C1C)
+                                      : const Color(0xFFF59E0B),
+                                ),
+                              ),
+                              SizedBox(width: 8 * scaleFactor),
+                              Expanded(
+                                child: Text(
+                                  'Week ${task['week']}: ${task['name']}',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor,
+                                    color: task['isAssessment']
+                                        ? const Color(0xFFB91C1C)
+                                        : Theme.of(context).textTheme.bodySmall?.color,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                      if (outstandingTasks.length > 5)
+                        Padding(
+                          padding: EdgeInsets.only(left: 16 * scaleFactor, top: 4 * scaleFactor),
+                          child: Text(
+                            '...and ${outstandingTasks.length - 5} more',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor,
+                              color: Colors.grey[600],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                    ],
+
+                    // Collapsed view: show "all caught up" if no overdue
+                    if (!isExpanded && outstandingTasks.isEmpty && weekNumber > 1) ...[
+                      SizedBox(height: 8 * scaleFactor),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.check_circle,
+                            size: 16 * scaleFactor,
+                            color: const Color(0xFF10B981),
+                          ),
+                          SizedBox(width: 6 * scaleFactor),
+                          Text(
+                            'All caught up!',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor,
+                              color: const Color(0xFF10B981),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    // Expanded view: show full week list
+                    if (isExpanded) ...[
+                      SizedBox(height: 8 * scaleFactor),
+                      ...List.generate(semester.numberOfWeeks, (index) {
+                        final week = index + 1;
+                        return _WeekDetailRow(
+                          week: week,
+                          currentWeek: weekNumber,
+                          semester: semester,
+                          module: module,
+                          tasks: tasks,
+                          assessments: assessments,
+                          scaleFactor: scaleFactor,
+                          isExpanded: expandedWeeks[week] ?? false,
+                          onToggle: () => onToggleWeek(week),
+                          weekCompletions: weekCompletions[week],
+                        );
+                      }),
+                    ],
+                  ],
+                );
+              },
+              loading: () => const CircularProgressIndicator(),
+              error: (_, __) => const SizedBox.shrink(),
+            );
+          },
+          loading: () => const CircularProgressIndicator(),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+
+  List<Assessment> _getAssessmentsForWeek(
+    List<Assessment> allAssessments,
+    DateTime semesterStartDate,
+    int weekNumber,
+  ) {
+    final assessments = <Assessment>[];
+
+    for (final assessment in allAssessments) {
+      if (assessment.type == AssessmentType.weekly) {
+        final dueDates = assessment.getWeeklyDueDates(semesterStartDate);
+        for (final dueDate in dueDates) {
+          final weekStart = semesterStartDate.add(Duration(days: (weekNumber - 1) * 7));
+          final weekEnd = weekStart.add(const Duration(days: 7));
+          if (dueDate.isAfter(weekStart.subtract(const Duration(days: 1))) &&
+              dueDate.isBefore(weekEnd)) {
+            assessments.add(assessment);
+            break;
+          }
+        }
+      } else {
+        if (assessment.weekNumber == weekNumber) {
+          assessments.add(assessment);
+        }
+      }
+    }
+
+    return assessments;
+  }
+}
+
+// Individual Week Detail Row
+class _WeekDetailRow extends ConsumerWidget {
+  final int week;
+  final int currentWeek;
+  final Semester semester;
+  final Module module;
+  final List<RecurringTask> tasks;
+  final List<Assessment> assessments;
+  final double scaleFactor;
+  final bool isExpanded;
+  final VoidCallback onToggle;
+  final Map<String, dynamic>? weekCompletions;
+
+  const _WeekDetailRow({
+    required this.week,
+    required this.currentWeek,
+    required this.semester,
+    required this.module,
+    required this.tasks,
+    required this.assessments,
+    required this.scaleFactor,
+    required this.isExpanded,
+    required this.onToggle,
+    this.weekCompletions,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final total = weekCompletions?['total'] ?? 0;
+    final completed = weekCompletions?['completed'] ?? 0;
+    final completionMap = weekCompletions?['completions'] as Map<String, TaskCompletion>? ?? {};
+
+    String statusSymbol;
+    Color statusColor;
+
+    if (week > currentWeek) {
+      statusSymbol = '';
+      statusColor = Colors.grey[400]!;
+    } else if (week == currentWeek) {
+      statusSymbol = ''; // Current week, no special symbol
+      statusColor = const Color(0xFF0EA5E9);
+    } else if (total > 0 && completed == total) {
+      statusSymbol = ' ✓';
+      statusColor = const Color(0xFF10B981);
+    } else {
+      statusSymbol = ' ⚠️'; // Overdue
+      statusColor = const Color(0xFFF59E0B);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: onToggle,
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 4 * scaleFactor),
+            child: Row(
+              children: [
+                Icon(
+                  isExpanded ? Icons.expand_more : Icons.chevron_right,
+                  size: 18 * scaleFactor,
+                  color: Colors.grey[600],
+                ),
+                SizedBox(width: 4 * scaleFactor),
+                Text(
+                  'Week $week$statusSymbol',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontSize: (Theme.of(context).textTheme.bodyMedium?.fontSize ?? 14) * scaleFactor,
+                    color: week == currentWeek ? statusColor : Theme.of(context).textTheme.bodyMedium?.color,
+                    fontWeight: week == currentWeek ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+                if (total > 0 && week <= currentWeek) ...[
+                  SizedBox(width: 8 * scaleFactor),
+                  Text(
+                    '($completed/$total)',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        if (isExpanded) ...[
+          Padding(
+            padding: EdgeInsets.only(left: 28 * scaleFactor, bottom: 8 * scaleFactor),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Show tasks for this week
+                ...tasks.map((task) {
+                  final completion = completionMap[task.id];
+                  final status = completion?.status ?? TaskStatus.notStarted;
+                  final statusIcon = status == TaskStatus.complete
+                      ? '✓'
+                      : status == TaskStatus.inProgress
+                          ? '○'
+                          : '✗';
+                  final iconColor = status == TaskStatus.complete
+                      ? const Color(0xFF10B981)
+                      : status == TaskStatus.inProgress
+                          ? Colors.orange
+                          : Colors.grey;
+
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: 4 * scaleFactor),
+                    child: Row(
+                      children: [
+                        Text(
+                          statusIcon,
+                          style: TextStyle(
+                            fontSize: 12 * scaleFactor,
+                            color: iconColor,
+                          ),
+                        ),
+                        SizedBox(width: 8 * scaleFactor),
+                        Expanded(
+                          child: Text(
+                            task.name,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor,
+                              decoration: status == TaskStatus.complete
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                // Show assessments for this week
+                ...assessments.where((a) => a.weekNumber == week).map((assessment) {
+                  final completion = completionMap[assessment.id];
+                  final status = completion?.status ?? TaskStatus.notStarted;
+                  final statusIcon = status == TaskStatus.complete ? '✓' : '✗';
+                  final iconColor = status == TaskStatus.complete
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFFB91C1C);
+
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: 4 * scaleFactor),
+                    child: Row(
+                      children: [
+                        Text(
+                          statusIcon,
+                          style: TextStyle(
+                            fontSize: 12 * scaleFactor,
+                            color: iconColor,
+                          ),
+                        ),
+                        SizedBox(width: 8 * scaleFactor),
+                        Expanded(
+                          child: Text(
+                            assessment.name,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor,
+                              color: const Color(0xFFB91C1C),
+                              decoration: status == TaskStatus.complete
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }

@@ -404,6 +404,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
           setState(() {
             _isDragging = true;
           });
+          // Prevent parent scroll while dragging
+          ref.read(isDraggingCheckboxProvider.notifier).state = true;
 
           // Now select the first box that was touched
           if (_firstTouchedEventId != null && _firstTouchedStatus != null) {
@@ -439,6 +441,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
           _firstTouchedEventId = null;
           _firstTouchedStatus = null;
         });
+        // Re-enable parent scroll
+        ref.read(isDraggingCheckboxProvider.notifier).state = false;
       },
       onPanCancel: () {
         setState(() {
@@ -448,6 +452,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
           _firstTouchedEventId = null;
           _firstTouchedStatus = null;
         });
+        // Re-enable parent scroll
+        ref.read(isDraggingCheckboxProvider.notifier).state = false;
       },
       child: Container(
         decoration: BoxDecoration(

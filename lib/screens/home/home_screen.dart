@@ -9,6 +9,7 @@ import 'package:module_tracker/models/semester.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/module_provider.dart';
+import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/screens/module/module_form_screen.dart';
 import 'package:module_tracker/screens/assessments/assessments_screen.dart'
     show AssignmentsScreen;
@@ -183,20 +184,24 @@ class HomeScreen extends ConsumerWidget {
                         const Expanded(child: SizedBox.shrink()), // Tue
                         Expanded(
                           child: Center(
-                            child: ShaderMask(
-                              shaderCallback: (bounds) => const LinearGradient(
-                                colors: [
-                                  Color(0xFF0EA5E9),
-                                  Color(0xFF06B6D4),
-                                  Color(0xFF10B981),
-                                ],
-                              ).createShader(bounds),
-                              child: Text(
-                                'Module Tracker',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: ShaderMask(
+                                shaderCallback: (bounds) => const LinearGradient(
+                                  colors: [
+                                    Color(0xFF0EA5E9),
+                                    Color(0xFF06B6D4),
+                                    Color(0xFF10B981),
+                                  ],
+                                ).createShader(bounds),
+                                child: Text(
+                                  'Module Tracker',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                  maxLines: 1,
                                 ),
                               ),
                             ),
@@ -218,13 +223,13 @@ class HomeScreen extends ConsumerWidget {
                                 ref.read(currentWeekStartDateProvider);
                           },
                           child: Container(
-                            width: 40,
-                            height: 40,
+                            width: 48,
+                            height: 48,
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4)],
                               ),
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
                                   color: const Color(0xFF0EA5E9).withOpacity(0.25),
@@ -235,7 +240,7 @@ class HomeScreen extends ConsumerWidget {
                             ),
                             child: const Icon(
                               Icons.school_rounded,
-                              size: 22,
+                              size: 28,
                               color: Colors.white,
                             ),
                           ),
@@ -249,14 +254,14 @@ class HomeScreen extends ConsumerWidget {
                 PopupMenuButton<String>(
                   padding: EdgeInsets.zero,
                   icon: Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: const Color(0xFF10B981).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
                       Icons.add_rounded,
-                      size: 18,
+                      size: 22,
                       color: Color(0xFF10B981),
                     ),
                   ),
@@ -322,19 +327,19 @@ class HomeScreen extends ConsumerWidget {
                     }
                   },
                 ),
-                SizedBox(width: 2),
+                const SizedBox(width: 8),
                 IconButton(
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   icon: Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: const Color(0xFF8B5CF6).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
                       Icons.assessment_outlined,
-                      size: 18,
+                      size: 22,
                       color: Color(0xFF8B5CF6),
                     ),
                   ),
@@ -347,19 +352,19 @@ class HomeScreen extends ConsumerWidget {
                     );
                   },
                 ),
-                SizedBox(width: 2),
+                const SizedBox(width: 8),
                 IconButton(
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   icon: Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: const Color(0xFF0EA5E9).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
                       Icons.grade_outlined,
-                      size: 18,
+                      size: 22,
                       color: Color(0xFF0EA5E9),
                     ),
                   ),
@@ -372,19 +377,19 @@ class HomeScreen extends ConsumerWidget {
                     );
                   },
                 ),
-                SizedBox(width: 2),
+                const SizedBox(width: 8),
                 IconButton(
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   icon: Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF59E0B).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
                       Icons.archive_outlined,
-                      size: 18,
+                      size: 22,
                       color: Color(0xFFF59E0B),
                     ),
                   ),
@@ -397,19 +402,19 @@ class HomeScreen extends ConsumerWidget {
                     );
                   },
                 ),
-                SizedBox(width: 2),
+                const SizedBox(width: 8),
                 IconButton(
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   icon: Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: const Color(0xFF0EA5E9).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
                       Icons.settings_outlined,
-                      size: 18,
+                      size: 22,
                       color: Color(0xFF0EA5E9),
                     ),
                   ),
@@ -422,7 +427,7 @@ class HomeScreen extends ConsumerWidget {
                     );
                   },
                 ),
-                SizedBox(width: 4),
+                const SizedBox(width: 12),
               ],
             ),
       body: semestersAsync.when(
@@ -472,12 +477,17 @@ class HomeScreen extends ConsumerWidget {
                     });
                   }
 
+                  final isDraggingCheckbox = ref.watch(isDraggingCheckboxProvider);
+
                   return RefreshIndicator(
                     onRefresh: () async {
                       ref.invalidate(currentSemesterModulesProvider);
                       ref.invalidate(allCurrentSemesterTasksProvider);
                     },
                     child: ListView(
+                      physics: isDraggingCheckbox
+                        ? const NeverScrollableScrollPhysics()
+                        : const AlwaysScrollableScrollPhysics(),
                       padding: EdgeInsets.all(
                         MediaQuery.of(context).size.width < 600 ? 8 : 10,
                       ),

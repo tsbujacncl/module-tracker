@@ -116,3 +116,6 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
 final userPreferencesProvider = StateNotifierProvider<UserPreferencesNotifier, UserPreferences>((ref) {
   return UserPreferencesNotifier();
 });
+
+// Provider to track when user is dragging over checkboxes (prevents scroll)
+final isDraggingCheckboxProvider = StateProvider<bool>((ref) => false);
