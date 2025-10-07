@@ -20,6 +20,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _currentPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _nameController = TextEditingController();
   bool _isChangingPassword = false;
 
   @override
@@ -27,6 +28,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -266,6 +268,111 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  Future<void> _showTargetGradeDialog() async {
+    final currentTarget = ref.read(userPreferencesProvider).targetGrade;
+    double tempTarget = currentTarget;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Target Grade'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Set your target grade for all modules',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '${tempTarget.toStringAsFixed(0)}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 48,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF0EA5E9),
+                    ),
+                  ),
+                  Text(
+                    '%',
+                    style: GoogleFonts.poppins(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Slider(
+                value: tempTarget,
+                min: 40.0,
+                max: 100.0,
+                divisions: 60,
+                label: '${tempTarget.toStringAsFixed(0)}%',
+                onChanged: (value) {
+                  setState(() {
+                    tempTarget = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '40% (Pass)',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                  Text(
+                    '70% (First)',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                  Text(
+                    '100%',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                ref.read(userPreferencesProvider.notifier).setTargetGrade(tempTarget);
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0EA5E9),
+              ),
+              child: const Text('Save', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showColorPickerDialog(String type, Color? currentColor) async {
     final availableColors = [
       const Color(0xFFF44336), // Red
@@ -372,6 +479,60 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  Future<void> _showNameDialog() async {
+    final currentName = ref.read(userPreferencesProvider).userName ?? '';
+    _nameController.text = currentName;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Name'),
+        content: TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(
+            labelText: 'Your Name',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final name = _nameController.text.trim();
+              if (name.isNotEmpty) {
+                await ref.read(userPreferencesProvider.notifier).setUserName(name);
+              }
+              if (mounted) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showBirthdayPicker() async {
+    final currentBirthday = ref.read(userPreferencesProvider).birthday;
+
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: currentBirthday ?? DateTime(2000, 1, 1),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+      helpText: 'Select Your Birthday',
+    );
+
+    if (selectedDate != null) {
+      await ref.read(userPreferencesProvider.notifier).setBirthday(selectedDate);
+    }
+  }
+
   Future<void> _showDeleteAccountDialog() async {
     final passwordController = TextEditingController();
 
@@ -458,11 +619,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Settings',
-          style: GoogleFonts.poppins(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
+        title: ShaderMask(
+          shaderCallback: (bounds) => const LinearGradient(
+            colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4), Color(0xFF10B981)],
+          ).createShader(bounds),
+          child: Text(
+            'Settings',
+            style: GoogleFonts.poppins(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
           ),
         ),
       ),
@@ -511,6 +678,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         leading: const Icon(Icons.email_outlined),
                         title: Text(user?.email ?? 'Not logged in'),
                         subtitle: const Text('Email address'),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.person_outline),
+                        title: Text(userPreferences.userName ?? 'Set your name'),
+                        subtitle: const Text('Name'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: _showNameDialog,
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.cake_outlined),
+                        title: Text(
+                          userPreferences.birthday != null
+                              ? '${userPreferences.birthday!.day}/${userPreferences.birthday!.month}/${userPreferences.birthday!.year}'
+                              : 'Set your birthday',
+                        ),
+                        subtitle: const Text('Birthday'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: _showBirthdayPicker,
                       ),
                       const Divider(height: 1),
                       ListTile(
@@ -600,6 +787,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         subtitle: Text(customizationPrefs.gradeDisplayFormat.displayName),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => _showGradeFormatDialog(customizationPrefs.gradeDisplayFormat),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.flag_outlined),
+                        title: const Text('Target Grade'),
+                        subtitle: Text('${userPreferences.targetGrade.toStringAsFixed(0)}%'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: _showTargetGradeDialog,
                       ),
                       const Divider(height: 1),
                       ListTile(

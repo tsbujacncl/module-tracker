@@ -9,6 +9,7 @@ import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/theme/design_tokens.dart';
+import 'package:module_tracker/utils/celebration_helper.dart';
 
 class WeeklyTasksTab extends ConsumerWidget {
   final Module module;
@@ -57,13 +58,13 @@ class WeeklyTasksTab extends ConsumerWidget {
   Color _getTaskColor(RecurringTaskType type) {
     switch (type) {
       case RecurringTaskType.lecture:
-        return const Color(0xFF3B82F6);
+        return const Color(0xFF60A5FA);
       case RecurringTaskType.lab:
       case RecurringTaskType.tutorial:
-        return const Color(0xFF10B981);
+        return const Color(0xFF34D399);
       case RecurringTaskType.flashcards:
       case RecurringTaskType.custom:
-        return const Color(0xFF8B5CF6);
+        return const Color(0xFFA78BFA);
     }
   }
 
@@ -233,7 +234,7 @@ class _TaskCard extends ConsumerWidget {
             children: [
               // Checkbox
               GestureDetector(
-                onTap: () {
+                onTap: () async {
                   final user = ref.read(currentUserProvider);
                   if (user == null) return;
 
@@ -253,12 +254,17 @@ class _TaskCard extends ConsumerWidget {
                         : null,
                   );
 
-                  // Optimistic update - don't await, update in background
-                  repository.upsertTaskCompletion(
+                  // Update task completion
+                  await repository.upsertTaskCompletion(
                     user.uid,
                     module.id,
                     newCompletion,
                   );
+
+                  // Check if this was the last task for the week and show celebration
+                  if (newStatus == TaskStatus.complete && context.mounted) {
+                    await checkAndShowWeeklyCelebration(context, ref, weekNumber);
+                  }
                 },
                 child: Container(
                   width: 24,

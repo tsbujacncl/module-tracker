@@ -4,10 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:module_tracker/models/module.dart';
 import 'package:module_tracker/models/assessment.dart';
-import 'package:module_tracker/models/task_completion.dart';
-import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/module_provider.dart';
-import 'package:module_tracker/screens/assessments/assessment_detail_screen.dart';
+import 'package:module_tracker/providers/auth_provider.dart';
+import 'package:module_tracker/providers/repository_provider.dart';
+import 'package:module_tracker/providers/user_preferences_provider.dart';
 
 class AssignmentsScreen extends ConsumerWidget {
   const AssignmentsScreen({super.key});
@@ -170,55 +170,24 @@ class _ModuleBox extends ConsumerWidget {
                         color: const Color(0xFF0F172A),
                       ),
                     ),
-                    if (module.code.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0EA5E9).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: const Color(0xFF0EA5E9).withOpacity(0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              module.code,
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF0EA5E9),
-                              ),
-                            ),
-                          ),
-                          if (module.credits > 0) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF64748B).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                '${module.credits} credits',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
+                    if (module.code.isNotEmpty || module.credits > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        [
+                          if (module.code.isNotEmpty) module.code,
+                          if (module.credits > 0) '(${module.credits} credits)',
+                        ].join(' '),
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF64748B),
+                        ),
                       ),
+                    ],
+                    // Progress Indicators
+                    if (assessments.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _ModuleProgressIndicator(assessments: assessments),
                     ],
                   ],
                 ),
@@ -288,7 +257,228 @@ class _ModuleBox extends ConsumerWidget {
   }
 }
 
-class _PieChartSection extends StatelessWidget {
+class _ModuleProgressIndicator extends ConsumerWidget {
+  final List<Assessment> assessments;
+
+  const _ModuleProgressIndicator({required this.assessments});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final targetGrade = ref.watch(userPreferencesProvider).targetGrade;
+    final completedCount = assessments.where((a) => a.markEarned != null).length;
+    final totalCount = assessments.length;
+
+    // Calculate current grade (weighted average of completed work)
+    double currentGrade = 0.0;
+
+    for (final assessment in assessments) {
+      if (assessment.markEarned != null) {
+        currentGrade += (assessment.markEarned! / 100 * assessment.weighting);
+      }
+    }
+
+    // Calculate grade still available
+    final gradeAvailable = assessments.fold<double>(0.0, (sum, a) {
+      if (a.markEarned == null) {
+        return sum + a.weighting;
+      }
+      return sum;
+    });
+
+    // Calculate max possible grade (current + remaining if get 100%)
+    final maxGrade = currentGrade + gradeAvailable;
+
+    // Calculate lost/unreachable percentage
+    final totalWeight = assessments.fold<double>(0.0, (sum, a) => sum + a.weighting);
+    final lostPercentage = 100.0 - totalWeight;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Multi-section progress bar with markers
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return SizedBox(
+              height: 24,
+              child: Stack(
+                children: [
+                  // Progress bar sections
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Row(
+                      children: [
+                        // Current grade (green)
+                        if (currentGrade > 0)
+                          Expanded(
+                            flex: (currentGrade * 100).toInt(),
+                            child: Container(
+                              color: const Color(0xFF10B981),
+                            ),
+                          ),
+                        // Max potential (light green)
+                        if (gradeAvailable > 0)
+                          Expanded(
+                            flex: (gradeAvailable * 100).toInt(),
+                            child: Container(
+                              color: const Color(0xFF10B981).withOpacity(0.3),
+                            ),
+                          ),
+                        // Lost/Unreachable (light grey)
+                        if (lostPercentage > 0)
+                          Expanded(
+                            flex: (lostPercentage * 100).toInt(),
+                            child: Container(
+                              color: const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  // Pass mark line at 40%
+                  Positioned(
+                    left: constraints.maxWidth * 0.4,
+                    top: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 2,
+                      color: const Color(0xFFEF4444),
+                    ),
+                  ),
+                  // Target grade line (customizable)
+                  Positioned(
+                    left: constraints.maxWidth * (targetGrade / 100),
+                    top: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 2,
+                      color: const Color(0xFF0EA5E9),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        // Info boxes
+        Row(
+          children: [
+            Expanded(
+              child: _InfoBox(
+                label: 'Completed',
+                value: '$completedCount/$totalCount',
+                color: const Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: _InfoBox(
+                label: 'Progress',
+                value: '${currentGrade.toStringAsFixed(0)}%',
+                color: const Color(0xFF10B981),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: _InfoBox(
+                label: 'Target',
+                value: '${targetGrade.toStringAsFixed(0)}%',
+                color: const Color(0xFF0EA5E9),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: _InfoBox(
+                label: 'Maximum',
+                value: '${maxGrade.toStringAsFixed(0)}%',
+                color: const Color(0xFF8B5CF6),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoBox extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _InfoBox({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  IconData _getIcon() {
+    switch (label) {
+      case 'Completed':
+        return Icons.task_alt;
+      case 'Progress':
+        return Icons.show_chart;
+      case 'Target':
+        return Icons.flag_outlined;
+      case 'Maximum':
+        return Icons.stars_outlined;
+      default:
+        return Icons.info_outline;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: color.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                _getIcon(),
+                size: 16,
+                color: color,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF64748B),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PieChartSection extends StatefulWidget {
   final Module module;
   final List<Assessment> assessments;
 
@@ -296,6 +486,33 @@ class _PieChartSection extends StatelessWidget {
     required this.module,
     required this.assessments,
   });
+
+  @override
+  State<_PieChartSection> createState() => _PieChartSectionState();
+}
+
+class _PieChartSectionState extends State<_PieChartSection> with SingleTickerProviderStateMixin {
+  int? _selectedIndex;
+  late AnimationController _animationController;
+  late Animation<double> _radiusAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _radiusAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   List<Color> _generateColors(int count) {
     final colors = [
@@ -316,11 +533,119 @@ class _PieChartSection extends StatelessWidget {
     return List.generate(count, (i) => colors[i % colors.length]);
   }
 
+  void _handleTapDown(TapDownDetails details, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final tapPosition = details.localPosition;
+
+    // Calculate angle of tap
+    final dx = tapPosition.dx - center.dx;
+    final dy = tapPosition.dy - center.dy;
+    final distance = math.sqrt(dx * dx + dy * dy);
+    final radius = math.min(size.width, size.height) / 2 * 0.85;
+
+    // Check if tap is within pie chart
+    if (distance > radius * 1.15) {
+      // Tapped outside, clear selection
+      _clearSelection();
+      return;
+    }
+
+    double angle = math.atan2(dy, dx);
+    if (angle < 0) angle += 2 * math.pi;
+
+    // Adjust for starting at top
+    angle = (angle + math.pi / 2) % (2 * math.pi);
+
+    // Find which slice was tapped
+    double currentAngle = 0;
+    final totalWeighting = widget.assessments.fold<double>(0, (sum, a) => sum + a.weighting);
+    final unaccountedPercentage = math.max(0.0, 100.0 - totalWeighting);
+
+    for (int i = 0; i < widget.assessments.length; i++) {
+      final assessment = widget.assessments[i];
+      final sweepAngle = (assessment.weighting / 100) * 2 * math.pi;
+
+      if (angle >= currentAngle && angle < currentAngle + sweepAngle) {
+        setState(() {
+          _selectedIndex = i;
+        });
+        _animationController.forward();
+        return;
+      }
+
+      currentAngle += sweepAngle;
+    }
+
+    // Check unaccounted slice
+    if (unaccountedPercentage > 0) {
+      final sweepAngle = (unaccountedPercentage / 100) * 2 * math.pi;
+      if (angle >= currentAngle && angle < currentAngle + sweepAngle) {
+        // Tapped on unaccounted, clear selection
+        _clearSelection();
+      }
+    }
+  }
+
+  void _clearSelection() {
+    if (_selectedIndex != null) {
+      setState(() {
+        _selectedIndex = null;
+      });
+      _animationController.reverse();
+    }
+  }
+
+  void _handleHover(PointerEvent event, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final hoverPosition = event.localPosition;
+
+    // Calculate angle of hover
+    final dx = hoverPosition.dx - center.dx;
+    final dy = hoverPosition.dy - center.dy;
+    final distance = math.sqrt(dx * dx + dy * dy);
+    final radius = math.min(size.width, size.height) / 2 * 0.85;
+
+    // Check if hover is within pie chart
+    if (distance > radius * 1.15) {
+      _clearSelection();
+      return;
+    }
+
+    double angle = math.atan2(dy, dx);
+    if (angle < 0) angle += 2 * math.pi;
+
+    // Adjust for starting at top
+    angle = (angle + math.pi / 2) % (2 * math.pi);
+
+    // Find which slice is being hovered
+    double currentAngle = 0;
+
+    for (int i = 0; i < widget.assessments.length; i++) {
+      final assessment = widget.assessments[i];
+      final sweepAngle = (assessment.weighting / 100) * 2 * math.pi;
+
+      if (angle >= currentAngle && angle < currentAngle + sweepAngle) {
+        if (_selectedIndex != i) {
+          setState(() {
+            _selectedIndex = i;
+          });
+          _animationController.forward();
+        }
+        return;
+      }
+
+      currentAngle += sweepAngle;
+    }
+
+    // Hovering over unaccounted or nothing
+    _clearSelection();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final totalWeighting = assessments.fold<double>(0, (sum, a) => sum + a.weighting);
+    final totalWeighting = widget.assessments.fold<double>(0, (sum, a) => sum + a.weighting);
     final unaccountedPercentage = math.max(0.0, 100.0 - totalWeighting);
-    final colors = _generateColors(assessments.length);
+    final colors = _generateColors(widget.assessments.length);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -328,121 +653,127 @@ class _PieChartSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Assessment Breakdown',
+            'Credit Breakdown',
             style: GoogleFonts.poppins(
               fontSize: 16,
               fontWeight: FontWeight.w700,
               color: const Color(0xFF0F172A),
             ),
           ),
-          const SizedBox(height: 16),
-          // Pie chart
-          SizedBox(
-            height: 140,
-            child: CustomPaint(
-              painter: _PieChartPainter(
-                assessments: assessments,
-                colors: colors,
-                unaccountedPercentage: unaccountedPercentage,
-              ),
-              child: const SizedBox.expand(),
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Legend
-          ...assessments.asMap().entries.map((entry) {
-            final index = entry.key;
-            final assessment = entry.value;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                children: [
-                  Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: colors[index],
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      assessment.name,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: const Color(0xFF0F172A),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Text(
-                    '${assessment.weighting.toStringAsFixed(0)}%',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: colors[index],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-          if (unaccountedPercentage > 0)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                children: [
-                  Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Unaccounted',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: const Color(0xFF64748B),
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${unaccountedPercentage.toStringAsFixed(0)}%',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF64748B),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 8),
-          Divider(color: Colors.grey[300], height: 1),
-          const SizedBox(height: 8),
-          // Total
+          const SizedBox(height: 20),
+          // Pie chart and legend side by side
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Total',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF0F172A),
+              // Pie chart on the left with tooltip overlay
+              SizedBox(
+                width: 120,
+                height: 120,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    MouseRegion(
+                      onHover: (event) => _handleHover(event, const Size(120, 120)),
+                      onExit: (_) => _clearSelection(),
+                      child: GestureDetector(
+                        onTapDown: (details) => _handleTapDown(details, const Size(120, 120)),
+                        onTapUp: (_) => _clearSelection(),
+                        onTapCancel: () => _clearSelection(),
+                        child: AnimatedBuilder(
+                          animation: _radiusAnimation,
+                          builder: (context, child) {
+                            return CustomPaint(
+                              painter: _PieChartPainter(
+                                assessments: widget.assessments,
+                                colors: colors,
+                                unaccountedPercentage: unaccountedPercentage,
+                                selectedIndex: _selectedIndex,
+                                radiusMultiplier: _radiusAnimation.value,
+                              ),
+                              child: const SizedBox.expand(),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Text(
-                '${totalWeighting.toStringAsFixed(0)}%',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF0F172A),
+              const SizedBox(width: 20),
+              // Legend on the right
+              Expanded(
+                child: Column(
+                  children: [
+                    ...widget.assessments.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final assessment = entry.value;
+                      final typeString = assessment.type.toString().split('.').last[0].toUpperCase() +
+                          assessment.type.toString().split('.').last.substring(1);
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Tooltip(
+                          message: typeString,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 12,
+                                height: 12,
+                                margin: const EdgeInsets.only(top: 2),
+                                decoration: BoxDecoration(
+                                  color: colors[index],
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  assessment.name,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF0F172A),
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                    if (unaccountedPercentage > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              margin: const EdgeInsets.only(top: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Unaccounted',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF64748B),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],
@@ -464,342 +795,427 @@ class _AssessmentsList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final now = DateTime.now();
-
-    // Separate assessments into categories
-    final upcomingAssessments = assessments
-        .where((a) => a.dueDate != null && a.dueDate!.isAfter(now))
-        .toList()
-      ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
-
-    final tbcAssessments = assessments
-        .where((a) => a.dueDate == null)
-        .toList();
-
-    final completedAssessments = assessments
-        .where((a) => a.dueDate != null && !a.dueDate!.isAfter(now))
-        .toList()
-      ..sort((a, b) => b.dueDate!.compareTo(a.dueDate!)); // Most recent first
+    // Sort assessments by due date (upcoming first, then completed)
+    final sortedAssessments = [...assessments]..sort((a, b) {
+      if (a.dueDate == null && b.dueDate == null) return 0;
+      if (a.dueDate == null) return 1; // TBC items go to end
+      if (b.dueDate == null) return -1;
+      return a.dueDate!.compareTo(b.dueDate!);
+    });
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Upcoming assessments
-          if (upcomingAssessments.isNotEmpty) ...[
-            Row(
-              children: [
-                Icon(
-                  Icons.calendar_today,
-                  size: 16,
-                  color: const Color(0xFF0EA5E9),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Upcoming',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...upcomingAssessments.map((assessment) {
-              return _AssessmentCard(
-                assessment: assessment,
-                module: module,
-                isUpcoming: true,
-              );
-            }),
-            const SizedBox(height: 16),
-          ],
-          // TBC assessments
-          if (tbcAssessments.isNotEmpty) ...[
-            Row(
-              children: [
-                Icon(
-                  Icons.schedule,
-                  size: 16,
-                  color: const Color(0xFFF59E0B),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'TBC',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...tbcAssessments.map((assessment) {
-              return _AssessmentCard(
-                assessment: assessment,
-                module: module,
-                isTBC: true,
-              );
-            }),
-            const SizedBox(height: 16),
-          ],
-          // Completed assessments
-          if (completedAssessments.isNotEmpty) ...[
-            Row(
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  size: 16,
-                  color: const Color(0xFF10B981),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Completed',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...completedAssessments.map((assessment) {
-              return _AssessmentCard(
-                assessment: assessment,
-                module: module,
-                isCompleted: true,
-              );
-            }),
-          ],
-        ],
+        children: sortedAssessments.map((assessment) {
+          return _AssessmentCard(
+            assessment: assessment,
+            module: module,
+          );
+        }).toList(),
       ),
     );
   }
 }
 
-class _AssessmentCard extends StatelessWidget {
+class _AssessmentCard extends ConsumerStatefulWidget {
   final Assessment assessment;
   final Module module;
-  final bool isUpcoming;
-  final bool isTBC;
-  final bool isCompleted;
 
   const _AssessmentCard({
     required this.assessment,
     required this.module,
-    this.isUpcoming = false,
-    this.isTBC = false,
-    this.isCompleted = false,
   });
 
-  Color _getUrgencyColor() {
-    if (isTBC) return const Color(0xFFF59E0B);
-    if (isCompleted) return const Color(0xFF10B981);
+  @override
+  ConsumerState<_AssessmentCard> createState() => _AssessmentCardState();
+}
 
-    final daysUntilDue = assessment.dueDate!.difference(DateTime.now()).inDays;
-    if (daysUntilDue <= 3) return const Color(0xFFEF4444); // Red: ≤3 days
-    if (daysUntilDue <= 14) return const Color(0xFFF59E0B); // Yellow: 4-14 days
-    return const Color(0xFF10B981); // Green: >14 days
+class _AssessmentCardState extends ConsumerState<_AssessmentCard> {
+  bool _showGradeInput = false;
+  late TextEditingController _gradeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _gradeController = TextEditingController(
+      text: widget.assessment.markEarned?.toStringAsFixed(1) ?? '',
+    );
   }
 
-  String _getUrgencyIcon() {
-    if (isTBC) return '⚪';
-    if (isCompleted) return '✓';
-
-    final daysUntilDue = assessment.dueDate!.difference(DateTime.now()).inDays;
-    if (daysUntilDue <= 3) return '🔴';
-    if (daysUntilDue <= 14) return '🟡';
-    return '🟢';
+  @override
+  void dispose() {
+    _gradeController.dispose();
+    super.dispose();
   }
 
-  String _getDueDateText() {
-    if (isTBC) return 'TBC';
-    if (assessment.dueDate == null) return 'No date';
+  Future<void> _saveGrade() async {
+    final gradeText = _gradeController.text.trim();
+    final grade = gradeText.isEmpty ? null : double.tryParse(gradeText);
 
-    final daysUntilDue = assessment.dueDate!.difference(DateTime.now()).inDays;
-    final dateFormat = '${assessment.dueDate!.day}/${assessment.dueDate!.month}';
-
-    if (isCompleted) {
-      return dateFormat;
+    // Validation: Out of range
+    if (grade != null && (grade < 0 || grade > 100)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Grade must be between 0 and 100'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
 
-    if (daysUntilDue == 0) return 'Today';
-    if (daysUntilDue == 1) return 'Tomorrow';
-    if (daysUntilDue < 0) return dateFormat;
-    return '$dateFormat (${daysUntilDue}d)';
+    // Check for unusual grades and show confirmation
+    if (grade != null) {
+      String? warningMessage;
+
+      if (grade > 100) {
+        warningMessage = 'Grade is over 100%. Are you sure this is correct?';
+      } else if (grade < 30) {
+        warningMessage = 'This is a very low grade (${grade.toStringAsFixed(1)}%). Confirm?';
+      } else if (grade == 100) {
+        warningMessage = 'Perfect score! Confirm 100%?';
+      } else if (widget.assessment.markEarned != null) {
+        warningMessage = 'Replace existing grade (${widget.assessment.markEarned!.toStringAsFixed(1)}%) with ${grade.toStringAsFixed(1)}%?';
+      }
+
+      if (warningMessage != null && mounted) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: Text(
+                'Confirm Grade',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              content: Text(
+                warningMessage!,
+                style: GoogleFonts.inter(),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0EA5E9),
+                  ),
+                  child: Text(
+                    'Confirm',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (confirmed != true) return;
+      }
+    }
+
+    // Save the grade
+    final user = ref.read(currentUserProvider);
+    if (user != null) {
+      final repository = ref.read(firestoreRepositoryProvider);
+      await repository.updateAssessment(
+        user.uid,
+        widget.module.semesterId,
+        widget.module.id,
+        widget.assessment.id,
+        widget.assessment.copyWith(markEarned: grade).toFirestore(),
+      );
+
+      if (mounted) {
+        setState(() {
+          _showGradeInput = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(grade == null ? 'Grade removed' : 'Grade saved: ${grade.toStringAsFixed(1)}%'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _markAsComplete() async {
+    final now = DateTime.now();
+    final user = ref.read(currentUserProvider);
+
+    if (user != null) {
+      final repository = ref.read(firestoreRepositoryProvider);
+      await repository.updateAssessment(
+        user.uid,
+        widget.module.semesterId,
+        widget.module.id,
+        widget.assessment.id,
+        widget.assessment.copyWith(dueDate: now).toFirestore(),
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Marked as complete'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _markAsIncomplete() async {
+    final user = ref.read(currentUserProvider);
+
+    if (user != null) {
+      final repository = ref.read(firestoreRepositoryProvider);
+      await repository.updateAssessment(
+        user.uid,
+        widget.module.semesterId,
+        widget.module.id,
+        widget.assessment.id,
+        widget.assessment.copyWith(dueDate: null).toFirestore(),
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Marked as incomplete'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final urgencyColor = _getUrgencyColor();
+    final isCompleted = widget.assessment.dueDate != null &&
+                        !widget.assessment.dueDate!.isAfter(DateTime.now());
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: urgencyColor.withOpacity(0.3),
+          color: const Color(0xFFE2E8F0),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: urgencyColor.withOpacity(0.08),
-            blurRadius: 6,
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AssessmentDetailScreen(
-                assessment: assessment,
-                module: module,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Assignment name with percentage - large and bold
+            Text(
+              '${widget.assessment.name} (${widget.assessment.weighting.toStringAsFixed(0)}%)',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF0F172A),
               ),
             ),
-          );
-        },
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Urgency icon
-                  Text(
-                    _getUrgencyIcon(),
-                    style: const TextStyle(fontSize: 20),
+            // Divider
+            const SizedBox(height: 16),
+            Divider(height: 1, color: Colors.grey[300]),
+            const SizedBox(height: 16),
+            // Description section
+            Text(
+              'Description',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.grey[200]!,
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                widget.assessment.description?.isNotEmpty == true
+                    ? widget.assessment.description!
+                    : 'No description provided',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: widget.assessment.description?.isNotEmpty == true
+                      ? const Color(0xFF64748B)
+                      : Colors.grey[400],
+                  height: 1.5,
+                ),
+              ),
+            ),
+            // Divider
+            const SizedBox(height: 16),
+            Divider(height: 1, color: Colors.grey[300]),
+            const SizedBox(height: 16),
+            // Progress section
+            Text(
+              'Progress',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                // Completed text on left
+                Text(
+                  'Completed',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF64748B),
                   ),
-                  const SizedBox(width: 12),
-                  // Content
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          assessment.name,
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF0F172A),
-                          ),
+                ),
+                const SizedBox(width: 8),
+                // Checkbox
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: Checkbox(
+                    value: isCompleted,
+                    onChanged: (value) async {
+                      if (value == true) {
+                        await _markAsComplete();
+                      } else {
+                        await _markAsIncomplete();
+                      }
+                    },
+                    activeColor: const Color(0xFF10B981),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+                const SizedBox(width: 24),
+                // Grade text
+                Text(
+                  'Grade',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Grade display/input
+                if (_showGradeInput) ...[
+                  SizedBox(
+                    width: 80,
+                    child: TextField(
+                      controller: _gradeController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        hintText: '0-100',
+                        suffixText: '%',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 8,
                         ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF64748B).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                assessment.type.toString().split('.').last[0].toUpperCase() +
-                                    assessment.type.toString().split('.').last.substring(1),
-                                style: GoogleFonts.inter(
-                                  fontSize: 10,
-                                  color: const Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: urgencyColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                '${assessment.weighting.toStringAsFixed(0)}%',
-                                style: GoogleFonts.inter(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: urgencyColor,
-                                ),
-                              ),
-                            ),
-                            if (assessment.markEarned != null) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF10B981).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  '${assessment.markEarned!.toStringAsFixed(1)}%',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF10B981),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
                         ),
-                        // Description
-                        if (assessment.description != null &&
-                            assessment.description!.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            assessment.description!,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: const Color(0xFF64748B),
-                              height: 1.4,
-                            ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ],
+                      ),
+                      style: GoogleFonts.inter(fontSize: 13),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  // Due date
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        _getDueDateText(),
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: urgencyColor,
+                  const SizedBox(width: 4),
+                  IconButton(
+                    onPressed: _saveGrade,
+                    icon: const Icon(Icons.check, size: 18),
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.all(6),
+                      minimumSize: const Size(28, 28),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _showGradeInput = false;
+                      });
+                    },
+                    icon: const Icon(Icons.close, size: 18),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.grey[300],
+                      foregroundColor: Colors.grey[700],
+                      padding: const EdgeInsets.all(6),
+                      minimumSize: const Size(28, 28),
+                    ),
+                  ),
+                ] else ...[
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _showGradeInput = true;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: widget.assessment.markEarned != null
+                            ? const Color(0xFF10B981).withOpacity(0.15)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: widget.assessment.markEarned != null
+                              ? const Color(0xFF10B981).withOpacity(0.3)
+                              : Colors.grey[300]!,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Icon(
-                        Icons.chevron_right,
-                        color: const Color(0xFF94A3B8),
-                        size: 18,
+                      child: Text(
+                        widget.assessment.markEarned != null
+                            ? '${widget.assessment.markEarned!.toStringAsFixed(1)}%'
+                            : 'Pending',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: widget.assessment.markEarned != null
+                              ? const Color(0xFF10B981)
+                              : Colors.grey[400],
+                        ),
                       ),
-                    ],
+                    ),
                   ),
                 ],
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -810,17 +1226,21 @@ class _PieChartPainter extends CustomPainter {
   final List<Assessment> assessments;
   final List<Color> colors;
   final double unaccountedPercentage;
+  final int? selectedIndex;
+  final double radiusMultiplier;
 
   _PieChartPainter({
     required this.assessments,
     required this.colors,
     required this.unaccountedPercentage,
+    this.selectedIndex,
+    this.radiusMultiplier = 1.0,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 * 0.8;
+    final baseRadius = math.min(size.width, size.height) / 2 * 0.85;
 
     double startAngle = -math.pi / 2; // Start from top
 
@@ -829,12 +1249,24 @@ class _PieChartPainter extends CustomPainter {
       final assessment = assessments[i];
       final sweepAngle = (assessment.weighting / 100) * 2 * math.pi;
 
+      // Determine color and radius for this slice
+      final isSelected = selectedIndex == i;
+      Color sliceColor = colors[i];
+      double sliceRadius = baseRadius;
+
+      if (isSelected) {
+        // Lighten the color by mixing with white
+        sliceColor = Color.lerp(colors[i], Colors.white, 0.3)!;
+        // Increase radius by multiplier (1.0 to 1.15)
+        sliceRadius = baseRadius * radiusMultiplier;
+      }
+
       final paint = Paint()
-        ..color = colors[i]
+        ..color = sliceColor
         ..style = PaintingStyle.fill;
 
       canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
+        Rect.fromCircle(center: center, radius: sliceRadius),
         startAngle,
         sweepAngle,
         true,
@@ -853,15 +1285,61 @@ class _PieChartPainter extends CustomPainter {
         ..style = PaintingStyle.fill;
 
       canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
+        Rect.fromCircle(center: center, radius: baseRadius),
         startAngle,
         sweepAngle,
         true,
         paint,
       );
     }
+
+    // Draw white borders between slices
+    startAngle = -math.pi / 2;
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+
+    for (int i = 0; i < assessments.length; i++) {
+      final assessment = assessments[i];
+      final sweepAngle = (assessment.weighting / 100) * 2 * math.pi;
+      final isSelected = selectedIndex == i;
+      double sliceRadius = baseRadius;
+
+      if (isSelected) {
+        sliceRadius = baseRadius * radiusMultiplier;
+      }
+
+      // Draw border line at start of slice
+      final lineEnd = Offset(
+        center.dx + math.cos(startAngle) * sliceRadius,
+        center.dy + math.sin(startAngle) * sliceRadius,
+      );
+      canvas.drawLine(center, lineEnd, borderPaint);
+
+      startAngle += sweepAngle;
+    }
+
+    // Draw final border line
+    if (assessments.isNotEmpty) {
+      // Check if last slice is selected
+      final isLastSelected = selectedIndex == assessments.length - 1;
+      double sliceRadius = baseRadius;
+      if (isLastSelected) {
+        sliceRadius = baseRadius * radiusMultiplier;
+      }
+
+      final lineEnd = Offset(
+        center.dx + math.cos(startAngle) * sliceRadius,
+        center.dy + math.sin(startAngle) * sliceRadius,
+      );
+      canvas.drawLine(center, lineEnd, borderPaint);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _PieChartPainter oldDelegate) {
+    return oldDelegate.selectedIndex != selectedIndex ||
+        oldDelegate.radiusMultiplier != radiusMultiplier;
+  }
 }

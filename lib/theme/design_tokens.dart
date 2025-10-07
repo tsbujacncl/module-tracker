@@ -25,11 +25,11 @@ class DesignTokens {
   static const Color orange = Color(0xFFF97316);
 
   /// Task type colors
-  static const Color lectureBlue = Color(0xFF3B82F6);
-  static const Color labGreen = Color(0xFF10B981);
-  static const Color tutorialGreen = Color(0xFF10B981);
-  static const Color flashcardPurple = Color(0xFF8B5CF6);
-  static const Color assessmentRed = Color(0xFFEF4444);
+  static const Color lectureBlue = Color(0xFF60A5FA);
+  static const Color labGreen = Color(0xFF34D399);
+  static const Color tutorialGreen = Color(0xFF34D399);
+  static const Color flashcardPurple = Color(0xFFA78BFA);
+  static const Color assessmentRed = Color(0xFFF87171);
 
   /// Background colors - Light mode
   static const Color backgroundLight = Color(0xFFF0F9FF);

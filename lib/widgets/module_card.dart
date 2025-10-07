@@ -12,6 +12,7 @@ import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/screens/module/module_form_screen.dart';
+import 'package:module_tracker/utils/celebration_helper.dart';
 
 class ModuleCard extends ConsumerStatefulWidget {
   final Module module;
@@ -66,6 +67,12 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
     });
 
     _completeTaskImmediately(taskId);
+  }
+
+  void updateTemporaryStatus(String taskId, TaskStatus newStatus) {
+    setState(() {
+      _temporaryCompletions[taskId] = newStatus;
+    });
   }
 
   Future<void> _completeTaskImmediately(String taskId) async {
@@ -458,6 +465,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                         onTouchDown: onTouchDown,
                                         onSelectTask: selectTask,
                                         getTemporaryStatus: getTemporaryStatus,
+                                        onUpdateTemporaryStatus: updateTemporaryStatus,
                                         onStatusChanged: (newStatus) async {
                                           final user = ref.read(
                                             currentUserProvider,
@@ -482,8 +490,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                                 : null,
                                           );
 
-                                          // Optimistic update - don't await
-                                          repository.upsertTaskCompletion(
+                                          // Update parent task
+                                          await repository.upsertTaskCompletion(
                                             user.uid,
                                             widget.module.id,
                                             newCompletion,
@@ -505,13 +513,18 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                                     status: TaskStatus.complete,
                                                     completedAt: now,
                                                   );
-                                              repository
+                                              await repository
                                                   .upsertTaskCompletion(
                                                     user.uid,
                                                     widget.module.id,
                                                     newSubCompletion,
                                                   );
                                             }
+                                          }
+
+                                          // Check for weekly completion celebration
+                                          if (newStatus == TaskStatus.complete && context.mounted) {
+                                            await checkAndShowWeeklyCelebration(context, ref, widget.weekNumber);
                                           }
                                         },
                                       ),
@@ -534,6 +547,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                           onTouchDown: onTouchDown,
                                           onSelectTask: selectTask,
                                           getTemporaryStatus: getTemporaryStatus,
+                                          onUpdateTemporaryStatus: updateTemporaryStatus,
                                           onStatusChanged: (newStatus) async {
                                             final user = ref.read(
                                               currentUserProvider,
@@ -557,13 +571,18 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                                       : null,
                                                 );
 
-                                            // Optimistic update - don't await
-                                            repository
+                                            // Update subtask
+                                            await repository
                                                 .upsertTaskCompletion(
                                                   user.uid,
                                                   widget.module.id,
                                                   newCompletion,
                                                 );
+
+                                            // Check for weekly completion celebration
+                                            if (newStatus == TaskStatus.complete && context.mounted) {
+                                              await checkAndShowWeeklyCelebration(context, ref, widget.weekNumber);
+                                            }
                                           },
                                         );
                                       }),
@@ -614,6 +633,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                       onTouchDown: onTouchDown,
                                       onSelectTask: selectTask,
                                       getTemporaryStatus: getTemporaryStatus,
+                                      onUpdateTemporaryStatus: updateTemporaryStatus,
                                       onStatusChanged: (newStatus) async {
                                         final user = ref.read(
                                           currentUserProvider,
@@ -635,12 +655,17 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                               : null,
                                         );
 
-                                        // Optimistic update - don't await
-                                        repository.upsertTaskCompletion(
+                                        // Update assessment
+                                        await repository.upsertTaskCompletion(
                                           user.uid,
                                           widget.module.id,
                                           newCompletion,
                                         );
+
+                                        // Check for weekly completion celebration
+                                        if (newStatus == TaskStatus.complete && context.mounted) {
+                                          await checkAndShowWeeklyCelebration(context, ref, widget.weekNumber);
+                                        }
                                       },
                                     );
                                   }),
@@ -977,6 +1002,7 @@ class _TaskItem extends ConsumerStatefulWidget {
   final Function(String, TaskStatus)? onTouchDown;
   final Function(String, TaskStatus)? onSelectTask;
   final TaskStatus? Function(String, TaskStatus)? getTemporaryStatus;
+  final Function(String, TaskStatus)? onUpdateTemporaryStatus;
 
   const _TaskItem({
     required this.taskName,
@@ -990,6 +1016,7 @@ class _TaskItem extends ConsumerStatefulWidget {
     this.onTouchDown,
     this.onSelectTask,
     this.getTemporaryStatus,
+    this.onUpdateTemporaryStatus,
   });
 
   @override
@@ -1016,9 +1043,6 @@ class _TaskItemState extends ConsumerState<_TaskItem> {
           child: Text(
             widget.taskName,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              decoration: currentStatus == TaskStatus.complete
-                  ? TextDecoration.lineThrough
-                  : null,
               fontSize:
                   (Theme.of(context).textTheme.bodyLarge?.fontSize ?? 16) *
                   widget.scaleFactor,
@@ -1037,7 +1061,7 @@ class _TaskItemState extends ConsumerState<_TaskItem> {
       onPointerDown: (_) => widget.onTouchDown?.call(widget.taskId, currentStatus),
       child: MouseRegion(
         onEnter: (_) => widget.onSelectTask?.call(widget.taskId, currentStatus),
-        child: InkWell(
+        child: GestureDetector(
           onTap: () {
             final now = DateTime.now();
             final isDoubleTap =
@@ -1050,6 +1074,11 @@ class _TaskItemState extends ConsumerState<_TaskItem> {
 
             final nextStatus = _getNextStatus(effectiveDoubleTap, currentStatus);
             _lastTapTime = now;
+
+            // Immediately update temporary status for instant feedback
+            widget.onUpdateTemporaryStatus?.call(widget.taskId, nextStatus);
+
+            // Then trigger database update
             widget.onStatusChanged(nextStatus);
           },
           child: Container(
@@ -1600,9 +1629,6 @@ class _WeekDetailRow extends ConsumerWidget {
                             task.name,
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor,
-                              decoration: status == TaskStatus.complete
-                                  ? TextDecoration.lineThrough
-                                  : null,
                             ),
                           ),
                         ),
@@ -1637,9 +1663,6 @@ class _WeekDetailRow extends ConsumerWidget {
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor,
                               color: const Color(0xFFB91C1C),
-                              decoration: status == TaskStatus.complete
-                                  ? TextDecoration.lineThrough
-                                  : null,
                             ),
                           ),
                         ),

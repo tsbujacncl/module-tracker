@@ -13,6 +13,9 @@ import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/module_provider.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
+import 'package:module_tracker/screens/module/module_form_screen.dart';
+import 'package:module_tracker/utils/celebration_helper.dart';
+import 'package:module_tracker/utils/birthday_helper.dart';
 
 class WeeklyCalendar extends ConsumerStatefulWidget {
   final Semester? semester;
@@ -79,7 +82,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
         return preferences.customLabTutorialColor ?? const Color(0xFF4CAF50); // Green for labs and tutorials
       case RecurringTaskType.flashcards:
       case RecurringTaskType.custom:
-        return const Color(0xFF8B5CF6); // Purple for custom tasks
+        return const Color(0xFFA78BFA); // Purple for custom tasks
     }
   }
 
@@ -222,42 +225,77 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
     return endMinutes - startMinutes;
   }
 
-  // Get the earliest and latest times from all tasks and assessments
+  // Get the earliest and latest times from tasks and assessments FOR THE CURRENT WEEK ONLY
   (int startHour, int endHour) getTimeRange() {
     int earliestHour = 24;  // Start with impossibly late hour
     int latestEndMinutes = 0;  // Start with impossibly early time
+    String? latestEventInfo;  // Track which event is latest
 
-    // Check tasks
-    for (final tasks in widget.tasksByModule.values) {
+    // Get week start date for filtering assessments
+    final weekStartDate = getWeekStartDate();
+
+    // Check tasks (only those that occur Mon-Fri, dayOfWeek 1-5)
+    for (final moduleId in widget.tasksByModule.keys) {
+      final tasks = widget.tasksByModule[moduleId]!;
       for (final task in tasks) {
-        if (task.time != null) {
+        // Only include tasks that occur on weekdays (Mon-Fri are days 1-5)
+        if (task.time != null && task.dayOfWeek >= 1 && task.dayOfWeek <= 5) {
           final startMinutes = parseTimeToMinutes(task.time!);
           final startH = startMinutes ~/ 60;
           earliestHour = math.min(earliestHour, startH);
 
+          final int endMinutes;
           if (task.endTime != null) {
-            final endMinutes = parseTimeToMinutes(task.endTime!);
-            latestEndMinutes = math.max(latestEndMinutes, endMinutes);
+            endMinutes = parseTimeToMinutes(task.endTime!);
           } else {
             // If no end time, assume 1 hour duration
-            final endMinutes = startMinutes + 60;
-            latestEndMinutes = math.max(latestEndMinutes, endMinutes);
+            endMinutes = startMinutes + 60;
+          }
+
+          if (endMinutes >= latestEndMinutes) {
+            latestEndMinutes = endMinutes;
+            final module = widget.modules.firstWhere((m) => m.id == moduleId);
+            latestEventInfo = 'Task: ${task.name} (${task.time} - ${task.endTime ?? "+1hr"}) in ${module.name}';
           }
         }
       }
     }
 
-    // Check assessments
-    for (final assessments in widget.assessmentsByModule.values) {
+    // Check assessments (only those scheduled for the current week)
+    for (final moduleId in widget.assessmentsByModule.keys) {
+      final assessments = widget.assessmentsByModule[moduleId]!;
       for (final assessment in assessments) {
-        if (assessment.time != null) {
+        // Check if assessment is in current week
+        bool isInCurrentWeek = false;
+
+        if (assessment.weekNumber == widget.currentWeek) {
+          isInCurrentWeek = true;
+        } else if (assessment.type == AssessmentType.weekly && widget.semester != null) {
+          // For weekly assessments, check if any occurrence falls in this week
+          final dueDates = assessment.getWeeklyDueDates(widget.semester!.startDate);
+          final weekEnd = weekStartDate.add(const Duration(days: 7));
+          for (final dueDate in dueDates) {
+            if (dueDate.isAfter(weekStartDate.subtract(const Duration(days: 1))) &&
+                dueDate.isBefore(weekEnd)) {
+              isInCurrentWeek = true;
+              break;
+            }
+          }
+        }
+
+        if (isInCurrentWeek && assessment.time != null) {
           final startMinutes = parseTimeToMinutes(assessment.time!);
           final startH = startMinutes ~/ 60;
           earliestHour = math.min(earliestHour, startH);
 
           // Assessments default to 1 hour duration
           final endMinutes = startMinutes + 60;
-          latestEndMinutes = math.max(latestEndMinutes, endMinutes);
+
+          if (endMinutes >= latestEndMinutes) {
+            latestEndMinutes = endMinutes;
+            final module = widget.modules.firstWhere((m) => m.id == moduleId);
+            latestEventInfo = 'Assessment: ${assessment.name} (${assessment.time} +1hr) in ${module.name}';
+          }
         }
       }
     }
@@ -268,16 +306,19 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
     }
 
     // Calculate the last hour that contains event content
-    // If event ends exactly on the hour (e.g., 17:00), don't include that hour
-    int latestHour;
+    // Round up to include the hour slot that contains the event's end time
+    int latestHour = (latestEndMinutes / 60).ceil();
+
+    // If event ends exactly on the hour, that hour slot is empty so don't include it
     if (latestEndMinutes % 60 == 0) {
       latestHour = latestEndMinutes ~/ 60;
-    } else {
-      latestHour = (latestEndMinutes / 60).ceil();
     }
 
     // Debug: Print the calculated range
-    print('DEBUG CALENDAR: Time range calculated - Start: ${earliestHour}:00, End: ${latestHour}:00');
+    print('DEBUG CALENDAR: Time range calculated - Start: ${earliestHour}:00, End: ${latestHour}:00, Latest event ends at ${latestEndMinutes} minutes (${(latestEndMinutes / 60).floor()}:${(latestEndMinutes % 60).toString().padLeft(2, '0')})');
+    if (latestEventInfo != null) {
+      print('DEBUG CALENDAR: Latest event is: $latestEventInfo');
+    }
 
     return (earliestHour, latestHour);
   }
@@ -286,6 +327,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
   Widget _buildDayHeaders(DateTime weekStartForHeaders, BuildContext context) {
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final userBirthday = ref.watch(userPreferencesProvider).birthday;
 
     return Row(
       children: List.generate(5, (index) {
@@ -293,10 +335,13 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
         final isToday = DateTime.now().day == date.day &&
             DateTime.now().month == date.month &&
             DateTime.now().year == date.year;
+        final isBirthday = isDateBirthday(date, userBirthday);
 
         return Expanded(
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
+              // Day name
               Text(
                 days[index],
                 style: GoogleFonts.poppins(
@@ -308,27 +353,55 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                 ),
               ),
               const SizedBox(height: 4),
-              Container(
+              // Birthday cake with overlapping number OR blue circle with number
+              // ALL days use same 32x32 container for even spacing
+              SizedBox(
                 width: 32,
                 height: 32,
-                decoration: BoxDecoration(
-                  color: isToday
-                      ? const Color(0xFF0EA5E9)
-                      : Colors.transparent,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    '${date.day}',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isToday
-                          ? Colors.white
-                          : (isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A)),
-                    ),
-                  ),
-                ),
+                child: isBirthday
+                    ? Stack(
+                        alignment: Alignment.center,
+                        clipBehavior: Clip.none, // Allow cake to overflow
+                        children: [
+                          // Birthday cake emoji as background (can overflow)
+                          Transform.translate(
+                            offset: const Offset(-1, -9),
+                            child: const Text(
+                              '🎂',
+                              style: TextStyle(fontSize: 31),
+                            ),
+                          ),
+                          // Day number overlapping in front - CENTERED
+                          Text(
+                            '${date.day}',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Container(
+                        decoration: BoxDecoration(
+                          color: isToday
+                              ? const Color(0xFF0EA5E9)
+                              : Colors.transparent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${date.day}',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: isToday
+                                  ? Colors.white
+                                  : (isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A)),
+                            ),
+                          ),
+                        ),
+                      ),
               ),
             ],
           ),
@@ -421,19 +494,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
         }
       },
       onPanEnd: (details) {
-        if (_isDragging && _selectedEventIds.length >= 2) {
-          // Events are already completed immediately as dragged over
-          if (mounted) {
-            final action = _isCompleting ? 'Completed' : 'Uncompleted';
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('$action ${_selectedEventIds.length} events'),
-                duration: const Duration(seconds: 2),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
-        }
+        // Events are already completed immediately as dragged over
         setState(() {
           _isDragging = false;
           _selectedEventIds.clear();
@@ -857,7 +918,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                         )
                                       : BorderSide.none,
                                   bottom: const BorderSide(
-                                    color: Color(0xFFEF4444),
+                                    color: Color(0xFFF87171),
                                     width: 2,
                                   ),
                                 ),
@@ -1117,7 +1178,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                       )
                                                     : BorderSide.none,
                                                 bottom: const BorderSide(
-                                                  color: Color(0xFFEF4444),
+                                                  color: Color(0xFFF87171),
                                                   width: 2,
                                                 ),
                                               ),
@@ -1512,6 +1573,11 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                 module.id,
                 newCompletion,
               );
+
+              // Check for weekly completion celebration
+              if (newStatus == TaskStatus.complete && context.mounted) {
+                await checkAndShowWeeklyCelebration(context, ref, weekNumber);
+              }
             },
             onLongPress: () {
               // Calculate the date for this assessment based on day of week
@@ -1533,11 +1599,11 @@ class _TimetableAssessmentBox extends ConsumerWidget {
               height: height,
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: const Color(0xFFEF4444).withOpacity(isCompleted ? 0.3 : 0.15), // Red color
+                color: const Color(0xFFF87171).withOpacity(isCompleted ? 0.3 : 0.15), // Red color
                 borderRadius: BorderRadius.circular(6),
                 border: const Border(
                   left: BorderSide(
-                    color: Color(0xFFEF4444), // Red
+                    color: Color(0xFFF87171), // Red
                     width: 3,
                   ),
                 ),
@@ -1585,12 +1651,12 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: currentStatus == TaskStatus.complete
-                        ? const Color(0xFFEF4444)
+                        ? const Color(0xFFF87171)
                         : currentStatus == TaskStatus.inProgress
                             ? Colors.orange
                             : Colors.white,
                     border: Border.all(
-                      color: const Color(0xFFEF4444),
+                      color: const Color(0xFFF87171),
                       width: 2,
                     ),
                   ),
@@ -1620,11 +1686,11 @@ class _TimetableAssessmentBox extends ConsumerWidget {
         height: height,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: const Color(0xFFEF4444).withOpacity(0.15),
+          color: const Color(0xFFF87171).withOpacity(0.15),
           borderRadius: BorderRadius.circular(6),
           border: const Border(
             left: BorderSide(
-              color: Color(0xFFEF4444),
+              color: Color(0xFFF87171),
               width: 3,
             ),
           ),
@@ -1635,11 +1701,11 @@ class _TimetableAssessmentBox extends ConsumerWidget {
         height: height,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: const Color(0xFFEF4444).withOpacity(0.15),
+          color: const Color(0xFFF87171).withOpacity(0.15),
           borderRadius: BorderRadius.circular(6),
           border: const Border(
             left: BorderSide(
-              color: Color(0xFFEF4444),
+              color: Color(0xFFF87171),
               width: 3,
             ),
           ),
@@ -1771,6 +1837,11 @@ class _TimetableTaskBox extends ConsumerWidget {
                     newSubCompletion,
                   );
                 }
+              }
+
+              // Check for weekly completion celebration
+              if (context.mounted) {
+                await checkAndShowWeeklyCelebration(context, ref, weekNumber);
               }
             }
           },
@@ -1951,7 +2022,7 @@ class _AllDayAssessmentChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFEF4444),
+        color: const Color(0xFFF87171),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
@@ -2176,6 +2247,11 @@ class _AssessmentDetailsDialogState extends ConsumerState<_AssessmentDetailsDial
                 newCompletion,
               );
 
+              // Check for weekly completion celebration
+              if (newStatus == TaskStatus.complete && context.mounted) {
+                await checkAndShowWeeklyCelebration(context, ref, widget.weekNumber);
+              }
+
               setState(() {
                 currentStatus = newStatus;
               });
@@ -2184,7 +2260,7 @@ class _AssessmentDetailsDialogState extends ConsumerState<_AssessmentDetailsDial
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: currentStatus == TaskStatus.complete
-                    ? const Color(0xFF10B981).withOpacity(0.1)
+                    ? const Color(0xFF34D399).withOpacity(0.1)
                     : const Color(0xFF0EA5E9).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -2197,7 +2273,7 @@ class _AssessmentDetailsDialogState extends ConsumerState<_AssessmentDetailsDial
                             ? Icons.timelapse
                             : Icons.radio_button_unchecked,
                     color: currentStatus == TaskStatus.complete
-                        ? const Color(0xFF10B981)
+                        ? const Color(0xFF34D399)
                         : const Color(0xFF0EA5E9),
                     size: 20,
                   ),
@@ -2219,69 +2295,106 @@ class _AssessmentDetailsDialogState extends ConsumerState<_AssessmentDetailsDial
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: () async {
-            Navigator.pop(context);
-            final result = await showDialog<bool>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: Text(
-                  'Delete Assessment',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 95,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.blue,
+                  side: const BorderSide(color: Colors.blue),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
-                content: Text(
-                  'Are you sure you want to delete "${widget.assessment.name}"?',
-                  style: GoogleFonts.inter(),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Cancel'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.red,
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('Close'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 95,
+              child: FilledButton.tonalIcon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ModuleFormScreen(
+                        existingModule: widget.module,
+                      ),
                     ),
-                    child: const Text('Delete'),
-                  ),
-                ],
+                  );
+                },
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                icon: const Icon(Icons.edit, size: 18),
+                label: const Text('Edit'),
               ),
-            );
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 95,
+              child: FilledButton.icon(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final result = await showDialog<String>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Text(
+                        'Delete Assessment',
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                      ),
+                      content: Text(
+                        'What would you like to delete?',
+                        style: GoogleFonts.inter(),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, 'this'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
+                          child: const Text('Just this event'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, 'following'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
+                          child: const Text('This and following'),
+                        ),
+                      ],
+                    ),
+                  );
 
-            if (result == true) {
-              final user = ref.read(currentUserProvider);
-              if (user == null) return;
+                  if (result != null) {
+                    final user = ref.read(currentUserProvider);
+                    if (user == null) return;
 
-              final repository = ref.read(firestoreRepositoryProvider);
-              await repository.deleteAssessment(
-                user.uid,
-                widget.module.id,
-                widget.assessment.id,
-              );
-            }
-          },
-          style: TextButton.styleFrom(
-            foregroundColor: Colors.red,
-          ),
-          child: const Text('Delete'),
-        ),
-        TextButton(
-          onPressed: () async {
-            Navigator.pop(context);
-            await showDialog(
-              context: context,
-              builder: (context) => _EditAssessmentDialog(
-                assessment: widget.assessment,
-                module: widget.module,
+                    final repository = ref.read(firestoreRepositoryProvider);
+                    await repository.deleteAssessment(
+                      user.uid,
+                      widget.module.id,
+                      widget.assessment.id,
+                    );
+                  }
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                icon: const Icon(Icons.delete, size: 18),
+                label: const Text('Delete'),
               ),
-            );
-          },
-          child: const Text('Edit'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
+            ),
+          ],
         ),
       ],
     );
@@ -2622,6 +2735,11 @@ class _TaskDetailsDialogState extends ConsumerState<_TaskDetailsDialog> {
                     );
                   }
                 }
+
+                // Check for weekly completion celebration
+                if (context.mounted) {
+                  await checkAndShowWeeklyCelebration(context, ref, widget.weekNumber);
+                }
               }
 
               setState(() {
@@ -2632,7 +2750,7 @@ class _TaskDetailsDialogState extends ConsumerState<_TaskDetailsDialog> {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: currentStatus == TaskStatus.complete
-                    ? const Color(0xFF10B981).withOpacity(0.1)
+                    ? const Color(0xFF34D399).withOpacity(0.1)
                     : const Color(0xFF0EA5E9).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -2645,7 +2763,7 @@ class _TaskDetailsDialogState extends ConsumerState<_TaskDetailsDialog> {
                             ? Icons.timelapse
                             : Icons.radio_button_unchecked,
                     color: currentStatus == TaskStatus.complete
-                        ? const Color(0xFF10B981)
+                        ? const Color(0xFF34D399)
                         : const Color(0xFF0EA5E9),
                     size: 20,
                   ),
@@ -2667,70 +2785,106 @@ class _TaskDetailsDialogState extends ConsumerState<_TaskDetailsDialog> {
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: () async {
-            Navigator.pop(context);
-            final result = await showDialog<bool>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: Text(
-                  'Delete Task',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 95,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.blue,
+                  side: const BorderSide(color: Colors.blue),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
-                content: Text(
-                  'Are you sure you want to delete this ${widget.getTaskTypeName(widget.task.type).toLowerCase()}?',
-                  style: GoogleFonts.inter(),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Cancel'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.red,
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('Close'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 95,
+              child: FilledButton.tonalIcon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ModuleFormScreen(
+                        existingModule: widget.module,
+                      ),
                     ),
-                    child: const Text('Delete'),
-                  ),
-                ],
+                  );
+                },
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                icon: const Icon(Icons.edit, size: 18),
+                label: const Text('Edit'),
               ),
-            );
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 95,
+              child: FilledButton.icon(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final result = await showDialog<String>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Text(
+                        'Delete ${widget.getTaskTypeName(widget.task.type)}',
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                      ),
+                      content: Text(
+                        'What would you like to delete?',
+                        style: GoogleFonts.inter(),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, 'this'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
+                          child: const Text('Just this event'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, 'following'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
+                          child: const Text('This and following'),
+                        ),
+                      ],
+                    ),
+                  );
 
-            if (result == true) {
-              final user = ref.read(currentUserProvider);
-              if (user == null) return;
+                  if (result != null) {
+                    final user = ref.read(currentUserProvider);
+                    if (user == null) return;
 
-              final repository = ref.read(firestoreRepositoryProvider);
-              await repository.deleteRecurringTask(
-                user.uid,
-                widget.module.id,
-                widget.task.id,
-              );
-            }
-          },
-          style: TextButton.styleFrom(
-            foregroundColor: Colors.red,
-          ),
-          child: const Text('Delete'),
-        ),
-        TextButton(
-          onPressed: () async {
-            Navigator.pop(context);
-            await showDialog(
-              context: context,
-              builder: (context) => _EditTaskDialog(
-                task: widget.task,
-                module: widget.module,
-                getTaskTypeName: widget.getTaskTypeName,
+                    final repository = ref.read(firestoreRepositoryProvider);
+                    await repository.deleteRecurringTask(
+                      user.uid,
+                      widget.module.id,
+                      widget.task.id,
+                    );
+                  }
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                icon: const Icon(Icons.delete, size: 18),
+                label: const Text('Delete'),
               ),
-            );
-          },
-          child: const Text('Edit'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
+            ),
+          ],
         ),
       ],
     );

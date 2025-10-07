@@ -24,12 +24,44 @@ import 'package:module_tracker/widgets/shared/empty_state.dart';
 import 'package:module_tracker/widgets/shared/app_loading_indicator.dart';
 import 'package:module_tracker/widgets/shared/app_error_state.dart';
 import 'package:module_tracker/theme/design_tokens.dart';
+import 'package:module_tracker/utils/birthday_helper.dart';
+import 'package:module_tracker/widgets/weekly_completion_dialog.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Show birthday celebration after first frame if it's user's birthday
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (shouldShowBirthdayCelebration(ref)) {
+        _showBirthdayCelebration();
+      }
+    });
+  }
+
+  void _showBirthdayCelebration() {
+    final userName = ref.read(userPreferencesProvider).userName ?? 'there';
+    markBirthdayCelebrationShown(ref);
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => WeeklyCompletionDialog(
+        userName: userName,
+        isBirthdayCelebration: true,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final semestersAsync = ref.watch(semestersProvider);
     final selectedSemester = ref.watch(selectedSemesterProvider);
     final selectedWeek = ref.watch(selectedWeekNumberProvider);
@@ -87,10 +119,20 @@ class HomeScreen extends ConsumerWidget {
                               ),
                             ],
                           ),
-                          child: Icon(
-                            Icons.school_rounded,
-                            size: 23 * scaleFactor,
-                            color: Colors.white,
+                          child: Center(
+                            child: isTodayBirthday(ref)
+                                ? Transform.translate(
+                                    offset: const Offset(0, -2),
+                                    child: Text(
+                                      '🎂',
+                                      style: TextStyle(fontSize: 23 * scaleFactor),
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.school_rounded,
+                                    size: 23 * scaleFactor,
+                                    color: Colors.white,
+                                  ),
                           ),
                         ),
                       ),
@@ -118,12 +160,14 @@ class HomeScreen extends ConsumerWidget {
                         ),
                       ),
                       // 4 Icons on right - balanced size
-                      _buildScaledActionIcon(
-                        context,
-                        Icons.add_rounded,
-                        const Color(0xFF10B981),
-                        scaleFactor,
-                        onTap: () => _showAddMenu(context),
+                      ExcludeSemantics(
+                        child: _buildScaledActionIcon(
+                          context,
+                          Icons.add_rounded,
+                          const Color(0xFF10B981),
+                          scaleFactor,
+                          onTap: () => _showAddMenu(context),
+                        ),
                       ),
                       SizedBox(width: 3),
                       _buildScaledActionIcon(
@@ -238,10 +282,20 @@ class HomeScreen extends ConsumerWidget {
                                 ),
                               ],
                             ),
-                            child: const Icon(
-                              Icons.school_rounded,
-                              size: 28,
-                              color: Colors.white,
+                            child: Center(
+                              child: isTodayBirthday(ref)
+                                  ? Transform.translate(
+                                      offset: const Offset(0, -2),
+                                      child: const Text(
+                                        '🎂',
+                                        style: TextStyle(fontSize: 28),
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.school_rounded,
+                                      size: 28,
+                                      color: Colors.white,
+                                    ),
                             ),
                           ),
                         ),
@@ -565,7 +619,9 @@ class HomeScreen extends ConsumerWidget {
                                 : screenWidth < 600
                                 ? 0.9
                                 : 1.0;
-                            return Text(
+                            final isMobile = screenWidth < 600;
+
+                            final title = Text(
                               'This Week\'s Tasks',
                               style: GoogleFonts.poppins(
                                 fontSize: 20 * titleScale,
@@ -575,6 +631,16 @@ class HomeScreen extends ConsumerWidget {
                                 ).textTheme.titleLarge?.color,
                               ),
                             );
+
+                            // Center title on desktop to match centered content
+                            return isMobile
+                              ? title
+                              : Center(
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(maxWidth: 1000),
+                                    child: title,
+                                  ),
+                                );
                           },
                         ),
                         const SizedBox(height: 12),
@@ -610,26 +676,31 @@ class HomeScreen extends ConsumerWidget {
                                 }).toList(),
                               );
                             } else {
-                              // Horizontal row for desktop
-                              return IntrinsicHeight(
-                                child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: sortedModules.map((module) {
-                                    return Expanded(
-                                      child: Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: horizontalPadding,
-                                        ),
-                                        child: ModuleCard(
-                                          module: module,
-                                          weekNumber: selectedWeek,
-                                          totalModules: sortedModules.length,
-                                          isMobileStacked: false,
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
+                              // Horizontal row for desktop - centered with max width
+                              return Center(
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 1000),
+                                  child: IntrinsicHeight(
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: sortedModules.map((module) {
+                                        return Expanded(
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: horizontalPadding,
+                                            ),
+                                            child: ModuleCard(
+                                              module: module,
+                                              weekNumber: selectedWeek,
+                                              totalModules: sortedModules.length,
+                                              isMobileStacked: false,
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
                                 ),
                               );
                             }

@@ -765,8 +765,8 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
           color: widget.task.type == RecurringTaskType.lecture
-              ? const Color(0xFF3B82F6)
-              : const Color(0xFF10B981),
+              ? const Color(0xFF60A5FA)
+              : const Color(0xFF34D399),
           width: 2,
         ),
       ),
@@ -784,8 +784,8 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: widget.task.type == RecurringTaskType.lecture
-                          ? const Color(0xFF3B82F6).withOpacity(0.1)
-                          : const Color(0xFF10B981).withOpacity(0.1),
+                          ? const Color(0xFF60A5FA).withOpacity(0.1)
+                          : const Color(0xFF34D399).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Row(
@@ -797,8 +797,8 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
                               : Icons.science,
                           size: 16,
                           color: widget.task.type == RecurringTaskType.lecture
-                              ? const Color(0xFF3B82F6)
-                              : const Color(0xFF10B981),
+                              ? const Color(0xFF60A5FA)
+                              : const Color(0xFF34D399),
                         ),
                         const SizedBox(width: 6),
                         Theme(
@@ -829,8 +829,8 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                     color: type == RecurringTaskType.lecture
-                                        ? const Color(0xFF3B82F6)
-                                        : const Color(0xFF10B981),
+                                        ? const Color(0xFF60A5FA)
+                                        : const Color(0xFF34D399),
                                   ),
                                 ),
                               );
@@ -871,7 +871,7 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
                       child: Container(
                         height: 32,
                         decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFF10B981) : Theme.of(context).colorScheme.surfaceContainerHighest,
+                          color: isSelected ? const Color(0xFF34D399) : Theme.of(context).colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Center(
@@ -1149,11 +1149,11 @@ class _AssessmentCardState extends State<_AssessmentCard> {
           color: () {
             switch (widget.assessment.type) {
               case AssessmentType.coursework:
-                return const Color(0xFF8B5CF6);
+                return const Color(0xFFA78BFA);
               case AssessmentType.exam:
-                return const Color(0xFFEF4444);
+                return const Color(0xFFF87171);
               case AssessmentType.weekly:
-                return const Color(0xFF3B82F6);
+                return const Color(0xFF60A5FA);
             }
           }(),
           width: 2,
@@ -1175,11 +1175,11 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                       color: () {
                         switch (widget.assessment.type) {
                           case AssessmentType.coursework:
-                            return const Color(0xFF8B5CF6).withOpacity(0.1);
+                            return const Color(0xFFA78BFA).withOpacity(0.1);
                           case AssessmentType.exam:
-                            return const Color(0xFFEF4444).withOpacity(0.1);
+                            return const Color(0xFFF87171).withOpacity(0.1);
                           case AssessmentType.weekly:
-                            return const Color(0xFF3B82F6).withOpacity(0.1);
+                            return const Color(0xFF60A5FA).withOpacity(0.1);
                         }
                       }(),
                       borderRadius: BorderRadius.circular(6),
@@ -1197,11 +1197,11 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                           color: () {
                             switch (widget.assessment.type) {
                               case AssessmentType.coursework:
-                                return const Color(0xFF8B5CF6);
+                                return const Color(0xFFA78BFA);
                               case AssessmentType.exam:
-                                return const Color(0xFFEF4444);
+                                return const Color(0xFFF87171);
                               case AssessmentType.weekly:
-                                return const Color(0xFF3B82F6);
+                                return const Color(0xFF60A5FA);
                             }
                           }(),
                         ),
@@ -1227,11 +1227,11 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                               Color getColor() {
                                 switch (type) {
                                   case AssessmentType.coursework:
-                                    return const Color(0xFF8B5CF6);
+                                    return const Color(0xFFA78BFA);
                                   case AssessmentType.exam:
-                                    return const Color(0xFFEF4444);
+                                    return const Color(0xFFF87171);
                                   case AssessmentType.weekly:
-                                    return const Color(0xFF3B82F6);
+                                    return const Color(0xFF60A5FA);
                                 }
                               }
                               return DropdownMenuItem(
