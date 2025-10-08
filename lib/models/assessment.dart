@@ -6,6 +6,13 @@ enum AssessmentType {
   weekly,
 }
 
+enum AssessmentStatus {
+  notStarted,
+  working,
+  submitted,
+  graded,
+}
+
 enum SubmitTiming {
   startOfNextWeek, // Due on the start of the following week
   endOfCurrentWeek, // Due at the end of the current week
@@ -16,6 +23,7 @@ class Assessment {
   final String moduleId;
   final String name;
   final AssessmentType type;
+  final AssessmentStatus status; // Stage of the assessment
   final DateTime? dueDate; // Optional - can be TBC
   final double weighting; // Percentage (0-100)
   final int? weekNumber; // Optional - calculated from dueDate if available
@@ -34,6 +42,7 @@ class Assessment {
     required this.moduleId,
     required this.name,
     required this.type,
+    this.status = AssessmentStatus.notStarted,
     this.dueDate,
     required this.weighting,
     this.weekNumber,
@@ -58,6 +67,12 @@ class Assessment {
         (e) => e.toString() == 'AssessmentType.${data['type']}',
         orElse: () => AssessmentType.coursework,
       ),
+      status: data['status'] != null
+          ? AssessmentStatus.values.firstWhere(
+              (e) => e.toString() == 'AssessmentStatus.${data['status']}',
+              orElse: () => AssessmentStatus.notStarted,
+            )
+          : AssessmentStatus.notStarted,
       dueDate: data['dueDate'] != null ? (data['dueDate'] as Timestamp).toDate() : null,
       weighting: (data['weighting'] ?? 0.0).toDouble(),
       weekNumber: data['weekNumber'] as int?,
@@ -82,6 +97,7 @@ class Assessment {
     return {
       'name': name,
       'type': type.toString().split('.').last,
+      'status': status.toString().split('.').last,
       'dueDate': dueDate != null ? Timestamp.fromDate(dueDate!) : null,
       'weighting': weighting,
       'weekNumber': weekNumber,
@@ -107,6 +123,12 @@ class Assessment {
         (e) => e.toString() == 'AssessmentType.${map['type']}',
         orElse: () => AssessmentType.coursework,
       ),
+      status: map['status'] != null
+          ? AssessmentStatus.values.firstWhere(
+              (e) => e.toString() == 'AssessmentStatus.${map['status']}',
+              orElse: () => AssessmentStatus.notStarted,
+            )
+          : AssessmentStatus.notStarted,
       dueDate: map['dueDate'] != null ? DateTime.parse(map['dueDate']) : null,
       weighting: (map['weighting'] ?? 0.0).toDouble(),
       weekNumber: map['weekNumber'] as int?,
@@ -133,6 +155,7 @@ class Assessment {
       'moduleId': moduleId,
       'name': name,
       'type': type.toString().split('.').last,
+      'status': status.toString().split('.').last,
       'dueDate': dueDate?.toIso8601String(),
       'weighting': weighting,
       'weekNumber': weekNumber,
@@ -153,6 +176,7 @@ class Assessment {
     String? moduleId,
     String? name,
     AssessmentType? type,
+    AssessmentStatus? status,
     DateTime? dueDate,
     double? weighting,
     int? weekNumber,
@@ -171,6 +195,7 @@ class Assessment {
       moduleId: moduleId ?? this.moduleId,
       name: name ?? this.name,
       type: type ?? this.type,
+      status: status ?? this.status,
       dueDate: dueDate ?? this.dueDate,
       weighting: weighting ?? this.weighting,
       weekNumber: weekNumber ?? this.weekNumber,

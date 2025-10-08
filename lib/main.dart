@@ -7,10 +7,8 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:module_tracker/firebase_options.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/theme_provider.dart';
-import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/screens/auth/login_screen.dart';
 import 'package:module_tracker/screens/home/home_screen.dart';
-import 'package:module_tracker/screens/onboarding/onboarding_screen.dart';
 import 'package:module_tracker/services/notification_service.dart';
 import 'package:module_tracker/theme/app_theme.dart';
 
@@ -72,21 +70,11 @@ class AuthWrapper extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateProvider);
-    final userPreferences = ref.watch(userPreferencesProvider);
 
     return authState.when(
       data: (user) {
         if (user != null) {
           print('DEBUG AUTH WRAPPER: User is logged in - ${user.email}');
-
-          // Check if onboarding is completed OR if user already has name set
-          // (Skip onboarding if they already configured via settings)
-          final hasName = userPreferences.userName != null && userPreferences.userName!.isNotEmpty;
-          if (!userPreferences.hasCompletedOnboarding && !hasName) {
-            print('DEBUG AUTH WRAPPER: Showing onboarding');
-            return const OnboardingScreen();
-          }
-
           return const HomeScreen();
         } else {
           print('DEBUG AUTH WRAPPER: No user logged in - showing login screen');

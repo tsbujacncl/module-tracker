@@ -266,3 +266,37 @@ enum GradeStatus {
   nearlyThere, // Close to target (within 90%)
   atRisk, // Below target projection
 }
+
+/// Overall university grade across all semesters
+class OverallGrade {
+  final double overallPercentage; // Overall weighted percentage
+  final double totalCreditsCompleted; // Total credits with grades
+  final double totalCreditsPossible; // Total credits across all semesters
+  final String classification; // UK classification (First, 2:1, etc.)
+  final Map<String, SemesterGradeBreakdown> semesterBreakdown;
+
+  const OverallGrade({
+    required this.overallPercentage,
+    required this.totalCreditsCompleted,
+    required this.totalCreditsPossible,
+    required this.classification,
+    required this.semesterBreakdown,
+  });
+}
+
+/// Breakdown of grades per semester
+class SemesterGradeBreakdown {
+  final String semesterId;
+  final String semesterName;
+  final double averagePercentage;
+  final double creditsCompleted;
+  final double creditsPossible;
+
+  const SemesterGradeBreakdown({
+    required this.semesterId,
+    required this.semesterName,
+    required this.averagePercentage,
+    required this.creditsCompleted,
+    required this.creditsPossible,
+  });
+}

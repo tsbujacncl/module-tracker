@@ -290,7 +290,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                 children: [
                   // Module header
                   Padding(
-                    padding: EdgeInsets.only(right: 8 * scaleFactor),
+                    padding: EdgeInsets.only(right: 40 * scaleFactor),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.start,
@@ -870,13 +870,11 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
               Positioned(
                 top: 0,
                 right: 0,
-                child: Transform.translate(
-                  offset: const Offset(8, -8),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () {
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () {
                         final RenderBox button =
                             context.findRenderObject() as RenderBox;
                         final RenderBox overlay =
@@ -946,7 +944,6 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                     ),
                   ),
                 ),
-              ),
             ],
         ),
       ),

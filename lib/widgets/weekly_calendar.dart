@@ -555,13 +555,13 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                           minWidth: 0,
                           maxWidth: double.infinity,
                           child: Transform.translate(
-                          offset: Offset(widget.dragOffset - (screenWidth - 32), 0),
+                          offset: Offset(widget.dragOffset - (screenWidth - 36), 0),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               // Previous week headers
                               SizedBox(
-                                width: screenWidth - 32,
+                                width: screenWidth - 36,
                                 child: _buildDayHeaders(
                                   weekStart.subtract(const Duration(days: 7)),
                                   context,
@@ -569,12 +569,12 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                               ),
                               // Current week headers
                               SizedBox(
-                                width: screenWidth - 32,
+                                width: screenWidth - 36,
                                 child: _buildDayHeaders(weekStart, context),
                               ),
                               // Next week headers
                               SizedBox(
-                                width: screenWidth - 32,
+                                width: screenWidth - 36,
                                 child: _buildDayHeaders(
                                   weekStart.add(const Duration(days: 7)),
                                   context,
@@ -709,7 +709,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                     // Day columns - SWIPEABLE (will be clipped and translated)
                     Positioned(
                       left: 32, // Leave space for time column
-                      right: 0,
+                      right: 4, // Add padding to prevent cutoff on narrow screens
                       top: 0,
                       bottom: 0,
                       child: ClipRect(
@@ -719,14 +719,14 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                 minWidth: 0,
                                 maxWidth: double.infinity,
                                 child: Transform.translate(
-                                  offset: Offset(widget.dragOffset - (screenWidth - 32), 0),
+                                  offset: Offset(widget.dragOffset - (screenWidth - 36), 0),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       // Previous week placeholder
                                       SizedBox(
-                                        width: screenWidth - 32,
+                                        width: screenWidth - 36,
                                         child: Row(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: _buildDayColumnsForWeek(
@@ -742,7 +742,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                       ),
                                       // Current week (actual data)
                                       SizedBox(
-                                        width: screenWidth - 32,
+                                        width: screenWidth - 36,
                                         child: Row(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: List.generate(5, (index) {
@@ -860,7 +860,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                         allItems.add(Positioned(
                           top: itemTop,
                           left: 2,
-                          right: 2,
+                          right: index == 4 ? 8 : 2, // Extra padding for Friday to prevent cutoff
                           child: _TimetableTaskBox(
                             task: event.taskWithModule!.task,
                             module: event.taskWithModule!.module,
@@ -880,7 +880,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                         allItems.add(Positioned(
                           top: itemTop,
                           left: 2,
-                          right: 2,
+                          right: index == 4 ? 8 : 2, // Extra padding for Friday to prevent cutoff
                           child: _TimetableAssessmentBox(
                             assessment: event.assessmentWithModule!.assessment,
                             module: event.assessmentWithModule!.module,
@@ -985,7 +985,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                       ),
                                       // Next week placeholder
                                       SizedBox(
-                                        width: screenWidth - 32,
+                                        width: screenWidth - 36,
                                         child: Row(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: _buildDayColumnsForWeek(
@@ -1120,7 +1120,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                       allItems.add(Positioned(
                                         top: itemTop,
                                         left: 2,
-                                        right: 2,
+                                        right: index == 4 ? 8 : 2, // Extra padding for Friday to prevent cutoff
                                         child: _TimetableTaskBox(
                                           task: event.taskWithModule!.task,
                                           module: event.taskWithModule!.module,
@@ -1140,7 +1140,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                       allItems.add(Positioned(
                                         top: itemTop,
                                         left: 2,
-                                        right: 2,
+                                        right: index == 4 ? 8 : 2, // Extra padding for Friday to prevent cutoff
                                         child: _TimetableAssessmentBox(
                                           assessment: event.assessmentWithModule!.assessment,
                                           module: event.assessmentWithModule!.module,

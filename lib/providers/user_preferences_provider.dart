@@ -68,20 +68,29 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     _loadPreferences();
   }
 
+  /// Ensure settings box is initialized
+  Future<Box> _ensureBox() async {
+    if (_settingsBox != null && _settingsBox!.isOpen) {
+      return _settingsBox!;
+    }
+    _settingsBox = await Hive.openBox('settings');
+    return _settingsBox!;
+  }
+
   /// Load saved preferences
   Future<void> _loadPreferences() async {
     try {
-      _settingsBox = await Hive.openBox('settings');
+      final box = await _ensureBox();
 
-      final threeStateToggle = _settingsBox?.get(_threeStateToggleKey, defaultValue: false) as bool;
-      final lectureColorValue = _settingsBox?.get(_lectureColorKey) as int?;
-      final labTutorialColorValue = _settingsBox?.get(_labTutorialColorKey) as int?;
-      final assignmentColorValue = _settingsBox?.get(_assignmentColorKey) as int?;
-      final targetGrade = _settingsBox?.get(_targetGradeKey, defaultValue: 70.0) as double;
-      final userName = _settingsBox?.get(_userNameKey) as String?;
-      final birthdayString = _settingsBox?.get(_birthdayKey) as String?;
-      final notificationTime = _settingsBox?.get(_notificationTimeKey) as String?;
-      final hasCompletedOnboarding = _settingsBox?.get(_hasCompletedOnboardingKey, defaultValue: false) as bool;
+      final threeStateToggle = box.get(_threeStateToggleKey, defaultValue: false) as bool;
+      final lectureColorValue = box.get(_lectureColorKey) as int?;
+      final labTutorialColorValue = box.get(_labTutorialColorKey) as int?;
+      final assignmentColorValue = box.get(_assignmentColorKey) as int?;
+      final targetGrade = box.get(_targetGradeKey, defaultValue: 70.0) as double;
+      final userName = box.get(_userNameKey) as String?;
+      final birthdayString = box.get(_birthdayKey) as String?;
+      final notificationTime = box.get(_notificationTimeKey) as String?;
+      final hasCompletedOnboarding = box.get(_hasCompletedOnboardingKey, defaultValue: false) as bool;
 
       state = UserPreferences(
         enableThreeStateTaskToggle: threeStateToggle,
@@ -104,7 +113,8 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     state = state.copyWith(enableThreeStateTaskToggle: enabled);
 
     try {
-      await _settingsBox?.put(_threeStateToggleKey, enabled);
+      final box = await _ensureBox();
+      await box.put(_threeStateToggleKey, enabled);
     } catch (e) {
       print('Error saving three-state toggle preference: $e');
     }
@@ -115,8 +125,9 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     state = state.copyWith(customLectureColor: color);
 
     try {
+      final box = await _ensureBox();
       // ignore: deprecated_member_use
-      await _settingsBox?.put(_lectureColorKey, color.value);
+      await box.put(_lectureColorKey, color.value);
     } catch (e) {
       print('Error saving lecture color: $e');
     }
@@ -127,8 +138,9 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     state = state.copyWith(customLabTutorialColor: color);
 
     try {
+      final box = await _ensureBox();
       // ignore: deprecated_member_use
-      await _settingsBox?.put(_labTutorialColorKey, color.value);
+      await box.put(_labTutorialColorKey, color.value);
     } catch (e) {
       print('Error saving lab/tutorial color: $e');
     }
@@ -139,8 +151,9 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     state = state.copyWith(customAssignmentColor: color);
 
     try {
+      final box = await _ensureBox();
       // ignore: deprecated_member_use
-      await _settingsBox?.put(_assignmentColorKey, color.value);
+      await box.put(_assignmentColorKey, color.value);
     } catch (e) {
       print('Error saving assignment color: $e');
     }
@@ -151,7 +164,8 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     state = state.copyWith(targetGrade: grade);
 
     try {
-      await _settingsBox?.put(_targetGradeKey, grade);
+      final box = await _ensureBox();
+      await box.put(_targetGradeKey, grade);
     } catch (e) {
       print('Error saving target grade: $e');
     }
@@ -162,7 +176,9 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     state = state.copyWith(userName: name);
 
     try {
-      await _settingsBox?.put(_userNameKey, name);
+      final box = await _ensureBox();
+      await box.put(_userNameKey, name);
+      print('DEBUG: User name saved successfully: $name');
     } catch (e) {
       print('Error saving user name: $e');
     }
@@ -173,7 +189,14 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     state = state.copyWith(birthday: birthday);
 
     try {
-      await _settingsBox?.put(_birthdayKey, birthday?.toIso8601String());
+      final box = await _ensureBox();
+      if (birthday != null) {
+        await box.put(_birthdayKey, birthday.toIso8601String());
+        print('DEBUG: Birthday saved successfully: ${birthday.toIso8601String()}');
+      } else {
+        await box.delete(_birthdayKey);
+        print('DEBUG: Birthday cleared');
+      }
     } catch (e) {
       print('Error saving birthday: $e');
     }
@@ -184,7 +207,8 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     state = state.copyWith(notificationTime: time);
 
     try {
-      await _settingsBox?.put(_notificationTimeKey, time);
+      final box = await _ensureBox();
+      await box.put(_notificationTimeKey, time);
     } catch (e) {
       print('Error saving notification time: $e');
     }
@@ -195,7 +219,8 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     state = state.copyWith(hasCompletedOnboarding: true);
 
     try {
-      await _settingsBox?.put(_hasCompletedOnboardingKey, true);
+      final box = await _ensureBox();
+      await box.put(_hasCompletedOnboardingKey, true);
     } catch (e) {
       print('Error saving onboarding status: $e');
     }

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:module_tracker/models/semester.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/screens/semester/semester_setup_screen.dart';
-import 'package:intl/intl.dart';
+import 'package:module_tracker/screens/assessments/assessments_screen.dart'
+    show AssignmentsScreen;
 
 class SemesterArchiveScreen extends ConsumerStatefulWidget {
   const SemesterArchiveScreen({super.key});
@@ -205,14 +207,6 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
                     status: SemesterStatus.current,
                     onArchive: () =>
                         _archiveSemester(context, ref, currentSemester),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SemesterSetupScreen(
-                          semesterToEdit: currentSemester,
-                        ),
-                      ),
-                    ),
                   ),
                   const SizedBox(height: 32),
                 ],
@@ -235,14 +229,6 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
                         status: SemesterStatus.future,
                         onArchive: () =>
                             _archiveSemester(context, ref, semester),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => SemesterSetupScreen(
-                              semesterToEdit: semester,
-                            ),
-                          ),
-                        ),
                       ),
                     ),
                   ),
@@ -290,14 +276,6 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
                         status: SemesterStatus.archived,
                         onRestore: () =>
                             _restoreSemester(context, ref, semester),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => SemesterSetupScreen(
-                              semesterToEdit: semester,
-                            ),
-                          ),
-                        ),
                       ),
                     ),
                   ),
@@ -346,14 +324,12 @@ class _SemesterCard extends StatelessWidget {
   final SemesterStatus status;
   final VoidCallback? onArchive;
   final VoidCallback? onRestore;
-  final VoidCallback? onTap;
 
   const _SemesterCard({
     required this.semester,
     required this.status,
     this.onArchive,
     this.onRestore,
-    this.onTap,
   });
 
   List<Color> _getGradientColors() {
@@ -385,7 +361,14 @@ class _SemesterCard extends StatelessWidget {
     final statusLabel = _getStatusLabel();
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AssignmentsScreen(),
+          ),
+        );
+      },
       child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: gradientColors),
@@ -415,7 +398,7 @@ class _SemesterCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (statusLabel != null)
+                if (statusLabel != null) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -434,6 +417,78 @@ class _SemesterCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                ],
+                // Menu button
+                Builder(
+                  builder: (context) => GestureDetector(
+                    onTap: () {
+                      final RenderBox button = context.findRenderObject() as RenderBox;
+                      final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
+                      final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
+
+                      showMenu<String>(
+                        context: context,
+                        position: RelativeRect.fromLTRB(
+                          buttonPosition.dx,
+                          buttonPosition.dy + button.size.height,
+                          overlay.size.width - buttonPosition.dx - button.size.width,
+                          overlay.size.height - buttonPosition.dy - button.size.height,
+                        ),
+                        items: [
+                          const PopupMenuItem(
+                            value: 'assignments',
+                            child: Row(
+                              children: [
+                                Icon(Icons.assessment_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('View Assignments'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('Edit Semester'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ).then((value) {
+                        if (!context.mounted) return;
+
+                        if (value == 'assignments') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AssignmentsScreen(),
+                            ),
+                          );
+                        } else if (value == 'edit') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => SemesterSetupScreen(
+                                semesterToEdit: semester,
+                              ),
+                            ),
+                          );
+                        }
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.more_vert,
+                        size: 20,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 8),

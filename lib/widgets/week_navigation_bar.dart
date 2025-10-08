@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:module_tracker/models/semester.dart';
-import 'package:module_tracker/screens/semester/semester_setup_screen.dart';
 import 'package:intl/intl.dart';
+import 'package:module_tracker/models/semester.dart';
+import 'package:module_tracker/screens/assessments/assessments_screen.dart'
+    show AssignmentsScreen;
 
 class WeekNavigationBar extends StatelessWidget {
   final Semester semester;
@@ -50,13 +51,11 @@ class WeekNavigationBar extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 GestureDetector(
-                  onLongPress: () {
+                  onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => SemesterSetupScreen(
-                          semesterToEdit: semester,
-                        ),
+                        builder: (context) => const AssignmentsScreen(),
                       ),
                     );
                   },

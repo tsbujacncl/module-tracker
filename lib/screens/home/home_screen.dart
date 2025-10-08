@@ -13,7 +13,6 @@ import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/screens/module/module_form_screen.dart';
 import 'package:module_tracker/screens/assessments/assessments_screen.dart'
     show AssignmentsScreen;
-import 'package:module_tracker/screens/grades/grades_screen.dart';
 import 'package:module_tracker/screens/settings/settings_screen.dart';
 import 'package:module_tracker/screens/semester/semester_archive_screen.dart';
 import 'package:module_tracker/screens/semester/semester_setup_screen.dart';
@@ -402,31 +401,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const AssignmentsScreen(),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0EA5E9).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.grade_outlined,
-                      size: 22,
-                      color: Color(0xFF0EA5E9),
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const GradesScreen(),
                       ),
                     );
                   },
