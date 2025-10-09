@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -25,6 +26,7 @@ import 'package:module_tracker/widgets/shared/app_error_state.dart';
 import 'package:module_tracker/theme/design_tokens.dart';
 import 'package:module_tracker/utils/birthday_helper.dart';
 import 'package:module_tracker/widgets/weekly_completion_dialog.dart';
+import 'package:module_tracker/widgets/hover_scale_widget.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -96,8 +98,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   child: Row(
                     children: [
-                      // Logo on left - balanced size
-                      GestureDetector(
+                      // Logo on left - balanced size with Elastic bounce (no movement)
+                      UniversalInteractiveWidget(
+                        style: InteractiveStyle.elastic,
+                        color: Colors.transparent,
                         onTap: () {
                           ref.read(selectedWeekStartDateProvider.notifier).state =
                               ref.read(currentWeekStartDateProvider);
@@ -112,7 +116,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             borderRadius: BorderRadius.circular(9 * scaleFactor),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF0EA5E9).withOpacity(0.25),
+                                color: const Color(0xFF0EA5E9).withValues(alpha: 0.25),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -158,53 +162,77 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                         ),
                       ),
-                      // 4 Icons on right - balanced size
+                      // 4 Icons on right - balanced size with Elastic animation
                       ExcludeSemantics(
-                        child: _buildScaledActionIcon(
-                          context,
-                          Icons.add_rounded,
-                          const Color(0xFF10B981),
-                          scaleFactor,
+                        child: UniversalInteractiveWidget(
+                          style: InteractiveStyle.elastic,
+                          color: const Color(0xFF10B981).withValues(alpha: 0.1),
                           onTap: () => _showAddMenu(context),
+                          child: Container(
+                            padding: EdgeInsets.all(6.5 * scaleFactor),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(7 * scaleFactor),
+                            ),
+                            child: Icon(Icons.add_rounded, size: 20 * scaleFactor, color: const Color(0xFF10B981)),
+                          ),
                         ),
                       ),
                       SizedBox(width: 3),
-                      _buildScaledActionIcon(
-                        context,
-                        Icons.archive_outlined,
-                        const Color(0xFFF59E0B),
-                        scaleFactor,
+                      UniversalInteractiveWidget(
+                        style: InteractiveStyle.elastic,
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => const SemesterArchiveScreen(),
                           ),
                         ),
+                        child: Container(
+                          padding: EdgeInsets.all(6.5 * scaleFactor),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(7 * scaleFactor),
+                          ),
+                          child: Icon(Icons.archive_outlined, size: 20 * scaleFactor, color: const Color(0xFFF59E0B)),
+                        ),
                       ),
                       SizedBox(width: 3),
-                      _buildScaledActionIcon(
-                        context,
-                        Icons.assessment_outlined,
-                        const Color(0xFF8B5CF6),
-                        scaleFactor,
+                      UniversalInteractiveWidget(
+                        style: InteractiveStyle.elastic,
+                        color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => const AssignmentsScreen(),
                           ),
                         ),
+                        child: Container(
+                          padding: EdgeInsets.all(6.5 * scaleFactor),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(7 * scaleFactor),
+                          ),
+                          child: Icon(Icons.assessment_outlined, size: 20 * scaleFactor, color: const Color(0xFF8B5CF6)),
+                        ),
                       ),
                       SizedBox(width: 3),
-                      _buildScaledActionIcon(
-                        context,
-                        Icons.settings_outlined,
-                        const Color(0xFF0EA5E9),
-                        scaleFactor,
+                      UniversalInteractiveWidget(
+                        style: InteractiveStyle.elastic,
+                        color: const Color(0xFF0EA5E9).withValues(alpha: 0.1),
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => const SettingsScreen(),
                           ),
+                        ),
+                        child: Container(
+                          padding: EdgeInsets.all(6.5 * scaleFactor),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0EA5E9).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(7 * scaleFactor),
+                          ),
+                          child: Icon(Icons.settings_outlined, size: 20 * scaleFactor, color: const Color(0xFF0EA5E9)),
                         ),
                       ),
                     ],
@@ -254,13 +282,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         const Expanded(child: SizedBox.shrink()), // Fri
                       ],
                     ),
-                    // Logo on left
+                    // Logo on left with Elastic bounce (no movement)
                     Positioned(
                       left: 8,
                       top: 0,
                       bottom: 0,
                       child: Center(
-                        child: GestureDetector(
+                        child: ElasticBounceWidget(
+                          backgroundColor: Colors.transparent,
                           onTap: () {
                             ref.read(selectedWeekStartDateProvider.notifier).state =
                                 ref.read(currentWeekStartDateProvider);
@@ -275,7 +304,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF0EA5E9).withOpacity(0.25),
+                                  color: const Color(0xFF0EA5E9).withValues(alpha: 0.25),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -304,90 +333,114 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
               actions: [
-                PopupMenuButton<String>(
-                  padding: EdgeInsets.zero,
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.add_rounded,
-                      size: 22,
-                      color: Color(0xFF10B981),
-                    ),
-                  ),
-                  offset: const Offset(0, 40),
-                  itemBuilder: (BuildContext context) =>
-                      <PopupMenuEntry<String>>[
-                        PopupMenuItem<String>(
-                          value: 'module',
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.school_outlined,
-                                size: 20,
-                                color: Color(0xFF10B981),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                'New Module',
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
+                // Custom add button with manual menu - no grey square!
+                Builder(
+                  builder: (BuildContext context) {
+                    return ElasticBounceWidget(
+                      backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.1),
+                      onTap: () {
+                        final RenderBox button = context.findRenderObject() as RenderBox;
+                        final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
+                        final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
+
+                        showMenu<String>(
+                          context: context,
+                          position: RelativeRect.fromLTRB(
+                            buttonPosition.dx,
+                            buttonPosition.dy + button.size.height,
+                            overlay.size.width - buttonPosition.dx - button.size.width,
+                            overlay.size.height - buttonPosition.dy - button.size.height,
                           ),
-                        ),
-                        PopupMenuItem<String>(
-                          value: 'semester',
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.calendar_today_outlined,
-                                size: 20,
-                                color: Color(0xFF0EA5E9),
+                          items: <PopupMenuEntry<String>>[
+                            PopupMenuItem<String>(
+                              value: 'module',
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.school_outlined,
+                                    size: 20,
+                                    color: Color(0xFF10B981),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'New Module',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 12),
-                              Text(
-                                'New Semester',
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'semester',
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.calendar_today_outlined,
+                                    size: 20,
+                                    color: Color(0xFF0EA5E9),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'New Semester',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
+                        ).then((String? value) {
+                          if (value == 'module') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const ModuleFormScreen(),
+                              ),
+                            );
+                          } else if (value == 'semester') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SemesterSetupScreen(),
+                              ),
+                            );
+                          }
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                      ],
-                  onSelected: (String value) {
-                    if (value == 'module') {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const ModuleFormScreen(),
+                        child: const Icon(
+                          Icons.add_rounded,
+                          size: 22,
+                          color: Color(0xFF10B981),
                         ),
-                      );
-                    } else if (value == 'semester') {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SemesterSetupScreen(),
-                        ),
-                      );
-                    }
+                      ),
+                    );
                   },
                 ),
                 const SizedBox(width: 8),
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  icon: Container(
+                ElasticBounceWidget(
+                  backgroundColor: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AssignmentsScreen(),
+                      ),
+                    );
+                  },
+                  child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -396,23 +449,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       color: Color(0xFF8B5CF6),
                     ),
                   ),
-                  onPressed: () {
+                ),
+                const SizedBox(width: 8),
+                ElasticBounceWidget(
+                  backgroundColor: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                  onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const AssignmentsScreen(),
+                        builder: (context) => const SemesterArchiveScreen(),
                       ),
                     );
                   },
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  icon: Container(
+                  child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withOpacity(0.1),
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -421,23 +473,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       color: Color(0xFFF59E0B),
                     ),
                   ),
-                  onPressed: () {
+                ),
+                const SizedBox(width: 8),
+                ElasticBounceWidget(
+                  backgroundColor: const Color(0xFF0EA5E9).withValues(alpha: 0.1),
+                  onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const SemesterArchiveScreen(),
+                        builder: (context) => const SettingsScreen(),
                       ),
                     );
                   },
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  icon: Container(
+                  child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0EA5E9).withOpacity(0.1),
+                      color: const Color(0xFF0EA5E9).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -446,14 +497,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       color: Color(0xFF0EA5E9),
                     ),
                   ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SettingsScreen(),
-                      ),
-                    );
-                  },
                 ),
                 const SizedBox(width: 12),
               ],
@@ -555,9 +598,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         Builder(
                           builder: (context) {
                             final screenWidth = MediaQuery.of(context).size.width;
-                            final isMobileOrTablet = screenWidth < 1024; // Enable swipe on mobile/tablet only
+                            // Disable swipe on web/desktop (regardless of screen size)
+                            final enableSwipe = !kIsWeb && screenWidth < 1024;
 
-                            if (isMobileOrTablet) {
+                            if (enableSwipe) {
                               return _SwipeableCalendar(
                                 semester: selectedSemester,
                                 currentWeek: selectedWeek,
@@ -606,15 +650,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               ),
                             );
 
-                            // Center title on desktop to match centered content
-                            return isMobile
-                              ? title
-                              : Center(
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints(maxWidth: 1000),
-                                    child: title,
-                                  ),
-                                );
+                            // Title consistent on all screen sizes
+                            return title;
                           },
                         ),
                         const SizedBox(height: 12),
@@ -650,31 +687,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 }).toList(),
                               );
                             } else {
-                              // Horizontal row for desktop - centered with max width
-                              return Center(
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 1000),
-                                  child: IntrinsicHeight(
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: sortedModules.map((module) {
-                                        return Expanded(
-                                          child: Padding(
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal: horizontalPadding,
-                                            ),
-                                            child: ModuleCard(
-                                              module: module,
-                                              weekNumber: selectedWeek,
-                                              totalModules: sortedModules.length,
-                                              isMobileStacked: false,
-                                            ),
-                                          ),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
+                              // Horizontal row for desktop - full width
+                              return IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: sortedModules.map((module) {
+                                    return Expanded(
+                                      child: Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: horizontalPadding,
+                                        ),
+                                        child: ModuleCard(
+                                          module: module,
+                                          weekNumber: selectedWeek,
+                                          totalModules: sortedModules.length,
+                                          isMobileStacked: false,
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
                               );
                             }

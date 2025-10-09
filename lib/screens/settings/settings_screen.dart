@@ -8,6 +8,7 @@ import 'package:module_tracker/providers/customization_provider.dart';
 import 'package:module_tracker/models/customization_preferences.dart';
 import 'package:module_tracker/screens/settings/notification_settings_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:module_tracker/widgets/hover_scale_widget.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -861,42 +862,68 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                   const SizedBox(height: 24),
                   // Support Section
-                  Card(
-                    child: ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF59E0B).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Enjoying the app? Support the development',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
                         ),
-                        child: const Icon(
-                          Icons.coffee_outlined,
-                          color: Color(0xFFF59E0B),
-                          size: 20,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      GlowPulseWidget(
+                        glowColor: const Color(0xFFFFC107),
+                        onTap: () async {
+                          final url = Uri.parse('https://buymeacoffee.com/tyrbujac');
+                          if (await canLaunchUrl(url)) {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          }
+                        },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Stack(
+                            alignment: Alignment.centerRight,
+                            children: [
+                              Image.asset(
+                                'assets/images/buy_me_a_coffee_button.png',
+                                height: 150,
+                                fit: BoxFit.contain,
+                              ),
+                              Positioned(
+                                right: 12,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.open_in_new,
+                                    size: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      title: const Text('Buy Me a Coffee'),
-                      subtitle: const Text('Support the development'),
-                      trailing: const Icon(Icons.open_in_new, size: 20),
-                      onTap: () async {
-                        final url = Uri.parse('https://buymeacoffee.com/tyrbujac');
-                        if (await canLaunchUrl(url)) {
-                          await launchUrl(url, mode: LaunchMode.externalApplication);
-                        }
-                      },
-                    ),
+                    ],
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 44),
                   // Designer credit
                   Text(
                     'Designed by Tyr @ tyrbujac.com',
                     style: GoogleFonts.inter(
-                      fontSize: 12,
+                      fontSize: 14,
                       color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),

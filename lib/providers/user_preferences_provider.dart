@@ -32,8 +32,8 @@ class UserPreferences {
     Color? customLabTutorialColor,
     Color? customAssignmentColor,
     double? targetGrade,
-    String? userName,
-    DateTime? birthday,
+    ValueGetter<String?>? userName,
+    ValueGetter<DateTime?>? birthday,
     String? notificationTime,
     bool? hasCompletedOnboarding,
   }) {
@@ -43,8 +43,8 @@ class UserPreferences {
       customLabTutorialColor: customLabTutorialColor ?? this.customLabTutorialColor,
       customAssignmentColor: customAssignmentColor ?? this.customAssignmentColor,
       targetGrade: targetGrade ?? this.targetGrade,
-      userName: userName ?? this.userName,
-      birthday: birthday ?? this.birthday,
+      userName: userName != null ? userName() : this.userName,
+      birthday: birthday != null ? birthday() : this.birthday,
       notificationTime: notificationTime ?? this.notificationTime,
       hasCompletedOnboarding: hasCompletedOnboarding ?? this.hasCompletedOnboarding,
     );
@@ -173,7 +173,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
 
   /// Set user name
   Future<void> setUserName(String name) async {
-    state = state.copyWith(userName: name);
+    state = state.copyWith(userName: () => name);
 
     try {
       final box = await _ensureBox();
@@ -186,7 +186,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
 
   /// Set birthday
   Future<void> setBirthday(DateTime? birthday) async {
-    state = state.copyWith(birthday: birthday);
+    state = state.copyWith(birthday: () => birthday);
 
     try {
       final box = await _ensureBox();

@@ -11,6 +11,7 @@ import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/providers/grade_provider.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/screens/module/module_form_screen.dart';
+import 'package:module_tracker/widgets/hover_scale_widget.dart';
 
 class AssignmentsScreen extends ConsumerStatefulWidget {
   const AssignmentsScreen({super.key});
@@ -568,9 +569,10 @@ class _ModuleBox extends ConsumerWidget {
                             ],
                           ),
                         ),
-                        // Three dots menu
+                        // Three dots menu with hover animation
                         Builder(
-                          builder: (context) => GestureDetector(
+                          builder: (context) => UniversalInteractiveWidget(
+                            style: InteractiveStyle.elastic,
                             onTap: () {
                               final RenderBox button = context.findRenderObject() as RenderBox;
                               final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
@@ -1460,13 +1462,10 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
       });
     }
 
-    // Save the grade and auto-transition to "Graded" if a grade is entered
+    // Save the grade (status is controlled by buttons now)
     final user = ref.read(currentUserProvider);
     if (user != null) {
       final repository = ref.read(firestoreRepositoryProvider);
-
-      // Auto-transition to Graded status when grade is entered
-      final newStatus = grade != null ? AssessmentStatus.graded : widget.assessment.status;
 
       await repository.updateAssessment(
         user.uid,
@@ -1475,7 +1474,6 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
         widget.assessment.id,
         widget.assessment.copyWith(
           markEarned: grade,
-          status: newStatus,
         ).toFirestore(),
       );
 
@@ -1552,7 +1550,7 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
       case AssessmentStatus.notStarted:
         return const Color(0xFFEF4444); // Red
       case AssessmentStatus.working:
-        return const Color(0xFFF59E0B); // Amber
+        return const Color(0xFFF59E0B); // Yellow/Amber
       case AssessmentStatus.submitted:
         return const Color(0xFF3B82F6); // Blue
       case AssessmentStatus.graded:
@@ -1573,18 +1571,6 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
     }
   }
 
-  String _getStatusEmoji() {
-    switch (widget.assessment.status) {
-      case AssessmentStatus.notStarted:
-        return '🔴';
-      case AssessmentStatus.working:
-        return '🟡';
-      case AssessmentStatus.submitted:
-        return '🔵';
-      case AssessmentStatus.graded:
-        return '🟢';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1616,61 +1602,9 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header row: Type badge + Status badge + Name + Weighting + Grade
+                // Header row: Name + Weighting + Type badge + Status badge + Grade
                 Row(
                   children: [
-                    // Type badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: typeBadgeColor.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: typeBadgeColor.withOpacity(0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        typeName,
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: typeBadgeColor,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    // Status badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor().withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: _getStatusColor().withOpacity(0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _getStatusEmoji(),
-                            style: const TextStyle(fontSize: 10),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _getStatusName(),
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: _getStatusColor(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
                     // Name and weighting
                     Expanded(
                       child: RichText(
@@ -1696,8 +1630,51 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
                         ),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    // Type badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: typeBadgeColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: typeBadgeColor.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        typeName,
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: typeBadgeColor,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // Status badge (no emoji)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _getStatusColor().withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: _getStatusColor().withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        _getStatusName(),
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _getStatusColor(),
+                        ),
+                      ),
+                    ),
                     // Grade display (right side)
-                    if (widget.assessment.markEarned != null)
+                    if (widget.assessment.markEarned != null) ...[
+                      const SizedBox(width: 8),
                       Text(
                         '${widget.assessment.markEarned!.toStringAsFixed(1)}%',
                         style: GoogleFonts.poppins(
@@ -1706,6 +1683,7 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
                           color: const Color(0xFF10B981),
                         ),
                       ),
+                    ],
                   ],
                 ),
                 // Divider
@@ -1724,7 +1702,8 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
                       ),
                     ),
                     const SizedBox(width: 8),
-                    InkWell(
+                    UniversalInteractiveWidget(
+                      style: InteractiveStyle.elastic,
                       onTap: () {
                         setState(() {
                           _isEditingDescription = !_isEditingDescription;
@@ -1828,170 +1807,194 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
                   ),
                 ),
                 const SizedBox(height: 8),
+                // 4 status buttons (all on one line)
                 Row(
                   children: [
-                    // Status dropdown
                     Expanded(
-                      flex: 2,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Status',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: const Color(0xFF64748B),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _getStatusColor().withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: _getStatusColor().withOpacity(0.3),
-                              ),
-                            ),
-                            child: DropdownButton<AssessmentStatus>(
-                              value: widget.assessment.status,
-                              isExpanded: true,
-                              underline: const SizedBox(),
-                              icon: Icon(Icons.arrow_drop_down, color: _getStatusColor()),
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: _getStatusColor(),
-                              ),
-                              dropdownColor: Colors.white,
-                              items: AssessmentStatus.values.map((status) {
-                                Color statusColor;
-                                String statusName;
-                                String statusEmoji;
-
-                                switch (status) {
-                                  case AssessmentStatus.notStarted:
-                                    statusColor = const Color(0xFFEF4444);
-                                    statusName = 'Not Started';
-                                    statusEmoji = '🔴';
-                                    break;
-                                  case AssessmentStatus.working:
-                                    statusColor = const Color(0xFFF59E0B);
-                                    statusName = 'Working';
-                                    statusEmoji = '🟡';
-                                    break;
-                                  case AssessmentStatus.submitted:
-                                    statusColor = const Color(0xFF3B82F6);
-                                    statusName = 'Submitted';
-                                    statusEmoji = '🔵';
-                                    break;
-                                  case AssessmentStatus.graded:
-                                    statusColor = const Color(0xFF10B981);
-                                    statusName = 'Graded';
-                                    statusEmoji = '🟢';
-                                    break;
-                                }
-
-                                return DropdownMenuItem(
-                                  value: status,
-                                  child: Row(
-                                    children: [
-                                      Text(statusEmoji, style: const TextStyle(fontSize: 12)),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        statusName,
-                                        style: GoogleFonts.inter(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: statusColor,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (newStatus) {
-                                if (newStatus != null) {
-                                  _updateStatus(newStatus);
-                                }
-                              },
-                            ),
-                          ),
-                        ],
+                      child: _StatusButton(
+                        label: 'Not Started',
+                        status: AssessmentStatus.notStarted,
+                        isSelected: widget.assessment.status == AssessmentStatus.notStarted,
+                        onTap: () => _updateStatus(AssessmentStatus.notStarted),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    // Grade input (auto-saves on blur/enter)
+                    const SizedBox(width: 6),
                     Expanded(
-                      flex: 2,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Grade',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: const Color(0xFF64748B),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          TextField(
-                            controller: _gradeController,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: InputDecoration(
-                              hintText: '0-100',
-                              suffixText: '%',
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: BorderSide(
-                                  color: _hasValidationError ? Colors.red : Colors.grey[300]!,
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: BorderSide(
-                                  color: _hasValidationError ? Colors.red : Colors.grey[300]!,
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                                borderSide: BorderSide(
-                                  color: _hasValidationError ? Colors.red : const Color(0xFF0EA5E9),
-                                  width: 2,
-                                ),
-                              ),
-                            ),
-                            style: GoogleFonts.inter(fontSize: 13),
-                            onSubmitted: (_) => _saveGrade(),
-                            onEditingComplete: () => _saveGrade(),
-                          ),
-                        ],
+                      child: _StatusButton(
+                        label: 'Working',
+                        status: AssessmentStatus.working,
+                        isSelected: widget.assessment.status == AssessmentStatus.working,
+                        onTap: () => _updateStatus(AssessmentStatus.working),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: _StatusButton(
+                        label: 'Submitted',
+                        status: AssessmentStatus.submitted,
+                        isSelected: widget.assessment.status == AssessmentStatus.submitted,
+                        onTap: () => _updateStatus(AssessmentStatus.submitted),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: _StatusButton(
+                        label: 'Graded',
+                        status: AssessmentStatus.graded,
+                        isSelected: widget.assessment.status == AssessmentStatus.graded,
+                        onTap: () => _updateStatus(AssessmentStatus.graded),
                       ),
                     ),
                   ],
                 ),
-                if (_hasValidationError) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Please enter a valid grade between 0 and 100',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: Colors.red,
-                    ),
-                  ),
-                ],
+                // Conditional grade input (appears when Graded is selected)
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  child: widget.assessment.status == AssessmentStatus.graded
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Text(
+                                  'Grade',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: const Color(0xFF64748B),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 100,
+                                  child: TextField(
+                                    controller: _gradeController,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    decoration: InputDecoration(
+                                      hintText: '0-100',
+                                      suffixText: '%',
+                                      isDense: true,
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 10,
+                                      ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(6),
+                                        borderSide: BorderSide(
+                                          color: _hasValidationError ? Colors.red : Colors.grey[300]!,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(6),
+                                        borderSide: BorderSide(
+                                          color: _hasValidationError ? Colors.red : Colors.grey[300]!,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(6),
+                                        borderSide: BorderSide(
+                                          color: _hasValidationError ? Colors.red : const Color(0xFF0EA5E9),
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                    style: GoogleFonts.inter(fontSize: 13),
+                                    onSubmitted: (_) {
+                                      _saveGrade();
+                                      FocusScope.of(context).unfocus();
+                                    },
+                                    onEditingComplete: () {
+                                      _saveGrade();
+                                      FocusScope.of(context).unfocus();
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_hasValidationError) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Please enter a valid grade between 0 and 100',
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            ],
+                          ],
+                        )
+                      : const SizedBox.shrink(),
+                ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _StatusButton extends StatelessWidget {
+  final String label;
+  final AssessmentStatus status;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _StatusButton({
+    required this.label,
+    required this.status,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  Color _getStatusColor() {
+    switch (status) {
+      case AssessmentStatus.notStarted:
+        return const Color(0xFFEF4444); // Red
+      case AssessmentStatus.working:
+        return const Color(0xFFF59E0B); // Yellow/Amber
+      case AssessmentStatus.submitted:
+        return const Color(0xFF3B82F6); // Blue
+      case AssessmentStatus.graded:
+        return const Color(0xFF10B981); // Green
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = _getStatusColor();
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? statusColor
+              : statusColor.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: statusColor.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : statusColor,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
     );
   }
 }

@@ -259,8 +259,6 @@ class FirestoreRepository {
     await _firestore
         .collection('users')
         .doc(userId)
-        .collection('semesters')
-        .doc(semesterId)
         .collection('modules')
         .doc(moduleId)
         .collection('assessments')

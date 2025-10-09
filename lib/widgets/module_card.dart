@@ -413,7 +413,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                     }
                                   }
                                 },
-                                onPanEnd: (details) {
+                                onPanEnd: (details) async {
                                   setState(() {
                                     _isDragging = false;
                                     _selectedTaskIds.clear();
@@ -423,6 +423,11 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                   });
                                   // Re-enable parent scroll
                                   ref.read(isDraggingCheckboxProvider.notifier).state = false;
+
+                                  // Check for weekly completion celebration after drag completes
+                                  if (context.mounted) {
+                                    await checkAndShowWeeklyCelebration(context, ref, widget.weekNumber);
+                                  }
                                 },
                                 onPanCancel: () {
                                   setState(() {

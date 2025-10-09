@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -51,6 +52,104 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
   final Map<String, TaskStatus> _temporaryCompletions = {}; // For instant visual feedback
   String? _firstTouchedEventId; // Track first box touched, waiting for drag confirmation
   TaskStatus? _firstTouchedStatus;
+
+  // Time tracker bar state
+  Timer? _timeTrackerTimer;
+  double? _currentTimeOffset; // Vertical position in pixels
+  int? _currentDayIndex; // Which day column (0-4 for Mon-Fri)
+
+  @override
+  void initState() {
+    super.initState();
+    // Delay initial update until after first frame to avoid MediaQuery errors
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateTimeTrackerPosition();
+    });
+    // Update every 60 seconds
+    _timeTrackerTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      _updateTimeTrackerPosition();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timeTrackerTimer?.cancel();
+    super.dispose();
+  }
+
+  // Update time tracker position
+  void _updateTimeTrackerPosition() {
+    final now = DateTime.now();
+    final weekStart = getWeekStartDate();
+
+    // Check if we should show the tracker
+    if (!_shouldShowTimeTracker(now, weekStart)) {
+      if (mounted) {
+        setState(() {
+          _currentTimeOffset = null;
+          _currentDayIndex = null;
+        });
+      }
+      return;
+    }
+
+    // Calculate day index (0-4 for Mon-Fri)
+    final dayIndex = now.weekday - 1; // 0=Mon, 4=Fri
+
+    // Calculate time range
+    final timeRange = getTimeRange();
+    final startHour = timeRange.$1;
+    final endHour = timeRange.$2;
+
+    // Check if current time is within displayed range
+    final currentHour = now.hour;
+    final currentMinute = now.minute;
+
+    if (currentHour < startHour || currentHour >= endHour) {
+      if (mounted) {
+        setState(() {
+          _currentTimeOffset = null;
+          _currentDayIndex = null;
+        });
+      }
+      return;
+    }
+
+    // Calculate vertical offset
+    final totalHours = endHour - startHour;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final heightRatio = screenWidth < 400 ? 0.40 : 0.38;
+    final maxHeight = MediaQuery.of(context).size.height * heightRatio;
+    final pixelsPerHour = maxHeight / totalHours;
+
+    final minutesSinceStart = (currentHour - startHour) * 60 + currentMinute;
+    final offset = (minutesSinceStart / 60) * pixelsPerHour;
+
+    if (mounted) {
+      setState(() {
+        _currentTimeOffset = offset;
+        _currentDayIndex = dayIndex;
+      });
+    }
+  }
+
+  // Check if time tracker should be shown
+  bool _shouldShowTimeTracker(DateTime now, DateTime weekStart) {
+    // Only show on weekdays (Mon-Fri)
+    if (now.weekday > 5) return false;
+
+    // Check if today is within the displayed week
+    final weekEnd = weekStart.add(const Duration(days: 7));
+    final today = DateTime(now.year, now.month, now.day);
+    final weekStartDay = DateTime(weekStart.year, weekStart.month, weekStart.day);
+    final weekEndDay = DateTime(weekEnd.year, weekEnd.month, weekEnd.day);
+
+    if (today.isBefore(weekStartDay) || today.isAfter(weekEndDay) || today == weekEndDay) {
+      return false;
+    }
+
+    return true;
+  }
 
   // Get the week start date (Monday)
   DateTime getWeekStartDate() {
@@ -493,7 +592,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
           // Hit detection will be handled by individual event widgets via MouseRegion
         }
       },
-      onPanEnd: (details) {
+      onPanEnd: (details) async {
         // Events are already completed immediately as dragged over
         setState(() {
           _isDragging = false;
@@ -504,6 +603,11 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
         });
         // Re-enable parent scroll
         ref.read(isDraggingCheckboxProvider.notifier).state = false;
+
+        // Check for weekly completion celebration after drag completes
+        if (context.mounted) {
+          await checkAndShowWeeklyCelebration(context, ref, widget.currentWeek);
+        }
       },
       onPanCancel: () {
         setState(() {
@@ -973,6 +1077,48 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                     );
                                   }),
                                   ...allItems,
+                                  // Time tracker line (only for current day)
+                                  if (_currentDayIndex == index && _currentTimeOffset != null)
+                                    Positioned(
+                                      top: _currentTimeOffset,
+                                      left: 0,
+                                      right: 0,
+                                      child: Row(
+                                        children: [
+                                          // Circle indicator
+                                          Container(
+                                            width: 8,
+                                            height: 8,
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFEF4444),
+                                              shape: BoxShape.circle,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: const Color(0xFFEF4444).withOpacity(0.5),
+                                                  blurRadius: 4,
+                                                  spreadRadius: 1,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          // Horizontal line
+                                          Expanded(
+                                            child: Container(
+                                              height: 2,
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFEF4444),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: const Color(0xFFEF4444).withOpacity(0.3),
+                                                    blurRadius: 2,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -1231,6 +1377,48 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                   );
                                                 }),
                                                 ...allItems,
+                                                // Time tracker line (only for current day)
+                                                if (_currentDayIndex == index && _currentTimeOffset != null)
+                                                  Positioned(
+                                                    top: _currentTimeOffset,
+                                                    left: 0,
+                                                    right: 0,
+                                                    child: Row(
+                                                      children: [
+                                                        // Circle indicator
+                                                        Container(
+                                                          width: 8,
+                                                          height: 8,
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(0xFFEF4444),
+                                                            shape: BoxShape.circle,
+                                                            boxShadow: [
+                                                              BoxShadow(
+                                                                color: const Color(0xFFEF4444).withOpacity(0.5),
+                                                                blurRadius: 4,
+                                                                spreadRadius: 1,
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        // Horizontal line
+                                                        Expanded(
+                                                          child: Container(
+                                                            height: 2,
+                                                            decoration: BoxDecoration(
+                                                              color: const Color(0xFFEF4444),
+                                                              boxShadow: [
+                                                                BoxShadow(
+                                                                  color: const Color(0xFFEF4444).withOpacity(0.3),
+                                                                  blurRadius: 2,
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
                                               ],
                                             ),
                                           ),
@@ -3201,3 +3389,4 @@ class _ColorPickerDialog extends StatelessWidget {
     );
   }
 }
+
