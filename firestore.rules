@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User data - private to the user
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Semesters
+      match /semesters/{semesterId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Modules
+      match /modules/{moduleId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+
+        // Recurring tasks
+        match /recurringTasks/{taskId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+
+        // Assessments
+        match /assessments/{assessmentId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+
+        // Task completions
+        match /taskCompletions/{completionId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+      }
+    }
+
+    // Shared modules collection - PUBLIC READ, AUTHENTICATED WRITE
+    match /shared_modules/{shareCode} {
+      // Anyone can read shared modules (to import them)
+      allow read: if true;
+
+      // Authenticated users can create/update shared modules
+      allow create: if request.auth != null
+                    && request.resource.data.sharedBy == request.auth.uid
+                    && request.resource.data.createdAt is timestamp
+                    && request.resource.data.expiresAt is timestamp;
+
+      // Only the creator can update their own shares (for import count)
+      allow update: if request.auth != null;
+
+      // Only the creator can delete their shares
+      allow delete: if request.auth != null
+                    && resource.data.sharedBy == request.auth.uid;
+    }
+  }
+}

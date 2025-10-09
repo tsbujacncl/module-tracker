@@ -13,6 +13,7 @@ import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/screens/module/module_form_screen.dart';
 import 'package:module_tracker/utils/celebration_helper.dart';
+import 'package:module_tracker/widgets/module_selection_dialog.dart';
 
 class ModuleCard extends ConsumerStatefulWidget {
   final Module module;
@@ -32,7 +33,7 @@ class ModuleCard extends ConsumerStatefulWidget {
   ConsumerState<ModuleCard> createState() => _ModuleCardState();
 }
 
-class _ModuleCardState extends ConsumerState<ModuleCard> {
+class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProviderStateMixin {
   // Track selected tasks during drag
   final Set<String> _selectedTaskIds = {};
   bool _isDragging = false;
@@ -44,8 +45,10 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
   // Track expanded weeks
   final Map<int, bool> _expandedWeeks = {};
 
-  // Track semester overview expansion (collapsed by default)
-  bool _isSemesterOverviewExpanded = false;
+  // Track tasks that are fading out after completion
+  final Map<String, DateTime> _completedTaskTimestamps = {};
+  final Set<String> _fadingOutTaskIds = {};
+  final Map<String, double> _fadeOpacities = {};
 
   void onTouchDown(String taskId, TaskStatus currentStatus) {
     if (!_isDragging) {
@@ -111,6 +114,66 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
     }
 
     return tempStatus;
+  }
+
+  // Handle task completion with fade-out animation
+  void handleTaskCompletedWithFade(String taskId) {
+    setState(() {
+      _completedTaskTimestamps[taskId] = DateTime.now();
+      _fadeOpacities[taskId] = 1.0;
+    });
+
+    // After 2 seconds, start fade out
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() {
+        _fadingOutTaskIds.add(taskId);
+      });
+
+      // Animate opacity to 0 over 500ms
+      _animateFadeOut(taskId);
+
+      // After fade completes, remove from display
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!mounted) return;
+        setState(() {
+          _completedTaskTimestamps.remove(taskId);
+          _fadingOutTaskIds.remove(taskId);
+          _fadeOpacities.remove(taskId);
+        });
+      });
+    });
+  }
+
+  void _animateFadeOut(String taskId) {
+    const steps = 10;
+    const stepDuration = Duration(milliseconds: 50);
+
+    for (int i = 0; i < steps; i++) {
+      Future.delayed(stepDuration * i, () {
+        if (!mounted || !_fadingOutTaskIds.contains(taskId)) return;
+        setState(() {
+          _fadeOpacities[taskId] = 1.0 - (i + 1) / steps;
+        });
+      });
+    }
+  }
+
+  // Check if task should be hidden (completed and past fade delay)
+  bool shouldShowTask(String taskId, TaskStatus status) {
+    if (status != TaskStatus.complete) return true;
+    if (!_completedTaskTimestamps.containsKey(taskId)) return true;
+
+    final completedTime = _completedTaskTimestamps[taskId]!;
+    final elapsed = DateTime.now().difference(completedTime);
+
+    // Hide after 2.5 seconds (2 second display + 0.5 second fade)
+    return elapsed.inMilliseconds < 2500;
+  }
+
+  // Get opacity for fading task
+  double getTaskOpacity(String taskId) {
+    return _fadeOpacities[taskId] ?? 1.0;
   }
 
   // Get display name for task type
@@ -674,10 +737,6 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                                       },
                                     );
                                   }),
-                                  // Add spacing to align Semester Overview across cards
-                                  SizedBox(
-                                    height: (parentTasks.length < 5 ? (5 - parentTasks.length) * 40 : 0) * scaleFactor,
-                                  ),
                                 ],
                               ),
                               );
@@ -693,177 +752,456 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                     loading: () => const CircularProgressIndicator(),
                     error: (error, stack) => Text('Error: $error'),
                   ),
-                  // Semester Overview Section
+
+                  // Outstanding Tasks Section - Interactive with Checkboxes
                   if (semester != null) ...[
-                    SizedBox(height: 16 * scaleFactor),
-                    Divider(height: 1, color: Colors.grey[300]),
-                    SizedBox(height: 12 * scaleFactor),
-                    _SemesterOverviewSection(
-                      semester: semester,
-                      module: widget.module,
-                      weekNumber: widget.weekNumber,
-                      scaleFactor: scaleFactor,
-                      isExpanded: _isSemesterOverviewExpanded,
-                      expandedWeeks: _expandedWeeks,
-                      onToggleExpansion: () {
-                        setState(() {
-                          _isSemesterOverviewExpanded = !_isSemesterOverviewExpanded;
-                        });
-                      },
-                      onToggleWeek: (weekNum) {
-                        setState(() {
-                          _expandedWeeks[weekNum] = !(_expandedWeeks[weekNum] ?? false);
-                        });
-                      },
-                    ),
-                  ],
-                  // Upcoming Assessments Section
-                  assessmentsAsync.when(
-                    data: (allAssessments) {
-                      final now = DateTime.now();
+                    recurringTasksAsync.when(
+                      data: (tasks) {
+                        return assessmentsAsync.when(
+                          data: (assessments) {
+                            // Collect outstanding tasks from previous weeks with their completion data
+                            final outstandingTasksData = <Map<String, dynamic>>[];
 
-                      // Separate upcoming assessments with dates and TBC assessments
-                      final upcomingWithDates = allAssessments
-                          .where((a) => a.dueDate != null && a.dueDate!.isAfter(now))
-                          .toList()
-                        ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+                            for (int week = 1; week < widget.weekNumber; week++) {
+                              final prevWeekCompletionsAsync = ref.watch(
+                                taskCompletionsProvider((moduleId: widget.module.id, weekNumber: week)),
+                              );
 
-                      final tbcAssessments = allAssessments
-                          .where((a) => a.dueDate == null)
-                          .toList();
+                              prevWeekCompletionsAsync.whenData((prevCompletions) {
+                                final prevCompletionMap = {for (var c in prevCompletions) c.taskId: c};
 
-                      // Combine: upcoming with dates first, then TBC
-                      final allUpcoming = [...upcomingWithDates, ...tbcAssessments];
+                                // Get assessments for previous week
+                                final prevWeekAssessments = getAssessmentsForWeek(
+                                  assessments,
+                                  semester.startDate,
+                                  week,
+                                );
 
-                      if (allUpcoming.isEmpty) {
-                        return const SizedBox.shrink();
-                      }
+                                // Check recurring tasks - add date to name
+                                for (final task in tasks) {
+                                  final completion = prevCompletionMap[task.id];
+                                  if (completion?.status != TaskStatus.complete) {
+                                    // Generate task name with date
+                                    final taskNameWithDate = generateTaskName(
+                                      task,
+                                      tasks,
+                                      semester.startDate,
+                                      week,
+                                    );
 
-                      // Take only next 3 assessments total
-                      final nextAssessments = allUpcoming.take(3).toList();
+                                    outstandingTasksData.add({
+                                      'week': week,
+                                      'taskId': task.id,
+                                      'name': taskNameWithDate,
+                                      'isAssessment': false,
+                                      'completion': completion,
+                                      'status': completion?.status ?? TaskStatus.notStarted,
+                                    });
+                                  }
+                                }
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(height: 16 * scaleFactor),
-                          Divider(height: 1, color: Colors.grey[300]),
-                          SizedBox(height: 12 * scaleFactor),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.assignment_outlined,
-                                size: 18 * scaleFactor,
-                                color: const Color(0xFF8B5CF6),
-                              ),
-                              SizedBox(width: 6 * scaleFactor),
-                              Text(
-                                'Upcoming Assessments',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: (Theme.of(context).textTheme.titleMedium?.fontSize ?? 16) * scaleFactor,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 8 * scaleFactor),
-                          ...nextAssessments.map((assessment) {
-                            // Handle TBC assessments (no due date)
-                            if (assessment.dueDate == null) {
-                              return Padding(
-                                padding: EdgeInsets.only(bottom: 6 * scaleFactor),
-                                child: Row(
+                                // Check assessments - add date to name
+                                for (final assessment in prevWeekAssessments) {
+                                  final completion = prevCompletionMap[assessment.id];
+                                  if (completion?.status != TaskStatus.complete) {
+                                    // Calculate the due date for this assessment
+                                    String dueDateStr = '';
+                                    if (assessment.dueDate != null) {
+                                      dueDateStr = ' (${formatTaskDate(assessment.dueDate!)})';
+                                    } else if (assessment.type == AssessmentType.weekly &&
+                                               assessment.dayOfWeek != null) {
+                                      // For weekly assessments, calculate based on week
+                                      final weekStartDate = semester.startDate.add(
+                                        Duration(days: (week - 1) * 7),
+                                      );
+                                      DateTime dueDate;
+                                      if (assessment.submitTiming == SubmitTiming.startOfNextWeek) {
+                                        final nextWeekStart = weekStartDate.add(const Duration(days: 7));
+                                        dueDate = nextWeekStart.add(Duration(days: assessment.dayOfWeek! - 1));
+                                      } else {
+                                        dueDate = weekStartDate.add(Duration(days: assessment.dayOfWeek! - 1));
+                                      }
+                                      dueDateStr = ' (${formatTaskDate(dueDate)})';
+                                    }
+
+                                    outstandingTasksData.add({
+                                      'week': week,
+                                      'taskId': assessment.id,
+                                      'name': '${assessment.name}$dueDateStr',
+                                      'isAssessment': true,
+                                      'completion': completion,
+                                      'status': completion?.status ?? TaskStatus.notStarted,
+                                    });
+                                  }
+                                }
+                              });
+                            }
+
+                            if (outstandingTasksData.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+
+                            // Filter out tasks that should be hidden (completed and faded out)
+                            final visibleTasks = outstandingTasksData.where((taskData) {
+                              final taskId = taskData['taskId'] as String;
+                              final status = taskData['status'] as TaskStatus;
+                              return shouldShowTask(taskId, status);
+                            }).toList();
+
+                            if (visibleTasks.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(height: 16 * scaleFactor),
+
+                                // Warning badge
+                                Row(
                                   children: [
+                                    Icon(
+                                      Icons.warning_amber_rounded,
+                                      size: 16 * scaleFactor,
+                                      color: const Color(0xFFF59E0B),
+                                    ),
+                                    SizedBox(width: 6 * scaleFactor),
                                     Text(
-                                      '⚪',
-                                      style: TextStyle(fontSize: 14 * scaleFactor),
-                                    ),
-                                    SizedBox(width: 8 * scaleFactor),
-                                    Expanded(
-                                      child: Text(
-                                        assessment.name,
-                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                          fontSize: (Theme.of(context).textTheme.bodyMedium?.fontSize ?? 14) * scaleFactor,
-                                        ),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 6 * scaleFactor,
-                                        vertical: 2 * scaleFactor,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF59E0B).withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(4 * scaleFactor),
-                                        border: Border.all(
-                                          color: const Color(0xFFF59E0B).withOpacity(0.3),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'TBC',
-                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          color: const Color(0xFFF59E0B),
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor * 0.9,
-                                        ),
+                                      '${visibleTasks.length} outstanding from previous weeks',
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        fontSize: (Theme.of(context).textTheme.bodyMedium?.fontSize ?? 13) * scaleFactor,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFFF59E0B),
                                       ),
                                     ),
                                   ],
                                 ),
-                              );
-                            }
+                                SizedBox(height: 8 * scaleFactor),
 
-                            // Handle assessments with dates
-                            final daysUntilDue = assessment.dueDate!.difference(now).inDays;
-                            Color urgencyColor;
-                            String urgencyIcon;
+                                // Interactive task list with checkboxes
+                                GestureDetector(
+                                  behavior: HitTestBehavior.deferToChild,
+                                  onPanStart: (details) {
+                                    if (!_isDragging) {
+                                      setState(() {
+                                        _isDragging = true;
+                                      });
+                                      ref.read(isDraggingCheckboxProvider.notifier).state = true;
+                                      if (_firstTouchedTaskId != null && _firstTouchedStatus != null) {
+                                        selectTask(_firstTouchedTaskId!, _firstTouchedStatus!);
+                                        _firstTouchedTaskId = null;
+                                        _firstTouchedStatus = null;
+                                      }
+                                    }
+                                  },
+                                  onPanEnd: (details) async {
+                                    setState(() {
+                                      _isDragging = false;
+                                      _selectedTaskIds.clear();
+                                      _firstTouchedTaskId = null;
+                                      _firstTouchedStatus = null;
+                                    });
+                                    ref.read(isDraggingCheckboxProvider.notifier).state = false;
+                                  },
+                                  onPanCancel: () {
+                                    setState(() {
+                                      _isDragging = false;
+                                      _selectedTaskIds.clear();
+                                      _firstTouchedTaskId = null;
+                                      _firstTouchedStatus = null;
+                                    });
+                                    ref.read(isDraggingCheckboxProvider.notifier).state = false;
+                                  },
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: visibleTasks.map((taskData) {
+                                      final weekNumber = taskData['week'] as int;
+                                      final taskId = taskData['taskId'] as String;
+                                      final taskName = taskData['name'] as String;
+                                      final isAssessment = taskData['isAssessment'] as bool;
+                                      final completion = taskData['completion'] as TaskCompletion?;
+                                      final status = taskData['status'] as TaskStatus;
 
-                            if (daysUntilDue <= 3) {
-                              urgencyColor = const Color(0xFFEF4444); // Red
-                              urgencyIcon = '🔴';
-                            } else if (daysUntilDue <= 7) {
-                              urgencyColor = const Color(0xFFF59E0B); // Amber
-                              urgencyIcon = '🟡';
-                            } else {
-                              urgencyColor = const Color(0xFF10B981); // Green
-                              urgencyIcon = '🟢';
-                            }
+                                      return Opacity(
+                                        opacity: getTaskOpacity(taskId),
+                                        child: _TaskItem(
+                                          taskName: '$taskName - Week $weekNumber',
+                                          taskId: taskId,
+                                          status: status,
+                                          completedAt: completion?.completedAt,
+                                          isAssessment: isAssessment,
+                                          scaleFactor: scaleFactor,
+                                          onTouchDown: onTouchDown,
+                                          onSelectTask: selectTask,
+                                          getTemporaryStatus: getTemporaryStatus,
+                                          onUpdateTemporaryStatus: updateTemporaryStatus,
+                                          onStatusChanged: (newStatus) async {
+                                            final user = ref.read(currentUserProvider);
+                                            if (user == null) return;
 
-                            final dateFormat = '${assessment.dueDate!.month}/${assessment.dueDate!.day}';
+                                            // Trigger fade-out animation if completing
+                                            if (newStatus == TaskStatus.complete) {
+                                              handleTaskCompletedWithFade(taskId);
+                                            }
 
-                            return Padding(
-                              padding: EdgeInsets.only(bottom: 6 * scaleFactor),
-                              child: Row(
-                                children: [
-                                  Text(
-                                    urgencyIcon,
-                                    style: TextStyle(fontSize: 14 * scaleFactor),
+                                            final repository = ref.read(firestoreRepositoryProvider);
+                                            final newCompletion = TaskCompletion(
+                                              id: completion?.id ?? '',
+                                              moduleId: widget.module.id,
+                                              taskId: taskId,
+                                              weekNumber: weekNumber,
+                                              status: newStatus,
+                                              completedAt: newStatus == TaskStatus.complete
+                                                  ? DateTime.now()
+                                                  : null,
+                                            );
+
+                                            await repository.upsertTaskCompletion(
+                                              user.uid,
+                                              widget.module.id,
+                                              newCompletion,
+                                            );
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
                                   ),
-                                  SizedBox(width: 8 * scaleFactor),
-                                  Expanded(
-                                    child: Text(
-                                      assessment.name,
-                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        fontSize: (Theme.of(context).textTheme.bodyMedium?.fontSize ?? 14) * scaleFactor,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    daysUntilDue == 0
-                                        ? 'Today'
-                                        : daysUntilDue == 1
-                                            ? 'Tomorrow'
-                                            : '$dateFormat (${daysUntilDue}d)',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: urgencyColor,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) * scaleFactor,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             );
-                          }),
-                        ],
+                          },
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, __) => const SizedBox.shrink(),
+                        );
+                      },
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, __) => const SizedBox.shrink(),
+                    ),
+                  ],
+
+                  // Assignments Due Section - with Checkboxes and Borders
+                  assessmentsAsync.when(
+                    data: (allAssessments) {
+                      final now = DateTime.now();
+
+                      // Filter: Only show assessments within 21 days (3 weeks), not completed this week, AND not due this week
+                      final upcomingAssessments = allAssessments
+                          .where((a) {
+                            if (a.dueDate == null) return false;
+                            final daysUntilDue = a.dueDate!.difference(now).inDays;
+                            // Exclude assessments due in the current week
+                            if (a.weekNumber == widget.weekNumber) return false;
+                            return a.dueDate!.isAfter(now) && daysUntilDue <= 21;
+                          })
+                          .toList()
+                        ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+
+                      if (upcomingAssessments.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+
+                      return completionsAsync.when(
+                        data: (completions) {
+                          final completionMap = {for (var c in completions) c.taskId: c};
+
+                          // Filter out completed assessments and those that should be hidden
+                          final visibleAssessments = upcomingAssessments.where((assessment) {
+                            final completion = completionMap[assessment.id];
+                            final status = completion?.status ?? TaskStatus.notStarted;
+                            return shouldShowTask(assessment.id, status);
+                          }).toList();
+
+                          if (visibleAssessments.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(height: 16 * scaleFactor),
+
+                              // Section header
+                              Text(
+                                'Assignments Due',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: (Theme.of(context).textTheme.titleMedium?.fontSize ?? 16) * scaleFactor,
+                                  color: const Color(0xFF1E293B),
+                                ),
+                              ),
+                              SizedBox(height: 12 * scaleFactor),
+
+                              // Assessment items with bordered containers
+                              ...visibleAssessments.map((assessment) {
+                                final completion = completionMap[assessment.id];
+                                final status = completion?.status ?? TaskStatus.notStarted;
+                                final daysUntilDue = assessment.dueDate!.difference(now).inDays;
+
+                                // Determine urgency color
+                                Color borderColor;
+                                String timeText;
+
+                                if (daysUntilDue <= 3) {
+                                  borderColor = const Color(0xFFEF4444); // Red
+                                  timeText = daysUntilDue == 0
+                                      ? 'Today'
+                                      : daysUntilDue == 1
+                                          ? 'Tomorrow'
+                                          : '$daysUntilDue days';
+                                } else if (daysUntilDue <= 7) {
+                                  borderColor = const Color(0xFFF59E0B); // Orange
+                                  timeText = '$daysUntilDue days';
+                                } else {
+                                  borderColor = const Color(0xFF64748B); // Grey
+                                  timeText = '$daysUntilDue days';
+                                }
+
+                                // Get assessment type name
+                                String typeName;
+                                switch (assessment.type) {
+                                  case AssessmentType.weekly:
+                                    typeName = 'Weekly';
+                                    break;
+                                  case AssessmentType.exam:
+                                    typeName = 'Exam';
+                                    break;
+                                  case AssessmentType.coursework:
+                                    typeName = 'Coursework';
+                                    break;
+                                }
+
+                                return Opacity(
+                                  opacity: getTaskOpacity(assessment.id),
+                                  child: Container(
+                                    margin: EdgeInsets.only(bottom: 8 * scaleFactor),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      children: [
+                                        // Checkbox on left (outside border)
+                                        GestureDetector(
+                                          onTap: () async {
+                                            final user = ref.read(currentUserProvider);
+                                            if (user == null) return;
+
+                                            final newStatus = status == TaskStatus.complete
+                                                ? TaskStatus.notStarted
+                                                : TaskStatus.complete;
+
+                                            // Trigger fade-out if completing
+                                            if (newStatus == TaskStatus.complete) {
+                                              handleTaskCompletedWithFade(assessment.id);
+                                            }
+
+                                            // Update temporary status for instant feedback
+                                            updateTemporaryStatus(assessment.id, newStatus);
+
+                                            final repository = ref.read(firestoreRepositoryProvider);
+                                            final newCompletion = TaskCompletion(
+                                              id: completion?.id ?? '',
+                                              moduleId: widget.module.id,
+                                              taskId: assessment.id,
+                                              weekNumber: widget.weekNumber,
+                                              status: newStatus,
+                                              completedAt: newStatus == TaskStatus.complete
+                                                  ? DateTime.now()
+                                                  : null,
+                                            );
+
+                                            await repository.upsertTaskCompletion(
+                                              user.uid,
+                                              widget.module.id,
+                                              newCompletion,
+                                            );
+                                          },
+                                          child: _StatusIcon(
+                                            status: getTemporaryStatus(assessment.id, status) ?? status,
+                                            scaleFactor: scaleFactor,
+                                          ),
+                                        ),
+                                        SizedBox(width: 12 * scaleFactor),
+
+                                        // Bordered content container
+                                        Expanded(
+                                          child: Container(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: 10 * scaleFactor,
+                                              vertical: 8 * scaleFactor,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: borderColor, width: 1.5),
+                                              borderRadius: BorderRadius.circular(6 * scaleFactor),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                // Assignment name
+                                                Text(
+                                                  assessment.name,
+                                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                                    fontSize: (Theme.of(context).textTheme.bodyLarge?.fontSize ?? 16) * scaleFactor,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: const Color(0xFF1E293B),
+                                                  ),
+                                                ),
+                                                SizedBox(height: 6 * scaleFactor),
+                                                // Two labels in a row
+                                                Row(
+                                                  children: [
+                                                    // Type label
+                                                    Container(
+                                                      padding: EdgeInsets.symmetric(
+                                                        horizontal: 6 * scaleFactor,
+                                                        vertical: 2 * scaleFactor,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: borderColor.withValues(alpha: 0.1),
+                                                        borderRadius: BorderRadius.circular(4 * scaleFactor),
+                                                      ),
+                                                      child: Text(
+                                                        typeName,
+                                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                          fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 11) * scaleFactor,
+                                                          color: borderColor,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    SizedBox(width: 6 * scaleFactor),
+                                                    // Due label
+                                                    Container(
+                                                      padding: EdgeInsets.symmetric(
+                                                        horizontal: 6 * scaleFactor,
+                                                        vertical: 2 * scaleFactor,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: borderColor.withValues(alpha: 0.1),
+                                                        borderRadius: BorderRadius.circular(4 * scaleFactor),
+                                                      ),
+                                                      child: Text(
+                                                        timeText,
+                                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                          fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 11) * scaleFactor,
+                                                          color: borderColor,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
+                          );
+                        },
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
                       );
                     },
                     loading: () => const SizedBox.shrink(),
@@ -916,6 +1254,16 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                               ),
                             ),
                             const PopupMenuItem(
+                              value: 'share',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.share_rounded, size: 20, color: Color(0xFF0EA5E9)),
+                                  SizedBox(width: 12),
+                                  Text('Share Module'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
                               value: 'archive',
                               child: Row(
                                 children: [
@@ -927,7 +1275,16 @@ class _ModuleCardState extends ConsumerState<ModuleCard> {
                             ),
                           ],
                         ).then((value) {
-                          if (value == 'edit') {
+                          if (value == 'share') {
+                            // Show module selection dialog
+                            showDialog(
+                              context: context,
+                              builder: (context) => ModuleSelectionDialog(
+                                preSelectedModule: widget.module,
+                                semesterId: widget.module.semesterId,
+                              ),
+                            );
+                          } else if (value == 'edit') {
                             Navigator.push(
                               context,
                               MaterialPageRoute(

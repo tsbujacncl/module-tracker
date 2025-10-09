@@ -7,6 +7,7 @@ import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/providers/customization_provider.dart';
 import 'package:module_tracker/models/customization_preferences.dart';
 import 'package:module_tracker/screens/settings/notification_settings_screen.dart';
+import 'package:module_tracker/screens/import_module/import_module_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:module_tracker/widgets/hover_scale_widget.dart';
 
@@ -654,7 +655,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0EA5E9).withOpacity(0.1),
+                                color: const Color(0xFF0EA5E9).withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Icon(
@@ -734,6 +735,56 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
+                // Modules Section
+                Card(
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.school_outlined,
+                                color: Color(0xFF10B981),
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Modules',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.download_rounded),
+                        title: const Text('Import Module'),
+                        subtitle: const Text('Import a shared module'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ImportModuleScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
                 // Customisation Section
                 Card(
                   child: Column(
@@ -745,7 +796,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFEC4899).withOpacity(0.1),
+                                color: const Color(0xFFEC4899).withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Icon(
@@ -869,7 +920,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         'Enjoying the app? Support the development',
                         style: GoogleFonts.inter(
                           fontSize: 14,
-                          color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                          color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -919,7 +970,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     'Designed by Tyr @ tyrbujac.com',
                     style: GoogleFonts.inter(
                       fontSize: 14,
-                      color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                      color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.6),
                     ),
                     textAlign: TextAlign.center,
                   ),
