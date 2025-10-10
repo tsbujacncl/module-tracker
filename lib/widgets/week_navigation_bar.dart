@@ -29,48 +29,63 @@ class WeekNavigationBar extends StatelessWidget {
     final dateFormat = DateFormat('MMM d');
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Centered text with more space (reduced padding since no today button)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40), // Reduced from 48 for more text space
-            child: Column(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: SizedBox(
+        height: 44, // Fixed height for the navigation bar
+        child: Stack(
+          children: [
+            // Match calendar structure: 5 equal columns (no margins)
+            Row(
               children: [
-                Text(
-                  'Week $currentWeek (${dateFormat.format(weekStart)} - ${dateFormat.format(weekEnd)})',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF0F172A),
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const AssignmentsScreen(),
-                      ),
-                    );
-                  },
-                  child: Text(
-                    semester.name,
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: const Color(0xFF64748B),
+                const Expanded(child: SizedBox.shrink()), // Mon
+                const Expanded(child: SizedBox.shrink()), // Tue
+                const Expanded(child: SizedBox.shrink()), // Wed
+                const Expanded(child: SizedBox.shrink()), // Thu
+                const Expanded(child: SizedBox.shrink()), // Fri
+              ],
+            ),
+          // Text centered across all columns (positioned to span full width)
+          Positioned.fill(
+            left: 48, // Leave space for left navigation button
+            right: 48, // Leave space for right navigation button
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Week $currentWeek (${dateFormat.format(weekStart)} - ${dateFormat.format(weekEnd)})',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF0F172A),
                     ),
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AssignmentsScreen(),
+                        ),
+                      );
+                    },
+                    child: Text(
+                      semester.name,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: const Color(0xFF64748B),
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           // Navigation controls overlaid
@@ -93,6 +108,7 @@ class WeekNavigationBar extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

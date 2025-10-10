@@ -67,6 +67,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final selectedSemester = ref.watch(selectedSemesterProvider);
     final selectedWeek = ref.watch(selectedWeekNumberProvider);
 
+    // Trigger auto-archive check for completed semesters
+    ref.watch(autoArchiveCompletedSemestersProvider);
+
     print(
       'DEBUG HOME: Building HomeScreen, semesters state: ${semestersAsync.runtimeType}',
     );
@@ -593,7 +596,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             );
                           },
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 2),
                         // Weekly Calendar - always show
                         Builder(
                           builder: (context) {

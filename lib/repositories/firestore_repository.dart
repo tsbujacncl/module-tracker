@@ -166,6 +166,82 @@ class FirestoreRepository {
         .update({'isActive': isActive});
   }
 
+  /// Auto-archive all modules for a semester
+  Future<void> autoArchiveSemesterModules(String userId, String semesterId) async {
+    final batch = _firestore.batch();
+
+    // Get all active modules for this semester
+    final modulesSnapshot = await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('modules')
+        .where('semesterId', isEqualTo: semesterId)
+        .where('isActive', isEqualTo: true)
+        .get();
+
+    // Archive each module
+    for (final doc in modulesSnapshot.docs) {
+      batch.update(doc.reference, {'isActive': false});
+    }
+
+    await batch.commit();
+  }
+
+  /// Delete module and all its subcollections
+  Future<void> deleteModule(String userId, String moduleId) async {
+    final batch = _firestore.batch();
+
+    // Delete all recurring tasks
+    final recurringTasksSnapshot = await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('modules')
+        .doc(moduleId)
+        .collection('recurringTasks')
+        .get();
+
+    for (final doc in recurringTasksSnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+
+    // Delete all assessments
+    final assessmentsSnapshot = await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('modules')
+        .doc(moduleId)
+        .collection('assessments')
+        .get();
+
+    for (final doc in assessmentsSnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+
+    // Delete all task completions
+    final completionsSnapshot = await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('modules')
+        .doc(moduleId)
+        .collection('taskCompletions')
+        .get();
+
+    for (final doc in completionsSnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+
+    // Delete the module itself
+    final moduleRef = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('modules')
+        .doc(moduleId);
+    batch.delete(moduleRef);
+
+    // Commit all deletions
+    await batch.commit();
+  }
+
   // ========== RECURRING TASK OPERATIONS ==========
 
   /// Get recurring tasks for a module

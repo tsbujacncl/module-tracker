@@ -136,8 +136,8 @@ class _ModuleDetailScreenState extends ConsumerState<ModuleDetailScreen>
                 icon: const Icon(Icons.edit_outlined),
               ),
               IconButton(
-                onPressed: () => _showArchiveDialog(context),
-                icon: const Icon(Icons.archive_outlined),
+                onPressed: () => _showDeleteDialog(context),
+                icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444)),
               ),
             ],
           ),
@@ -204,39 +204,85 @@ class _ModuleDetailScreenState extends ConsumerState<ModuleDetailScreen>
     }
   }
 
-  void _showArchiveDialog(BuildContext context) {
+  void _showDeleteDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Archive Module'),
-        content: Text(
-          'Are you sure you want to archive "${widget.module.name}"? You can restore it later from the archive.',
+        title: const Text('Delete Module'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Are you sure you want to delete "${widget.module.name}"?'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This action cannot be undone. All tasks, assessments, and grades will be permanently deleted.',
+                        style: TextStyle(fontSize: 13, color: Color(0xFFEF4444)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+            ),
             onPressed: () async {
               final user = ref.read(currentUserProvider);
               if (user == null) return;
 
               final repository = ref.read(firestoreRepositoryProvider);
-              await repository.toggleModuleArchive(user.uid, widget.module.id, false);
 
-              if (dialogContext.mounted) {
-                Navigator.pop(dialogContext);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Module archived'),
-                    backgroundColor: Color(0xFF10B981),
-                  ),
-                );
+              try {
+                await repository.deleteModule(user.uid, widget.module.id);
+
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                  // Also pop the module detail screen since the module is deleted
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Module deleted successfully'),
+                      backgroundColor: Color(0xFF10B981),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error deleting module: $e'),
+                      backgroundColor: const Color(0xFFEF4444),
+                    ),
+                  );
+                }
               }
             },
-            child: const Text('Archive'),
+            child: const Text('Delete'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
           ),
         ],
       ),

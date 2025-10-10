@@ -499,6 +499,89 @@ class _ModuleBox extends ConsumerWidget {
 
   const _ModuleBox({required this.module});
 
+  void _showDeleteDialog(BuildContext context, WidgetRef ref, Module module) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Module'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Are you sure you want to delete "${module.name}"?'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This action cannot be undone. All tasks, assessments, and grades will be permanently deleted.',
+                        style: TextStyle(fontSize: 13, color: Color(0xFFEF4444)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+            ),
+            onPressed: () async {
+              final user = ref.read(currentUserProvider);
+              if (user == null) return;
+
+              final repository = ref.read(firestoreRepositoryProvider);
+
+              try {
+                await repository.deleteModule(user.uid, module.id);
+
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Module deleted successfully'),
+                      backgroundColor: Color(0xFF10B981),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error deleting module: $e'),
+                      backgroundColor: const Color(0xFFEF4444),
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final assessmentsAsync = ref.watch(assessmentsProvider(module.id));
@@ -582,10 +665,10 @@ class _ModuleBox extends ConsumerWidget {
                               showMenu<String>(
                                 context: context,
                                 position: RelativeRect.fromLTRB(
-                                  buttonPosition.dx,
-                                  buttonPosition.dy + button.size.height,
-                                  overlay.size.width - buttonPosition.dx - button.size.width,
-                                  overlay.size.height - buttonPosition.dy - button.size.height,
+                                  buttonPosition.dx - 80, // Move left 80px
+                                  buttonPosition.dy + 30, // Move down 30px
+                                  overlay.size.width - buttonPosition.dx - button.size.width + 80,
+                                  overlay.size.height - buttonPosition.dy - button.size.height - 30,
                                 ),
                                 items: const [
                                   PopupMenuItem(
@@ -605,6 +688,16 @@ class _ModuleBox extends ConsumerWidget {
                                         Icon(Icons.share_rounded, size: 18, color: Color(0xFF0EA5E9)),
                                         SizedBox(width: 8),
                                         Text('Share Module'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete_outline, size: 18, color: Color(0xFFEF4444)),
+                                        SizedBox(width: 8),
+                                        Text('Delete Module', style: TextStyle(color: Color(0xFFEF4444))),
                                       ],
                                     ),
                                   ),
@@ -631,6 +724,8 @@ class _ModuleBox extends ConsumerWidget {
                                       ),
                                     ),
                                   );
+                                } else if (value == 'delete') {
+                                  _showDeleteDialog(context, ref, module);
                                 }
                               });
                             },

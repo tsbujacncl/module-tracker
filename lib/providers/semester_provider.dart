@@ -21,6 +21,39 @@ final semestersProvider = StreamProvider<List<Semester>>((ref) {
   return repository.getUserSemesters(user.uid);
 });
 
+// FutureProvider to check and auto-archive completed semesters
+// This should be triggered from the app initialization or home screen
+final autoArchiveCompletedSemestersProvider = FutureProvider<void>((ref) async {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return;
+
+  final semestersAsync = ref.watch(semestersProvider);
+  final repository = ref.watch(firestoreRepositoryProvider);
+
+  await semestersAsync.when(
+    data: (semesters) async {
+      final now = DateTime.now();
+
+      // Find semesters that have ended (end date is in the past)
+      final completedSemesters = semesters.where(
+        (s) => !s.isArchived && s.endDate.isBefore(now),
+      ).toList();
+
+      // Auto-archive modules for each completed semester
+      for (final semester in completedSemesters) {
+        try {
+          await repository.autoArchiveSemesterModules(user.uid, semester.id);
+          print('DEBUG: Auto-archived modules for semester: ${semester.name}');
+        } catch (e) {
+          print('DEBUG: Error auto-archiving modules for semester ${semester.name}: $e');
+        }
+      }
+    },
+    loading: () => null,
+    error: (_, __) => null,
+  );
+});
+
 // Current/active semester provider (semester where today falls between start and end dates)
 final currentSemesterProvider = Provider<Semester?>((ref) {
   final semesters = ref.watch(semestersProvider);

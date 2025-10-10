@@ -72,6 +72,17 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
   }
 
   @override
+  void didUpdateWidget(WeeklyCalendar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update time tracker immediately when week changes
+    if (oldWidget.weekStartDate != widget.weekStartDate ||
+        oldWidget.currentWeek != widget.currentWeek) {
+      print('DEBUG: Week changed - updating time tracker position');
+      _updateTimeTrackerPosition();
+    }
+  }
+
+  @override
   void dispose() {
     _timeTrackerTimer?.cancel();
     super.dispose();
@@ -136,18 +147,26 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
   // Check if time tracker should be shown
   bool _shouldShowTimeTracker(DateTime now, DateTime weekStart) {
     // Only show on weekdays (Mon-Fri)
-    if (now.weekday > 5) return false;
-
-    // Check if today is within the displayed week
-    final weekEnd = weekStart.add(const Duration(days: 7));
-    final today = DateTime(now.year, now.month, now.day);
-    final weekStartDay = DateTime(weekStart.year, weekStart.month, weekStart.day);
-    final weekEndDay = DateTime(weekEnd.year, weekEnd.month, weekEnd.day);
-
-    if (today.isBefore(weekStartDay) || today.isAfter(weekEndDay) || today == weekEndDay) {
+    if (now.weekday > 5) {
+      print('DEBUG: Not showing tracker - weekend (weekday: ${now.weekday})');
       return false;
     }
 
+    // Check if today is within the displayed week
+    final today = DateTime(now.year, now.month, now.day);
+    final weekStartDay = DateTime(weekStart.year, weekStart.month, weekStart.day);
+    final weekEndDay = weekStartDay.add(const Duration(days: 4)); // Friday is 4 days after Monday
+
+    print('DEBUG: Time tracker check - today: $today, weekStart: $weekStartDay, weekEnd: $weekEndDay');
+
+    // Show only if today is within Mon-Fri of the displayed week
+    // today must be >= weekStartDay and <= weekEndDay
+    if (today.isBefore(weekStartDay) || today.isAfter(weekEndDay)) {
+      print('DEBUG: Not showing tracker - today not in displayed week');
+      return false;
+    }
+
+    print('DEBUG: Showing tracker - today is in displayed week');
     return true;
   }
 
@@ -175,20 +194,20 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
 
     switch (type) {
       case RecurringTaskType.lecture:
-        return preferences.customLectureColor ?? const Color(0xFF1565C0); // Dark Blue
+        return preferences.customLectureColor ?? const Color(0xFF2196F3); // Lighter Vibrant Blue
       case RecurringTaskType.lab:
       case RecurringTaskType.tutorial:
-        return preferences.customLabTutorialColor ?? const Color(0xFF4CAF50); // Green for labs and tutorials
+        return preferences.customLabTutorialColor ?? const Color(0xFF43A047); // Vibrant Green for labs and tutorials
       case RecurringTaskType.flashcards:
       case RecurringTaskType.custom:
-        return const Color(0xFFA78BFA); // Purple for custom tasks
+        return const Color(0xFFAB47BC); // Vibrant Purple for custom tasks
     }
   }
 
   // Get color for assessments
   Color getAssessmentColor() {
     final preferences = ref.watch(userPreferencesProvider);
-    return preferences.customAssignmentColor ?? const Color(0xFFF44336); // Red
+    return preferences.customAssignmentColor ?? const Color(0xFFE53935); // Vibrant Red
   }
 
   // Get display name for task type
@@ -423,13 +442,23 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
   }
 
   // Helper to build day headers for a specific week
-  Widget _buildDayHeaders(DateTime weekStartForHeaders, BuildContext context) {
+  Widget _buildDayHeaders(
+    DateTime weekStartForHeaders,
+    BuildContext context,
+    double timeColumnWidth,
+    double rightMargin,
+    bool useFullTimeFormat,
+  ) {
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final userBirthday = ref.watch(userPreferencesProvider).birthday;
 
     return Row(
-      children: List.generate(5, (index) {
+      children: [
+        // Time column spacer (flush left)
+        SizedBox(width: timeColumnWidth),
+        // Day headers (5 columns, equal width)
+        ...List.generate(5, (index) {
         final date = weekStartForHeaders.add(Duration(days: index));
         final isToday = DateTime.now().day == date.day &&
             DateTime.now().month == date.month &&
@@ -439,10 +468,12 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
         return Expanded(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Day name
               Text(
                 days[index],
+                textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -505,7 +536,10 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
             ],
           ),
         );
-      }),
+        }),
+        // Right margin
+        SizedBox(width: rightMargin),
+      ],
     );
   }
 
@@ -532,12 +566,6 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                 color: borderColor.withOpacity(0.5),
                 width: 1,
               ),
-              right: index == 4
-                  ? BorderSide(
-                      color: borderColor.withOpacity(0.5),
-                      width: 1,
-                    )
-                  : BorderSide.none,
             ),
           ),
         ),
@@ -556,19 +584,47 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
     final endHour = timeRange.$2;
     final totalHours = endHour - startHour;
 
-    // Calculate pixels per hour to fill screen height (more on narrow screens)
-    final screenWidth = MediaQuery.of(context).size.width;
-    final heightRatio = screenWidth < 400 ? 0.40 : 0.38;
-    final maxHeight = MediaQuery.of(context).size.height * heightRatio;
-    final pixelsPerHour = maxHeight / totalHours;
-
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final cardColor = Theme.of(context).cardTheme.color ?? (isDarkMode ? const Color(0xFF1E293B) : Colors.white);
     final headerColor = isDarkMode ? const Color(0xFF334155) : const Color(0xFFF0F9FF);
     final legendColor = isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFFAFAFA);
     final borderColor = isDarkMode ? const Color(0xFF334155) : const Color(0xFFE0F2FE);
 
-    return GestureDetector(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Use actual available width from constraints instead of screen width
+        final screenWidth = constraints.maxWidth;
+
+        // Responsive dimensions for margins and time column
+        final bool isSmall = screenWidth < 400;
+        final bool isLarge = screenWidth >= 500;
+
+        // Breakpoints for margins and time format
+        final double marginSize;
+        final bool useFullTimeFormat;
+
+        if (isSmall) {
+          marginSize = 16.0;
+          useFullTimeFormat = false; // "10"
+        } else if (isLarge) {
+          marginSize = 30.0;
+          useFullTimeFormat = true; // "10:00"
+        } else {
+          marginSize = 20.0;
+          useFullTimeFormat = false; // "10"
+        }
+
+        final timeColumnWidth = marginSize; // Same as margin (always equal)
+        final rightMargin = marginSize;
+
+        // Calculate available width for 5 day columns
+        final availableForDays = screenWidth - timeColumnWidth - rightMargin;
+
+        final heightRatio = screenWidth < 400 ? 0.40 : 0.38;
+        final maxHeight = MediaQuery.of(context).size.height * heightRatio;
+        final pixelsPerHour = maxHeight / totalHours;
+
+        return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
       onPanStart: (details) {
         // Drag is now confirmed - activate first touched box if exists
@@ -646,8 +702,6 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
             ),
             child: Row(
               children: [
-                // Time column header (empty space) - FIXED
-                const SizedBox(width: 32),
                 // Day headers - SWIPEABLE or STATIC
                 if (widget.isSwipeable)
                   Expanded(
@@ -659,29 +713,41 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                           minWidth: 0,
                           maxWidth: double.infinity,
                           child: Transform.translate(
-                          offset: Offset(widget.dragOffset - (screenWidth - 36), 0),
+                          offset: Offset(widget.dragOffset - screenWidth, 0),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               // Previous week headers
                               SizedBox(
-                                width: screenWidth - 36,
+                                width: screenWidth,
                                 child: _buildDayHeaders(
                                   weekStart.subtract(const Duration(days: 7)),
                                   context,
+                                  timeColumnWidth,
+                                  rightMargin,
+                                  useFullTimeFormat,
                                 ),
                               ),
                               // Current week headers
                               SizedBox(
-                                width: screenWidth - 36,
-                                child: _buildDayHeaders(weekStart, context),
+                                width: screenWidth,
+                                child: _buildDayHeaders(
+                                  weekStart,
+                                  context,
+                                  timeColumnWidth,
+                                  rightMargin,
+                                  useFullTimeFormat,
+                                ),
                               ),
                               // Next week headers
                               SizedBox(
-                                width: screenWidth - 36,
+                                width: screenWidth,
                                 child: _buildDayHeaders(
                                   weekStart.add(const Duration(days: 7)),
                                   context,
+                                  timeColumnWidth,
+                                  rightMargin,
+                                  useFullTimeFormat,
                                 ),
                               ),
                             ],
@@ -692,7 +758,15 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                     ),
                   )
                 else
-                  Expanded(child: _buildDayHeaders(weekStart, context)),
+                  Expanded(
+                    child: _buildDayHeaders(
+                      weekStart,
+                      context,
+                      timeColumnWidth,
+                      rightMargin,
+                      useFullTimeFormat,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -810,10 +884,10 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                 height: totalHeight,
                 child: Stack(
                   children: [
-                    // Day columns - SWIPEABLE (will be clipped and translated)
+                    // Day columns - SWIPEABLE (with time column and right margin)
                     Positioned(
-                      left: 32, // Leave space for time column
-                      right: 4, // Add padding to prevent cutoff on narrow screens
+                      left: timeColumnWidth,
+                      right: rightMargin,
                       top: 0,
                       bottom: 0,
                       child: ClipRect(
@@ -823,14 +897,14 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                 minWidth: 0,
                                 maxWidth: double.infinity,
                                 child: Transform.translate(
-                                  offset: Offset(widget.dragOffset - (screenWidth - 36), 0),
+                                  offset: Offset(widget.dragOffset - availableForDays, 0),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       // Previous week placeholder
                                       SizedBox(
-                                        width: screenWidth - 36,
+                                        width: availableForDays,
                                         child: Row(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: _buildDayColumnsForWeek(
@@ -846,7 +920,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                       ),
                                       // Current week (actual data)
                                       SizedBox(
-                                        width: screenWidth - 36,
+                                        width: availableForDays,
                                         child: Row(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: List.generate(5, (index) {
@@ -964,7 +1038,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                         allItems.add(Positioned(
                           top: itemTop,
                           left: 2,
-                          right: index == 4 ? 8 : 2, // Extra padding for Friday to prevent cutoff
+                          right: 2,
                           child: _TimetableTaskBox(
                             task: event.taskWithModule!.task,
                             module: event.taskWithModule!.module,
@@ -984,7 +1058,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                         allItems.add(Positioned(
                           top: itemTop,
                           left: 2,
-                          right: index == 4 ? 8 : 2, // Extra padding for Friday to prevent cutoff
+                          right: 2,
                           child: _TimetableAssessmentBox(
                             assessment: event.assessmentWithModule!.assessment,
                             module: event.assessmentWithModule!.module,
@@ -1015,12 +1089,6 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                     color: borderColor.withOpacity(0.5),
                                     width: 1,
                                   ),
-                                  right: index == 4
-                                      ? BorderSide(
-                                          color: borderColor.withOpacity(0.5),
-                                          width: 1,
-                                        )
-                                      : BorderSide.none,
                                   bottom: const BorderSide(
                                     color: Color(0xFFF87171),
                                     width: 2,
@@ -1048,12 +1116,6 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                     color: borderColor.withOpacity(0.5),
                                     width: 1,
                                   ),
-                                  right: index == 4
-                                      ? BorderSide(
-                                          color: borderColor.withOpacity(0.5),
-                                          width: 1,
-                                        )
-                                      : BorderSide.none,
                                 ),
                               ),
                               child: Stack(
@@ -1086,33 +1148,32 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                       child: Row(
                                         children: [
                                           // Circle indicator
-                                          Container(
-                                            width: 8,
-                                            height: 8,
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFEF4444),
-                                              shape: BoxShape.circle,
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: const Color(0xFFEF4444).withOpacity(0.5),
-                                                  blurRadius: 4,
-                                                  spreadRadius: 1,
-                                                ),
-                                              ],
+                                          Transform.translate(
+                                            offset: const Offset(-4.5, -4),
+                                            child: Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: const BoxDecoration(
+                                                color: Color(0xFFEF4444),
+                                                shape: BoxShape.circle,
+                                              ),
                                             ),
                                           ),
                                           // Horizontal line
                                           Expanded(
-                                            child: Container(
-                                              height: 2,
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFEF4444),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: const Color(0xFFEF4444).withOpacity(0.3),
-                                                    blurRadius: 2,
-                                                  ),
-                                                ],
+                                            child: Transform.translate(
+                                              offset: const Offset(-5.3, -4),
+                                              child: Container(
+                                                height: 1.5,
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFEF4444),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                                                      blurRadius: 1,
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -1131,7 +1192,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                       ),
                                       // Next week placeholder
                                       SizedBox(
-                                        width: screenWidth - 36,
+                                        width: availableForDays,
                                         child: Row(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: _buildDayColumnsForWeek(
@@ -1266,7 +1327,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                       allItems.add(Positioned(
                                         top: itemTop,
                                         left: 2,
-                                        right: index == 4 ? 8 : 2, // Extra padding for Friday to prevent cutoff
+                                        right: 2,
                                         child: _TimetableTaskBox(
                                           task: event.taskWithModule!.task,
                                           module: event.taskWithModule!.module,
@@ -1286,7 +1347,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                       allItems.add(Positioned(
                                         top: itemTop,
                                         left: 2,
-                                        right: index == 4 ? 8 : 2, // Extra padding for Friday to prevent cutoff
+                                        right: 2,
                                         child: _TimetableAssessmentBox(
                                           assessment: event.assessmentWithModule!.assessment,
                                           module: event.assessmentWithModule!.module,
@@ -1317,12 +1378,6 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                   color: borderColor.withOpacity(0.5),
                                                   width: 1,
                                                 ),
-                                                right: index == 4
-                                                    ? BorderSide(
-                                                        color: borderColor.withOpacity(0.5),
-                                                        width: 1,
-                                                      )
-                                                    : BorderSide.none,
                                                 bottom: const BorderSide(
                                                   color: Color(0xFFF87171),
                                                   width: 2,
@@ -1350,12 +1405,6 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                   color: borderColor.withOpacity(0.5),
                                                   width: 1,
                                                 ),
-                                                right: index == 4
-                                                    ? BorderSide(
-                                                        color: borderColor.withOpacity(0.5),
-                                                        width: 1,
-                                                      )
-                                                    : BorderSide.none,
                                               ),
                                             ),
                                             child: Stack(
@@ -1386,33 +1435,32 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                     child: Row(
                                                       children: [
                                                         // Circle indicator
-                                                        Container(
-                                                          width: 8,
-                                                          height: 8,
-                                                          decoration: BoxDecoration(
-                                                            color: const Color(0xFFEF4444),
-                                                            shape: BoxShape.circle,
-                                                            boxShadow: [
-                                                              BoxShadow(
-                                                                color: const Color(0xFFEF4444).withOpacity(0.5),
-                                                                blurRadius: 4,
-                                                                spreadRadius: 1,
-                                                              ),
-                                                            ],
+                                                        Transform.translate(
+                                                          offset: const Offset(-4.5, -4),
+                                                          child: Container(
+                                                            width: 8,
+                                                            height: 8,
+                                                            decoration: const BoxDecoration(
+                                                              color: Color(0xFFEF4444),
+                                                              shape: BoxShape.circle,
+                                                            ),
                                                           ),
                                                         ),
                                                         // Horizontal line
                                                         Expanded(
-                                                          child: Container(
-                                                            height: 2,
-                                                            decoration: BoxDecoration(
-                                                              color: const Color(0xFFEF4444),
-                                                              boxShadow: [
-                                                                BoxShadow(
-                                                                  color: const Color(0xFFEF4444).withOpacity(0.3),
-                                                                  blurRadius: 2,
-                                                                ),
-                                                              ],
+                                                          child: Transform.translate(
+                                                            offset: const Offset(-5.3, -4),
+                                                            child: Container(
+                                                              height: 1.5,
+                                                              decoration: BoxDecoration(
+                                                                color: const Color(0xFFEF4444),
+                                                                boxShadow: [
+                                                                  BoxShadow(
+                                                                    color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                                                                    blurRadius: 1,
+                                                                  ),
+                                                                ],
+                                                              ),
                                                             ),
                                                           ),
                                                         ),
@@ -1430,35 +1478,35 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                               ),
                       ),
                     ),
-                    // Time column - FIXED (always on top, not affected by swipe)
+                    // Time labels on the left (flush left, no left margin)
                     Positioned(
                       left: 0,
                       top: 0,
                       bottom: 0,
-                      child: SizedBox(
-                        width: 32,
-                        height: totalHeight,
-                        child: Column(
-                          children: List.generate(totalHours, (index) {
-                            final hour = startHour + index;
-                            final multiplier = hourMultipliers[hour] ?? 1;
-                            return Container(
-                              height: pixelsPerHour * multiplier,
-                              alignment: Alignment.topRight,
-                              padding: const EdgeInsets.only(right: 4, top: 4),
+                      width: timeColumnWidth,
+                      child: Column(
+                        children: List.generate(endHour - startHour, (index) {
+                          final hour = startHour + index;
+                          final multiplier = hourMultipliers[hour] ?? 1;
+                          final hourHeight = pixelsPerHour * multiplier;
+
+                          return SizedBox(
+                            height: hourHeight,
+                            child: Align(
+                              alignment: Alignment.topCenter,
                               child: Text(
-                                '${hour.toString().padLeft(2, '0')}:00',
+                                useFullTimeFormat ? '${hour.toString().padLeft(2, '0')}:00' : '$hour',
                                 style: GoogleFonts.inter(
-                                  fontSize: 9,
-                                  color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                  fontSize: useFullTimeFormat ? 9 : 10,
                                   fontWeight: FontWeight.w500,
+                                  color: isDarkMode
+                                      ? const Color(0xFF64748B)
+                                      : const Color(0xFF94A3B8),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.visible,
                               ),
-                            );
-                          }),
-                        ),
+                            ),
+                          );
+                        }),
                       ),
                     ),
                   ],
@@ -1481,17 +1529,17 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
               runSpacing: 8,
               children: [
                 _LegendItem(
-                  color: ref.watch(userPreferencesProvider).customLectureColor ?? const Color(0xFF1565C0),
+                  color: ref.watch(userPreferencesProvider).customLectureColor ?? const Color(0xFF2196F3),
                   label: 'Lecture',
                   onTap: () => _showColorPicker(context, 'Lecture'),
                 ),
                 _LegendItem(
-                  color: ref.watch(userPreferencesProvider).customLabTutorialColor ?? const Color(0xFF4CAF50),
+                  color: ref.watch(userPreferencesProvider).customLabTutorialColor ?? const Color(0xFF43A047),
                   label: 'Lab/Tutorial',
                   onTap: () => _showColorPicker(context, 'Lab/Tutorial'),
                 ),
                 _LegendItem(
-                  color: ref.watch(userPreferencesProvider).customAssignmentColor ?? const Color(0xFFF44336),
+                  color: ref.watch(userPreferencesProvider).customAssignmentColor ?? const Color(0xFFE53935),
                   label: 'Assignment',
                   onTap: () => _showColorPicker(context, 'Assignment'),
                 ),
@@ -1501,6 +1549,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
         ],
         ),
       ),
+    );
+      },
     );
   }
 
@@ -1787,7 +1837,7 @@ class _TimetableAssessmentBox extends ConsumerWidget {
               height: height,
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: const Color(0xFFF87171).withOpacity(isCompleted ? 0.3 : 0.15), // Red color
+                color: const Color(0xFFF87171).withOpacity(isCompleted ? 0.5 : 0.3), // Red color
                 borderRadius: BorderRadius.circular(6),
                 border: const Border(
                   left: BorderSide(
@@ -1798,36 +1848,39 @@ class _TimetableAssessmentBox extends ConsumerWidget {
               ),
             child: Stack(
               children: [
-                // Assessment content - full width
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      module.code.isNotEmpty ? module.code : module.name,
-                      style: GoogleFonts.inter(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-                        height: 1.2,
+                // Assessment content - constrained width to leave space for checkbox
+                Padding(
+                  padding: const EdgeInsets.only(right: 22), // Leave space for checkbox
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        module.code.isNotEmpty ? module.code : module.name,
+                        style: GoogleFonts.inter(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.clip,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      assessment.type.toString().split('.').last[0].toUpperCase() +
-                          assessment.type.toString().split('.').last.substring(1),
-                      style: GoogleFonts.inter(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w500,
-                        color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                        height: 1.2,
+                      const SizedBox(height: 2),
+                      Text(
+                        assessment.type.toString().split('.').last[0].toUpperCase() +
+                            assessment.type.toString().split('.').last.substring(1),
+                        style: GoogleFonts.inter(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w500,
+                          color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.clip,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 // Circular checkbox at right center (visual indicator only)
                 Positioned(
@@ -1874,7 +1927,7 @@ class _TimetableAssessmentBox extends ConsumerWidget {
         height: height,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: const Color(0xFFF87171).withOpacity(0.15),
+          color: const Color(0xFFF87171).withOpacity(0.3),
           borderRadius: BorderRadius.circular(6),
           border: const Border(
             left: BorderSide(
@@ -1889,7 +1942,7 @@ class _TimetableAssessmentBox extends ConsumerWidget {
         height: height,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: const Color(0xFFF87171).withOpacity(0.15),
+          color: const Color(0xFFF87171).withOpacity(0.3),
           borderRadius: BorderRadius.circular(6),
           border: const Border(
             left: BorderSide(
@@ -2056,7 +2109,7 @@ class _TimetableTaskBox extends ConsumerWidget {
               height: height,
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: getTaskColor(task.type).withOpacity(isCompleted ? 0.3 : 0.15),
+                color: getTaskColor(task.type).withOpacity(isCompleted ? 0.5 : 0.3),
                 borderRadius: BorderRadius.circular(6),
                 border: Border(
                   left: BorderSide(
@@ -2067,34 +2120,36 @@ class _TimetableTaskBox extends ConsumerWidget {
               ),
             child: Stack(
               children: [
-                // Task content - full width
-                Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    module.code.isNotEmpty ? module.code : module.name,
-                    style: GoogleFonts.inter(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
-                      height: 1.2,
+                // Task content - constrained width to leave space for checkbox
+                Padding(
+                  padding: const EdgeInsets.only(right: 22), // Leave space for checkbox
+                  child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      module.code.isNotEmpty ? module.code : module.name,
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                        height: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.clip,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    getTaskTypeName(task.type),
-                    style: GoogleFonts.inter(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w500,
-                      color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                      height: 1.2,
+                    const SizedBox(height: 2),
+                    Text(
+                      getTaskTypeName(task.type),
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w500,
+                        color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        height: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.clip,
-                  ),
                   if (task.location != null && height > 80) ...[
                     Row(
                       children: [
@@ -2120,6 +2175,7 @@ class _TimetableTaskBox extends ConsumerWidget {
                     ),
                   ],
                 ],
+                ),
               ),
               // Circular checkbox at right center (visual indicator only)
               Positioned(
@@ -2166,7 +2222,7 @@ class _TimetableTaskBox extends ConsumerWidget {
         height: height,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: getTaskColor(task.type).withOpacity(0.15),
+          color: getTaskColor(task.type).withOpacity(0.3),
           borderRadius: BorderRadius.circular(6),
           border: Border(
             left: BorderSide(
@@ -2181,7 +2237,7 @@ class _TimetableTaskBox extends ConsumerWidget {
         height: height,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: getTaskColor(task.type).withOpacity(0.15),
+          color: getTaskColor(task.type).withOpacity(0.3),
           borderRadius: BorderRadius.circular(6),
           border: Border(
             left: BorderSide(

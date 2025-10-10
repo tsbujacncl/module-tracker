@@ -1225,18 +1225,16 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                   context,
                                 ).overlay!.context.findRenderObject()
                                 as RenderBox;
-                        final RelativeRect position = RelativeRect.fromRect(
-                          Rect.fromPoints(
-                            button.localToGlobal(
-                              Offset.zero,
-                              ancestor: overlay,
-                            ),
-                            button.localToGlobal(
-                              button.size.bottomRight(Offset.zero),
-                              ancestor: overlay,
-                            ),
-                          ),
-                          Offset.zero & overlay.size,
+
+                        // Get button position
+                        final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
+
+                        // Position menu to the left and slightly down from the button
+                        final RelativeRect position = RelativeRect.fromLTRB(
+                          buttonPosition.dx - 80, // Move left 80px
+                          buttonPosition.dy + 30, // Move down 30px
+                          overlay.size.width - buttonPosition.dx - button.size.width + 80,
+                          overlay.size.height - buttonPosition.dy - button.size.height - 30,
                         );
 
                         showMenu<String>(
@@ -1264,12 +1262,12 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                               ),
                             ),
                             const PopupMenuItem(
-                              value: 'archive',
+                              value: 'delete',
                               child: Row(
                                 children: [
-                                  Icon(Icons.archive_outlined, size: 20),
+                                  Icon(Icons.delete_outline, size: 20, color: Color(0xFFEF4444)),
                                   SizedBox(width: 12),
-                                  Text('Archive Module'),
+                                  Text('Delete Module', style: TextStyle(color: Color(0xFFEF4444))),
                                 ],
                               ),
                             ),
@@ -1294,8 +1292,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                 ),
                               ),
                             );
-                          } else if (value == 'archive') {
-                            _showArchiveDialog(context, ref);
+                          } else if (value == 'delete') {
+                            _showDeleteDialog(context, ref);
                           }
                         });
                       },
@@ -1312,36 +1310,83 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
     );
   }
 
-  void _showArchiveDialog(BuildContext context, WidgetRef ref) {
+  void _showDeleteDialog(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Archive Module'),
-        content: Text('Are you sure you want to archive "${widget.module.name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Module'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Are you sure you want to delete "${widget.module.name}"?'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This action cannot be undone. All tasks, assessments, and grades will be permanently deleted.',
+                        style: TextStyle(fontSize: 13, color: Color(0xFFEF4444)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
+        ),
+        actions: [
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+            ),
             onPressed: () async {
               final user = ref.read(currentUserProvider);
               if (user == null) return;
 
               final repository = ref.read(firestoreRepositoryProvider);
-              await repository.toggleModuleArchive(user.uid, widget.module.id, false);
 
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Module archived'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
+              try {
+                await repository.deleteModule(user.uid, widget.module.id);
+
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Module deleted successfully'),
+                      backgroundColor: Color(0xFF10B981),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error deleting module: $e'),
+                      backgroundColor: const Color(0xFFEF4444),
+                    ),
+                  );
+                }
               }
             },
-            child: const Text('Archive'),
+            child: const Text('Delete'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
           ),
         ],
       ),
