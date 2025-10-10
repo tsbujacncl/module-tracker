@@ -7,9 +7,12 @@ import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/providers/customization_provider.dart';
 import 'package:module_tracker/models/customization_preferences.dart';
 import 'package:module_tracker/screens/settings/notification_settings_screen.dart';
+import 'package:module_tracker/screens/settings/event_colors_screen.dart';
 import 'package:module_tracker/screens/import_module/import_module_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:module_tracker/widgets/hover_scale_widget.dart';
+import 'package:module_tracker/widgets/gradient_header.dart';
+import 'package:module_tracker/widgets/user_avatar.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -24,6 +27,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _confirmPasswordController = TextEditingController();
   final _nameController = TextEditingController();
   bool _isChangingPassword = false;
+
+  /// Get responsive scale factor for smooth scaling across screen sizes
+  /// Mobile (<600px): 1.0x
+  /// Tablet (600-900px): smoothly 1.0x → 1.1x
+  /// Desktop (>900px): smoothly 1.1x → 1.2x
+  double _getScaleFactor(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+
+    if (width < 600) {
+      return 1.0;
+    } else if (width < 900) {
+      // Smooth interpolation from 1.0 to 1.1 between 600-900px
+      final progress = (width - 600) / 300; // 0.0 to 1.0
+      return 1.0 + (0.1 * progress);
+    } else {
+      // Smooth interpolation from 1.1 to 1.2 between 900-1200px
+      final progress = ((width - 900) / 300).clamp(
+        0.0,
+        1.0,
+      ); // 0.0 to 1.0, capped at 1200px
+      return 1.1 + (0.1 * progress);
+    }
+  }
+
+  /// Get responsive horizontal padding for smooth margin scaling
+  /// Mobile (<600px): 16px each side
+  /// Tablet (600-900px): smoothly 16px → 40px
+  /// Desktop (900-1200px): smoothly 40px → 60px
+  /// Large Desktop (>1200px): capped at 60px
+  double _getHorizontalPadding(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+
+    if (width < 600) {
+      return 16.0;
+    } else if (width < 900) {
+      // Smooth interpolation from 16 to 40 between 600-900px
+      final progress = (width - 600) / 300; // 0.0 to 1.0
+      return 16.0 + (24.0 * progress); // 16 + 24 = 40
+    } else {
+      // Smooth interpolation from 40 to 60 between 900-1200px
+      final progress = ((width - 900) / 300).clamp(
+        0.0,
+        1.0,
+      ); // Capped at 1200px
+      return 40.0 + (20.0 * progress); // 40 + 20 = 60
+    }
+  }
 
   @override
   void dispose() {
@@ -81,7 +131,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           FilledButton(
             onPressed: () async {
-              if (_newPasswordController.text != _confirmPasswordController.text) {
+              if (_newPasswordController.text !=
+                  _confirmPasswordController.text) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Passwords do not match'),
@@ -234,7 +285,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               groupValue: current,
               onChanged: (value) {
                 if (value != null) {
-                  ref.read(customizationProvider.notifier).setWeekStartDay(value);
+                  ref
+                      .read(customizationProvider.notifier)
+                      .setWeekStartDay(value);
                   Navigator.pop(context);
                 }
               },
@@ -259,7 +312,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               groupValue: current,
               onChanged: (value) {
                 if (value != null) {
-                  ref.read(customizationProvider.notifier).setGradeDisplayFormat(value);
+                  ref
+                      .read(customizationProvider.notifier)
+                      .setGradeDisplayFormat(value);
                   Navigator.pop(context);
                 }
               },
@@ -361,7 +416,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                ref.read(userPreferencesProvider.notifier).setTargetGrade(tempTarget);
+                ref
+                    .read(userPreferencesProvider.notifier)
+                    .setTargetGrade(tempTarget);
                 Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(
@@ -371,112 +428,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Future<void> _showColorPickerDialog(String type, Color? currentColor) async {
-    final availableColors = [
-      const Color(0xFFF44336), // Red
-      const Color(0xFFFF9800), // Orange
-      const Color(0xFFFFEB3B), // Yellow
-      const Color(0xFF4CAF50), // Green
-      const Color(0xFF03A9F4), // Light Blue
-      const Color(0xFF1565C0), // Dark Blue
-      const Color(0xFF9C27B0), // Purple
-      const Color(0xFFE91E63), // Pink
-      const Color(0xFF795548), // Brown
-      const Color(0xFF9E9E9E), // Grey
-    ];
-
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Choose Colour for $type',
-          style: GoogleFonts.inter(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        content: SizedBox(
-          width: 300,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // First row (5 colors)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: availableColors.sublist(0, 5).map((color) {
-                  return InkWell(
-                    onTap: () {
-                      if (type == 'Lecture') {
-                        ref.read(userPreferencesProvider.notifier).setLectureColor(color);
-                      } else if (type == 'Lab/Tutorial') {
-                        ref.read(userPreferencesProvider.notifier).setLabTutorialColor(color);
-                      } else if (type == 'Assignment') {
-                        ref.read(userPreferencesProvider.notifier).setAssignmentColor(color);
-                      }
-                      Navigator.of(context).pop();
-                    },
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: currentColor == color ? Colors.black : Colors.grey.shade300,
-                          width: currentColor == color ? 3 : 2,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 12),
-              // Second row (5 colors)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: availableColors.sublist(5, 10).map((color) {
-                  return InkWell(
-                    onTap: () {
-                      if (type == 'Lecture') {
-                        ref.read(userPreferencesProvider.notifier).setLectureColor(color);
-                      } else if (type == 'Lab/Tutorial') {
-                        ref.read(userPreferencesProvider.notifier).setLabTutorialColor(color);
-                      } else if (type == 'Assignment') {
-                        ref.read(userPreferencesProvider.notifier).setAssignmentColor(color);
-                      }
-                      Navigator.of(context).pop();
-                    },
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: currentColor == color ? Colors.black : Colors.grey.shade300,
-                          width: currentColor == color ? 3 : 2,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.inter(),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -506,7 +457,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onPressed: () async {
               final name = _nameController.text.trim();
               if (name.isNotEmpty) {
-                await ref.read(userPreferencesProvider.notifier).setUserName(name);
+                await ref
+                    .read(userPreferencesProvider.notifier)
+                    .setUserName(name);
               }
               if (mounted) {
                 Navigator.pop(context);
@@ -531,7 +484,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
 
     if (selectedDate != null) {
-      await ref.read(userPreferencesProvider.notifier).setBirthday(selectedDate);
+      await ref
+          .read(userPreferencesProvider.notifier)
+          .setBirthday(selectedDate);
     }
   }
 
@@ -566,9 +521,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
               if (passwordController.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -618,370 +571,477 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final currentTheme = ref.watch(themeProvider);
     final userPreferences = ref.watch(userPreferencesProvider);
     final customizationPrefs = ref.watch(customizationProvider);
+    final scaleFactor = _getScaleFactor(context);
+    final horizontalPadding = _getHorizontalPadding(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: ShaderMask(
-          shaderCallback: (bounds) => const LinearGradient(
-            colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4), Color(0xFF10B981)],
-          ).createShader(bounds),
-          child: Text(
-            'Settings',
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ),
+      appBar: AppBar(title: const GradientHeader(title: 'Settings')),
       body: ListView(
         children: [
           Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 600),
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.symmetric(
+                  horizontal: horizontalPadding,
+                  vertical: 24,
+                ),
                 child: Column(
                   children: [
-                // Account Section
-                Card(
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0EA5E9).withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.account_circle_outlined,
-                                color: Color(0xFF0EA5E9),
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Account',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.email_outlined),
-                        title: Text(user?.email ?? 'Not logged in'),
-                        subtitle: const Text('Email address'),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.person_outline),
-                        title: Text(userPreferences.userName ?? 'Set your name'),
-                        subtitle: const Text('Name'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _showNameDialog,
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.cake_outlined),
-                        title: Text(
-                          userPreferences.birthday != null
-                              ? '${userPreferences.birthday!.day}/${userPreferences.birthday!.month}/${userPreferences.birthday!.year}'
-                              : 'Set your birthday',
-                        ),
-                        subtitle: const Text('Birthday'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _showBirthdayPicker,
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.lock_outline),
-                        title: const Text('Change Password'),
-                        subtitle: const Text('Update your account password'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _showChangePasswordDialog,
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.logout_outlined),
-                        title: const Text('Log Out'),
-                        subtitle: const Text('Sign out of your account'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _showLogoutDialog,
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(
-                          Icons.delete_outline,
-                          color: Color(0xFFEF4444),
-                        ),
-                        title: const Text(
-                          'Delete Account',
-                          style: TextStyle(color: Color(0xFFEF4444)),
-                        ),
-                        subtitle: const Text('Permanently delete your account'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _showDeleteAccountDialog,
-                      ),
-                    ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                // Modules Section
-                Card(
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.school_outlined,
-                                color: Color(0xFF10B981),
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Modules',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.download_rounded),
-                        title: const Text('Import Module'),
-                        subtitle: const Text('Import a shared module'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const ImportModuleScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Customisation Section
-                Card(
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEC4899).withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.palette_outlined,
-                                color: Color(0xFFEC4899),
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Customisation',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: Icon(currentTheme.icon),
-                        title: const Text('Theme'),
-                        subtitle: Text(currentTheme.displayName),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _showThemeDialog,
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.calendar_today),
-                        title: const Text('Week Starts On'),
-                        subtitle: Text(customizationPrefs.weekStartDay.displayName),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _showWeekStartDialog(customizationPrefs.weekStartDay),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.grade),
-                        title: const Text('Grade Display Format'),
-                        subtitle: Text(customizationPrefs.gradeDisplayFormat.displayName),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _showGradeFormatDialog(customizationPrefs.gradeDisplayFormat),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.flag_outlined),
-                        title: const Text('Target Grade'),
-                        subtitle: Text('${userPreferences.targetGrade.toStringAsFixed(0)}%'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _showTargetGradeDialog,
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: const Icon(Icons.notifications_outlined),
-                        title: const Text('Notifications'),
-                        subtitle: const Text('Manage reminders and alerts'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const NotificationSettingsScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: userPreferences.customLectureColor ?? const Color(0xFF1565C0),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        title: const Text('Lecture Colour'),
-                        subtitle: const Text('Colour for lecture events'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _showColorPickerDialog('Lecture', userPreferences.customLectureColor),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: userPreferences.customLabTutorialColor ?? const Color(0xFF4CAF50),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        title: const Text('Lab/Tutorial Colour'),
-                        subtitle: const Text('Colour for lab and tutorial events'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _showColorPickerDialog('Lab/Tutorial', userPreferences.customLabTutorialColor),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: userPreferences.customAssignmentColor ?? const Color(0xFFF44336),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        title: const Text('Assignment Colour'),
-                        subtitle: const Text('Colour for assignment events'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _showColorPickerDialog('Assignment', userPreferences.customAssignmentColor),
-                      ),
-                    ],
-                  ),
-                ),
-                  const SizedBox(height: 24),
-                  // Support Section
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Enjoying the app? Support the development',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 12),
-                      GlowPulseWidget(
-                        glowColor: const Color(0xFFFFC107),
-                        onTap: () async {
-                          final url = Uri.parse('https://buymeacoffee.com/tyrbujac');
-                          if (await canLaunchUrl(url)) {
-                            await launchUrl(url, mode: LaunchMode.externalApplication);
-                          }
-                        },
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Stack(
-                            alignment: Alignment.centerRight,
-                            children: [
-                              Image.asset(
-                                'assets/images/buy_me_a_coffee_button.png',
-                                height: 150,
-                                fit: BoxFit.contain,
-                              ),
-                              Positioned(
-                                right: 12,
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.2),
-                                    shape: BoxShape.circle,
+                    // Account Section
+                    Card(
+                      child: Column(
+                        children: [
+                          // Account section header with avatar and name - tappable to edit
+                          InkWell(
+                            onTap: _showNameDialog,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  // User avatar
+                                  UserAvatar(
+                                    name: userPreferences.userName ?? 'User',
+                                    size: 44 * scaleFactor,
                                   ),
-                                  child: const Icon(
-                                    Icons.open_in_new,
-                                    size: 16,
-                                    color: Colors.white,
+                                  const SizedBox(width: 12),
+                                  // Account: 'Name' text
+                                  Expanded(
+                                    child: RichText(
+                                      text: TextSpan(
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 17 * scaleFactor,
+                                          fontWeight: FontWeight.w700,
+                                          color: Theme.of(
+                                            context,
+                                          ).textTheme.bodyLarge?.color,
+                                        ),
+                                        children: [
+                                          const TextSpan(text: 'Account: '),
+                                          TextSpan(
+                                            text:
+                                                "'${userPreferences.userName ?? 'Set name'}'",
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 17 * scaleFactor,
+                                              fontWeight: FontWeight.w600,
+                                              color: const Color(0xFF0EA5E9),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: const Color(0xFF94A3B8),
+                                    size: 24 * scaleFactor,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          // Email row - informational only, no tap, no chevron
+                          ListTile(
+                            leading: Icon(
+                              Icons.email_outlined,
+                              color: Colors.grey.shade600,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: Text(
+                              user?.email ?? 'Not logged in',
+                              style: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).textTheme.bodyLarge?.color,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'Email address',
+                              style: TextStyle(color: Colors.grey.shade500),
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              Icons.cake_outlined,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: Text(
+                              userPreferences.birthday != null
+                                  ? '${userPreferences.birthday!.day}/${userPreferences.birthday!.month}/${userPreferences.birthday!.year}'
+                                  : 'Set your birthday',
+                            ),
+                            subtitle: const Text('Birthday'),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 24 * scaleFactor,
+                            ),
+                            onTap: _showBirthdayPicker,
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              Icons.lock_outline,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: const Text('Change Password'),
+                            subtitle: const Text(
+                              'Update your account password',
+                            ),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 24 * scaleFactor,
+                            ),
+                            onTap: _showChangePasswordDialog,
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              Icons.logout_outlined,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: const Text('Log Out'),
+                            subtitle: const Text('Sign out of your account'),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 24 * scaleFactor,
+                            ),
+                            onTap: _showLogoutDialog,
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              Icons.delete_outline,
+                              color: const Color(0xFFEF4444),
+                              size: 24 * scaleFactor,
+                            ),
+                            title: const Text(
+                              'Delete Account',
+                              style: TextStyle(color: Color(0xFFEF4444)),
+                            ),
+                            subtitle: const Text(
+                              'Permanently delete your account',
+                            ),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 24 * scaleFactor,
+                            ),
+                            onTap: _showDeleteAccountDialog,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    // Modules Section
+                    Card(
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF10B981,
+                                    ).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.school_outlined,
+                                    color: const Color(0xFF10B981),
+                                    size: 20 * scaleFactor,
                                   ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Modules',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 18 * scaleFactor,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              Icons.download_rounded,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: const Text('Import Module'),
+                            subtitle: const Text('Import a shared module'),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 24 * scaleFactor,
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const ImportModuleScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              Icons.share_rounded,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: const Text('Share Module'),
+                            subtitle: const Text('Share a module with others'),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 24 * scaleFactor,
+                            ),
+                            onTap: () {
+                              // Show module selection dialog for sharing
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Go to a module card and use the share option from the menu',
+                                  ),
+                                  backgroundColor: Color(0xFF0EA5E9),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    // Customisation Section
+                    Card(
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFFEC4899,
+                                    ).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.palette_outlined,
+                                    color: const Color(0xFFEC4899),
+                                    size: 20 * scaleFactor,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Customisation',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 18 * scaleFactor,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              currentTheme.icon,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: const Text('Theme'),
+                            subtitle: Text(currentTheme.displayName),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 24 * scaleFactor,
+                            ),
+                            onTap: _showThemeDialog,
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              Icons.calendar_today,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: const Text('Week Starts On'),
+                            subtitle: Text(
+                              customizationPrefs.weekStartDay.displayName,
+                            ),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 24 * scaleFactor,
+                            ),
+                            onTap: () => _showWeekStartDialog(
+                              customizationPrefs.weekStartDay,
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(Icons.grade, size: 24 * scaleFactor),
+                            title: const Text('Grade Display Format'),
+                            subtitle: Text(
+                              customizationPrefs.gradeDisplayFormat.displayName,
+                            ),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 24 * scaleFactor,
+                            ),
+                            onTap: () => _showGradeFormatDialog(
+                              customizationPrefs.gradeDisplayFormat,
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              Icons.flag_outlined,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: const Text('Target Grade'),
+                            subtitle: Text(
+                              '${userPreferences.targetGrade.toStringAsFixed(0)}%',
+                            ),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 24 * scaleFactor,
+                            ),
+                            onTap: _showTargetGradeDialog,
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              Icons.notifications_outlined,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: const Text('Notifications'),
+                            subtitle: const Text('Manage reminders and alerts'),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 24 * scaleFactor,
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const NotificationSettingsScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              Icons.palette_outlined,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: const Text('Event Colors'),
+                            subtitle: const Text(
+                              'Customize lecture, lab, and assignment colors',
+                            ),
+                            trailing: Icon(
+                              Icons.chevron_right,
+                              size: 24 * scaleFactor,
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const EventColorsScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Support Section
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Enjoying the app? Support the development',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: Theme.of(context).textTheme.bodyMedium?.color
+                                ?.withValues(alpha: 0.7),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        GlowPulseWidget(
+                          glowColor: const Color(0xFFFFC107),
+                          onTap: () async {
+                            final url = Uri.parse(
+                              'https://buymeacoffee.com/tyrbujac',
+                            );
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(
+                                url,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            }
+                          },
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Stack(
+                              alignment: Alignment.centerRight,
+                              children: [
+                                Image.asset(
+                                  'assets/images/buy_me_a_coffee_button.png',
+                                  height: 150,
+                                  fit: BoxFit.contain,
+                                ),
+                                Positioned(
+                                  right: 12,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.2,
+                                      ),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.open_in_new,
+                                      size: 16,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 44),
-                  // Designer credit
-                  Text(
-                    'Designed by Tyr @ tyrbujac.com',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+                      ],
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                ],
+                    const SizedBox(height: 44),
+                    // Designer credit
+                    Text(
+                      'Designed by Tyr @ tyrbujac.com',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      ],
-    ),
+        ],
+      ),
     );
   }
 }

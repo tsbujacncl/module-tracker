@@ -352,42 +352,140 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Module header
-                  Padding(
-                    padding: EdgeInsets.only(right: 40 * scaleFactor),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.module.name,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                fontSize:
-                                    (Theme.of(
-                                          context,
-                                        ).textTheme.titleLarge?.fontSize ??
-                                        22) *
-                                    scaleFactor,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.module.name,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize:
+                                        (Theme.of(
+                                              context,
+                                            ).textTheme.titleLarge?.fontSize ??
+                                            22) *
+                                        scaleFactor,
+                                  ),
+                            ),
+                            if (widget.module.code.isNotEmpty)
+                              Text(
+                                widget.module.code,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: Colors.grey[600],
+                                      fontSize:
+                                          (Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium?.fontSize ??
+                                              14) *
+                                          scaleFactor,
+                                    ),
                               ),
+                          ],
                         ),
-                        if (widget.module.code.isNotEmpty)
-                          Text(
-                            widget.module.code,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: Colors.grey[600],
-                                  fontSize:
-                                      (Theme.of(
-                                            context,
-                                          ).textTheme.bodyMedium?.fontSize ??
-                                          14) *
-                                      scaleFactor,
-                                ),
+                      ),
+                      // Three dots menu button
+                      Transform.translate(
+                        offset: const Offset(0, -3.5),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () {
+                              final RenderBox button =
+                                  context.findRenderObject() as RenderBox;
+                              final RenderBox overlay =
+                                  Navigator.of(
+                                        context,
+                                      ).overlay!.context.findRenderObject()
+                                      as RenderBox;
+
+                              // Get button position
+                              final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
+
+                              // Position menu to the left and slightly down from the button
+                              final RelativeRect position = RelativeRect.fromLTRB(
+                                buttonPosition.dx - 80, // Move left 80px
+                                buttonPosition.dy + 30, // Move down 30px
+                                overlay.size.width - buttonPosition.dx - button.size.width + 80,
+                                overlay.size.height - buttonPosition.dy - button.size.height - 30,
+                              );
+
+                              showMenu<String>(
+                                context: context,
+                                position: position,
+                                items: [
+                                  const PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit_outlined, size: 20),
+                                        SizedBox(width: 12),
+                                        Text('Edit Module'),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'share',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.share_rounded, size: 20, color: Color(0xFF0EA5E9)),
+                                        SizedBox(width: 12),
+                                        Text('Share Module'),
+                                      ],
+                                    ),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete_outline, size: 20, color: Color(0xFFEF4444)),
+                                        SizedBox(width: 12),
+                                        Text('Delete Module', style: TextStyle(color: Color(0xFFEF4444))),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ).then((value) {
+                                if (value == 'share') {
+                                  // Show module selection dialog
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => ModuleSelectionDialog(
+                                      preSelectedModule: widget.module,
+                                      semesterId: widget.module.semesterId,
+                                    ),
+                                  );
+                                } else if (value == 'edit') {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ModuleFormScreen(
+                                        existingModule: widget.module,
+                                        semesterId: widget.module.semesterId,
+                                      ),
+                                    ),
+                                  );
+                                } else if (value == 'delete') {
+                                  _showDeleteDialog(context, ref);
+                                }
+                              });
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: Icon(Icons.more_vert, size: 28 * scaleFactor),
+                            ),
                           ),
-                      ],
+                        ),
+                      ),
+                    ],
                     ),
-                  ),
                   SizedBox(height: 8 * scaleFactor),
                   // Tasks list (recurring tasks + weekly assessments)
                   recurringTasksAsync.when(
@@ -486,11 +584,6 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                   });
                                   // Re-enable parent scroll
                                   ref.read(isDraggingCheckboxProvider.notifier).state = false;
-
-                                  // Check for weekly completion celebration after drag completes
-                                  if (context.mounted) {
-                                    await checkAndShowWeeklyCelebration(context, ref, widget.weekNumber);
-                                  }
                                 },
                                 onPanCancel: () {
                                   setState(() {
@@ -1209,101 +1302,6 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                   ),
                 ],
               ),
-              // Position menu button in top right corner
-              Positioned(
-                top: 0,
-                right: 0,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: () {
-                        final RenderBox button =
-                            context.findRenderObject() as RenderBox;
-                        final RenderBox overlay =
-                            Navigator.of(
-                                  context,
-                                ).overlay!.context.findRenderObject()
-                                as RenderBox;
-
-                        // Get button position
-                        final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
-
-                        // Position menu to the left and slightly down from the button
-                        final RelativeRect position = RelativeRect.fromLTRB(
-                          buttonPosition.dx - 80, // Move left 80px
-                          buttonPosition.dy + 30, // Move down 30px
-                          overlay.size.width - buttonPosition.dx - button.size.width + 80,
-                          overlay.size.height - buttonPosition.dy - button.size.height - 30,
-                        );
-
-                        showMenu<String>(
-                          context: context,
-                          position: position,
-                          items: [
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit_outlined, size: 20),
-                                  SizedBox(width: 12),
-                                  Text('Edit Module'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'share',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.share_rounded, size: 20, color: Color(0xFF0EA5E9)),
-                                  SizedBox(width: 12),
-                                  Text('Share Module'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete_outline, size: 20, color: Color(0xFFEF4444)),
-                                  SizedBox(width: 12),
-                                  Text('Delete Module', style: TextStyle(color: Color(0xFFEF4444))),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ).then((value) {
-                          if (value == 'share') {
-                            // Show module selection dialog
-                            showDialog(
-                              context: context,
-                              builder: (context) => ModuleSelectionDialog(
-                                preSelectedModule: widget.module,
-                                semesterId: widget.module.semesterId,
-                              ),
-                            );
-                          } else if (value == 'edit') {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ModuleFormScreen(
-                                  existingModule: widget.module,
-                                  semesterId: widget.module.semesterId,
-                                ),
-                              ),
-                            );
-                          } else if (value == 'delete') {
-                            _showDeleteDialog(context, ref);
-                          }
-                        });
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(Icons.more_vert, size: 28 * scaleFactor),
-                      ),
-                    ),
-                  ),
-                ),
             ],
         ),
       ),

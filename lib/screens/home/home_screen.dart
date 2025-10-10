@@ -47,6 +47,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
   }
 
+  /// Get responsive horizontal padding for smooth margin scaling
+  /// Mobile (<600px): 8px each side
+  /// Tablet (600-900px): smoothly 8px → 32px
+  /// Desktop (900-1200px): smoothly 32px → 60px
+  /// Large Desktop (>1200px): smoothly 60px → 100px
+  double _getHorizontalPadding(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+
+    if (width < 600) {
+      return 8.0;
+    } else if (width < 900) {
+      // Smooth interpolation from 8 to 32 between 600-900px
+      final progress = (width - 600) / 300; // 0.0 to 1.0
+      return 8.0 + (24.0 * progress); // 8 + 24 = 32
+    } else if (width < 1200) {
+      // Smooth interpolation from 32 to 60 between 900-1200px
+      final progress = (width - 900) / 300; // 0.0 to 1.0
+      return 32.0 + (28.0 * progress); // 32 + 28 = 60
+    } else {
+      // Smooth interpolation from 60 to 100 for screens >1200px
+      final progress = ((width - 1200) / 400).clamp(
+        0.0,
+        1.0,
+      ); // Capped at 1600px
+      return 60.0 + (40.0 * progress); // 60 + 40 = 100
+    }
+  }
+
   void _showBirthdayCelebration() {
     final userName = ref.read(userPreferencesProvider).userName ?? 'there';
     markBirthdayCelebrationShown(ref);
@@ -81,12 +109,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Dynamic scaling based on screen width - balanced approach
     final scaleFactor = screenWidth < 360
-        ? 0.8  // Very small screens: reduce slightly
+        ? 0.8 // Very small screens: reduce slightly
         : screenWidth < 380
-            ? 0.9  // Small screens (e.g., iPhone SE): moderate reduction
-            : screenWidth < 420
-                ? 0.95 // Medium-small screens: slight reduction
-                : 1.0; // Normal and larger screens: full size
+        ? 0.9 // Small screens (e.g., iPhone SE): moderate reduction
+        : screenWidth < 420
+        ? 0.95 // Medium-small screens: slight reduction
+        : 1.0; // Normal and larger screens: full size
+
+    final appBarHorizontalPadding = _getHorizontalPadding(context);
 
     return Scaffold(
       appBar: isMobile
@@ -96,7 +126,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               flexibleSpace: SafeArea(
                 child: Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: 10,
+                    horizontal: appBarHorizontalPadding,
                     vertical: 2,
                   ),
                   child: Row(
@@ -106,8 +136,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         style: InteractiveStyle.elastic,
                         color: Colors.transparent,
                         onTap: () {
-                          ref.read(selectedWeekStartDateProvider.notifier).state =
-                              ref.read(currentWeekStartDateProvider);
+                          ref
+                              .read(selectedWeekStartDateProvider.notifier)
+                              .state = ref.read(
+                            currentWeekStartDateProvider,
+                          );
                         },
                         child: Container(
                           width: 40 * scaleFactor,
@@ -116,10 +149,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             gradient: const LinearGradient(
                               colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4)],
                             ),
-                            borderRadius: BorderRadius.circular(9 * scaleFactor),
+                            borderRadius: BorderRadius.circular(
+                              9 * scaleFactor,
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF0EA5E9).withValues(alpha: 0.25),
+                                color: const Color(
+                                  0xFF0EA5E9,
+                                ).withValues(alpha: 0.25),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -131,7 +168,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     offset: const Offset(0, -2),
                                     child: Text(
                                       '🎂',
-                                      style: TextStyle(fontSize: 23 * scaleFactor),
+                                      style: TextStyle(
+                                        fontSize: 23 * scaleFactor,
+                                      ),
                                     ),
                                   )
                                 : Icon(
@@ -174,10 +213,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           child: Container(
                             padding: EdgeInsets.all(6.5 * scaleFactor),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(7 * scaleFactor),
+                              color: const Color(
+                                0xFF10B981,
+                              ).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(
+                                7 * scaleFactor,
+                              ),
                             ),
-                            child: Icon(Icons.add_rounded, size: 20 * scaleFactor, color: const Color(0xFF10B981)),
+                            child: Icon(
+                              Icons.add_rounded,
+                              size: 20 * scaleFactor,
+                              color: const Color(0xFF10B981),
+                            ),
                           ),
                         ),
                       ),
@@ -194,10 +241,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         child: Container(
                           padding: EdgeInsets.all(6.5 * scaleFactor),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(7 * scaleFactor),
+                            color: const Color(
+                              0xFFF59E0B,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(
+                              7 * scaleFactor,
+                            ),
                           ),
-                          child: Icon(Icons.archive_outlined, size: 20 * scaleFactor, color: const Color(0xFFF59E0B)),
+                          child: Icon(
+                            Icons.archive_outlined,
+                            size: 20 * scaleFactor,
+                            color: const Color(0xFFF59E0B),
+                          ),
                         ),
                       ),
                       SizedBox(width: 3),
@@ -213,10 +268,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         child: Container(
                           padding: EdgeInsets.all(6.5 * scaleFactor),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(7 * scaleFactor),
+                            color: const Color(
+                              0xFF8B5CF6,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(
+                              7 * scaleFactor,
+                            ),
                           ),
-                          child: Icon(Icons.assessment_outlined, size: 20 * scaleFactor, color: const Color(0xFF8B5CF6)),
+                          child: Icon(
+                            Icons.assessment_outlined,
+                            size: 20 * scaleFactor,
+                            color: const Color(0xFF8B5CF6),
+                          ),
                         ),
                       ),
                       SizedBox(width: 3),
@@ -232,10 +295,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         child: Container(
                           padding: EdgeInsets.all(6.5 * scaleFactor),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0EA5E9).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(7 * scaleFactor),
+                            color: const Color(
+                              0xFF0EA5E9,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(
+                              7 * scaleFactor,
+                            ),
                           ),
-                          child: Icon(Icons.settings_outlined, size: 20 * scaleFactor, color: const Color(0xFF0EA5E9)),
+                          child: Icon(
+                            Icons.settings_outlined,
+                            size: 20 * scaleFactor,
+                            color: const Color(0xFF0EA5E9),
+                          ),
                         ),
                       ),
                     ],
@@ -250,8 +321,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     // Account for ListView padding to match calendar's available width
-                    final listViewPadding = screenWidth < 600 ? 8.0 : 10.0;
-                    final adjustedWidth = constraints.maxWidth - (listViewPadding * 2);
+                    final listViewPadding = appBarHorizontalPadding;
+                    final adjustedWidth =
+                        constraints.maxWidth - (listViewPadding * 2);
 
                     // Same responsive breakpoints as calendar
                     final bool isSmall = adjustedWidth < 400;
@@ -295,13 +367,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 child: FittedBox(
                                   fit: BoxFit.scaleDown,
                                   child: ShaderMask(
-                                    shaderCallback: (bounds) => const LinearGradient(
-                                      colors: [
-                                        Color(0xFF0EA5E9),
-                                        Color(0xFF06B6D4),
-                                        Color(0xFF10B981),
-                                      ],
-                                    ).createShader(bounds),
+                                    shaderCallback: (bounds) =>
+                                        const LinearGradient(
+                                          colors: [
+                                            Color(0xFF0EA5E9),
+                                            Color(0xFF06B6D4),
+                                            Color(0xFF10B981),
+                                          ],
+                                        ).createShader(bounds),
                                     child: Text(
                                       'Module Tracker',
                                       style: GoogleFonts.poppins(
@@ -321,56 +394,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             SizedBox(width: listViewPadding + marginSize),
                           ],
                         ),
-                    // Logo on left with Elastic bounce (no movement)
-                    Positioned(
-                      left: 8,
-                      top: 0,
-                      bottom: 0,
-                      child: Center(
-                        child: ElasticBounceWidget(
-                          backgroundColor: Colors.transparent,
-                          onTap: () {
-                            ref.read(selectedWeekStartDateProvider.notifier).state =
-                                ref.read(currentWeekStartDateProvider);
-                          },
-                          child: Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4)],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF0EA5E9).withValues(alpha: 0.25),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Center(
-                              child: isTodayBirthday(ref)
-                                  ? Transform.translate(
-                                      offset: const Offset(0, -2),
-                                      child: const Text(
-                                        '🎂',
-                                        style: TextStyle(fontSize: 28),
-                                      ),
+                        // Logo on left with Elastic bounce (no movement)
+                        Positioned(
+                          left: appBarHorizontalPadding,
+                          top: 0,
+                          bottom: 0,
+                          child: Center(
+                            child: ElasticBounceWidget(
+                              backgroundColor: Colors.transparent,
+                              onTap: () {
+                                ref
+                                    .read(
+                                      selectedWeekStartDateProvider.notifier,
                                     )
-                                  : const Icon(
-                                      Icons.school_rounded,
-                                      size: 28,
-                                      color: Colors.white,
+                                    .state = ref.read(
+                                  currentWeekStartDateProvider,
+                                );
+                              },
+                              child: Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFF0EA5E9),
+                                      Color(0xFF06B6D4),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF0EA5E9,
+                                      ).withValues(alpha: 0.25),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
                                     ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: isTodayBirthday(ref)
+                                      ? Transform.translate(
+                                          offset: const Offset(0, -2),
+                                          child: const Text(
+                                            '🎂',
+                                            style: TextStyle(fontSize: 28),
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.school_rounded,
+                                          size: 28,
+                                          color: Colors.white,
+                                        ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                );
-              },
+                      ],
+                    );
+                  },
                 ),
               ),
               actions: [
@@ -378,19 +461,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 Builder(
                   builder: (BuildContext context) {
                     return ElasticBounceWidget(
-                      backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.1),
+                      backgroundColor: const Color(
+                        0xFF10B981,
+                      ).withValues(alpha: 0.1),
                       onTap: () {
-                        final RenderBox button = context.findRenderObject() as RenderBox;
-                        final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
-                        final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
+                        final RenderBox button =
+                            context.findRenderObject() as RenderBox;
+                        final RenderBox overlay =
+                            Navigator.of(
+                                  context,
+                                ).overlay!.context.findRenderObject()
+                                as RenderBox;
+                        final buttonPosition = button.localToGlobal(
+                          Offset.zero,
+                          ancestor: overlay,
+                        );
 
                         showMenu<String>(
                           context: context,
                           position: RelativeRect.fromLTRB(
                             buttonPosition.dx,
                             buttonPosition.dy + button.size.height,
-                            overlay.size.width - buttonPosition.dx - button.size.width,
-                            overlay.size.height - buttonPosition.dy - button.size.height,
+                            overlay.size.width -
+                                buttonPosition.dx -
+                                button.size.width,
+                            overlay.size.height -
+                                buttonPosition.dy -
+                                button.size.height,
                           ),
                           items: <PopupMenuEntry<String>>[
                             PopupMenuItem<String>(
@@ -446,7 +543,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const SemesterSetupScreen(),
+                                builder: (context) =>
+                                    const SemesterSetupScreen(),
                               ),
                             );
                           }
@@ -469,7 +567,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 const SizedBox(width: 8),
                 ElasticBounceWidget(
-                  backgroundColor: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                  backgroundColor: const Color(
+                    0xFF8B5CF6,
+                  ).withValues(alpha: 0.1),
                   onTap: () {
                     Navigator.push(
                       context,
@@ -493,7 +593,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 const SizedBox(width: 8),
                 ElasticBounceWidget(
-                  backgroundColor: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                  backgroundColor: const Color(
+                    0xFFF59E0B,
+                  ).withValues(alpha: 0.1),
                   onTap: () {
                     Navigator.push(
                       context,
@@ -517,7 +619,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 const SizedBox(width: 8),
                 ElasticBounceWidget(
-                  backgroundColor: const Color(0xFF0EA5E9).withValues(alpha: 0.1),
+                  backgroundColor: const Color(
+                    0xFF0EA5E9,
+                  ).withValues(alpha: 0.1),
                   onTap: () {
                     Navigator.push(
                       context,
@@ -539,7 +643,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: appBarHorizontalPadding),
               ],
             ),
       body: semestersAsync.when(
@@ -589,7 +693,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     });
                   }
 
-                  final isDraggingCheckbox = ref.watch(isDraggingCheckboxProvider);
+                  final isDraggingCheckbox = ref.watch(
+                    isDraggingCheckboxProvider,
+                  );
+
+                  final horizontalPadding = _getHorizontalPadding(context);
 
                   return RefreshIndicator(
                     onRefresh: () async {
@@ -598,10 +706,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     },
                     child: ListView(
                       physics: isDraggingCheckbox
-                        ? const NeverScrollableScrollPhysics()
-                        : const AlwaysScrollableScrollPhysics(),
-                      padding: EdgeInsets.all(
-                        MediaQuery.of(context).size.width < 600 ? 8 : 10,
+                          ? const NeverScrollableScrollPhysics()
+                          : const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: horizontalPadding,
+                        vertical: 8,
                       ),
                       children: [
                         // Week navigation bar (always shown)
@@ -638,7 +747,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         // Weekly Calendar - always show
                         Builder(
                           builder: (context) {
-                            final screenWidth = MediaQuery.of(context).size.width;
+                            final screenWidth = MediaQuery.of(
+                              context,
+                            ).size.width;
                             // Disable swipe on web/desktop (regardless of screen size)
                             final enableSwipe = !kIsWeb && screenWidth < 1024;
 
@@ -649,9 +760,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 modules: modules,
                                 tasksByModule: tasksByModule,
                                 assessmentsByModule: assessmentsByModule,
-                                weekStartDate: ref.watch(selectedWeekStartDateProvider),
+                                weekStartDate: ref.watch(
+                                  selectedWeekStartDateProvider,
+                                ),
                                 onWeekChanged: (newDate) {
-                                  ref.read(selectedWeekStartDateProvider.notifier).state = newDate;
+                                  ref
+                                          .read(
+                                            selectedWeekStartDateProvider
+                                                .notifier,
+                                          )
+                                          .state =
+                                      newDate;
                                 },
                               );
                             }
@@ -662,7 +781,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               modules: modules,
                               tasksByModule: tasksByModule,
                               assessmentsByModule: assessmentsByModule,
-                              weekStartDate: ref.watch(selectedWeekStartDateProvider),
+                              weekStartDate: ref.watch(
+                                selectedWeekStartDateProvider,
+                              ),
                             );
                           },
                         ),
@@ -692,7 +813,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             );
 
                             // Title consistent on all screen sizes
-                            return title;
+                            return Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: title,
+                            );
                           },
                         ),
                         const SizedBox(height: 12),
@@ -935,7 +1059,9 @@ class _WeekNavigationWrapper extends StatelessWidget {
           // Match calendar structure: 32px + 5 columns
           Row(
             children: [
-              const SizedBox(width: 16), // Adjust for padding + match 32px time column
+              const SizedBox(
+                width: 16,
+              ), // Adjust for padding + match 32px time column
               const Expanded(child: SizedBox.shrink()), // Mon
               const Expanded(child: SizedBox.shrink()), // Tue
               Expanded(
@@ -1017,7 +1143,8 @@ class _SwipeableCalendar extends StatefulWidget {
   State<_SwipeableCalendar> createState() => _SwipeableCalendarState();
 }
 
-class _SwipeableCalendarState extends State<_SwipeableCalendar> with SingleTickerProviderStateMixin {
+class _SwipeableCalendarState extends State<_SwipeableCalendar>
+    with SingleTickerProviderStateMixin {
   double _dragOffset = 0.0;
   late AnimationController _animationController;
   late Animation<double> _animation;
@@ -1030,20 +1157,26 @@ class _SwipeableCalendarState extends State<_SwipeableCalendar> with SingleTicke
       vsync: this,
       duration: const Duration(milliseconds: 250),
     );
-    _animation = Tween<double>(begin: 0, end: 0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-    )..addListener(() {
-        setState(() {
-          _dragOffset = _animation.value;
-        });
-      })..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          setState(() {
-            _isAnimating = false;
-            _dragOffset = 0.0;
+    _animation =
+        Tween<double>(begin: 0, end: 0).animate(
+            CurvedAnimation(
+              parent: _animationController,
+              curve: Curves.easeOutCubic,
+            ),
+          )
+          ..addListener(() {
+            setState(() {
+              _dragOffset = _animation.value;
+            });
+          })
+          ..addStatusListener((status) {
+            if (status == AnimationStatus.completed) {
+              setState(() {
+                _isAnimating = false;
+                _dragOffset = 0.0;
+              });
+            }
           });
-        }
-      });
   }
 
   @override
@@ -1058,7 +1191,10 @@ class _SwipeableCalendarState extends State<_SwipeableCalendar> with SingleTicke
       _dragOffset += details.delta.dx;
       // Limit drag to screen width
       final screenWidth = MediaQuery.of(context).size.width;
-      _dragOffset = _dragOffset.clamp(-screenWidth.toDouble(), screenWidth.toDouble());
+      _dragOffset = _dragOffset.clamp(
+        -screenWidth.toDouble(),
+        screenWidth.toDouble(),
+      );
     });
   }
 
@@ -1075,31 +1211,39 @@ class _SwipeableCalendarState extends State<_SwipeableCalendar> with SingleTicke
       final isSwipingRight = _dragOffset > 0;
       final targetOffset = _dragOffset > 0 ? screenWidth : -screenWidth;
 
-      _animation = Tween<double>(
-        begin: _dragOffset,
-        end: targetOffset.toDouble(),
-      ).animate(
-        CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-      );
+      _animation =
+          Tween<double>(
+            begin: _dragOffset,
+            end: targetOffset.toDouble(),
+          ).animate(
+            CurvedAnimation(
+              parent: _animationController,
+              curve: Curves.easeOutCubic,
+            ),
+          );
 
       _animationController.forward(from: 0).then((_) {
         // Update the week
         if (isSwipingRight) {
           // Swiped left-to-right → go to previous week
-          widget.onWeekChanged(widget.weekStartDate.subtract(const Duration(days: 7)));
+          widget.onWeekChanged(
+            widget.weekStartDate.subtract(const Duration(days: 7)),
+          );
         } else {
           // Swiped right-to-left → go to next week
-          widget.onWeekChanged(widget.weekStartDate.add(const Duration(days: 7)));
+          widget.onWeekChanged(
+            widget.weekStartDate.add(const Duration(days: 7)),
+          );
         }
       });
     } else {
       // Snap back to current week
       _isAnimating = true;
-      _animation = Tween<double>(
-        begin: _dragOffset,
-        end: 0,
-      ).animate(
-        CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
+      _animation = Tween<double>(begin: _dragOffset, end: 0).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: Curves.easeOutCubic,
+        ),
       );
       _animationController.forward(from: 0);
     }

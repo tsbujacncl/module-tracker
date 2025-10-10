@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -13,6 +12,7 @@ import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/screens/module/module_form_screen.dart';
 import 'package:module_tracker/widgets/hover_scale_widget.dart';
 import 'package:module_tracker/widgets/module_selection_dialog.dart';
+import 'package:module_tracker/widgets/gradient_header.dart';
 
 class AssignmentsScreen extends ConsumerStatefulWidget {
   const AssignmentsScreen({super.key});
@@ -36,6 +36,34 @@ class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen> {
     });
   }
 
+  /// Get responsive horizontal padding for smooth margin scaling
+  /// Mobile (<600px): 8px each side
+  /// Tablet (600-900px): smoothly 8px → 32px
+  /// Desktop (900-1200px): smoothly 32px → 60px
+  /// Large Desktop (>1200px): smoothly 60px → 100px
+  double _getHorizontalPadding(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+
+    if (width < 600) {
+      return 8.0;
+    } else if (width < 900) {
+      // Smooth interpolation from 8 to 32 between 600-900px
+      final progress = (width - 600) / 300; // 0.0 to 1.0
+      return 8.0 + (24.0 * progress); // 8 + 24 = 32
+    } else if (width < 1200) {
+      // Smooth interpolation from 32 to 60 between 900-1200px
+      final progress = (width - 900) / 300; // 0.0 to 1.0
+      return 32.0 + (28.0 * progress); // 32 + 28 = 60
+    } else {
+      // Smooth interpolation from 60 to 100 for screens >1200px
+      final progress = ((width - 1200) / 400).clamp(
+        0.0,
+        1.0,
+      ); // Capped at 1600px
+      return 60.0 + (40.0 * progress); // 60 + 40 = 100
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentSemester = ref.watch(currentSemesterProvider);
@@ -46,24 +74,11 @@ class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen> {
     final modulesAsync = selectedSemesterId != null
         ? ref.watch(modulesForSemesterProvider(selectedSemesterId))
         : ref.watch(currentSemesterModulesProvider);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final crossAxisCount = screenWidth < 900 ? 1 : 2;
+    final horizontalPadding = _getHorizontalPadding(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: ShaderMask(
-          shaderCallback: (bounds) => const LinearGradient(
-            colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4), Color(0xFF10B981)],
-          ).createShader(bounds),
-          child: Text(
-            'Assignments',
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-        ),
+        title: const GradientHeader(title: 'Assignments', fontSize: 28),
       ),
       body: modulesAsync.when(
         data: (modules) {
@@ -125,7 +140,10 @@ class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen> {
             ..sort((a, b) => a.code.compareTo(b.code));
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: 16,
+            ),
             child: Column(
               children: [
                 // Semester Overview Card
@@ -135,27 +153,19 @@ class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen> {
                     onSemesterChanged: _onSemesterChanged,
                   ),
                 const SizedBox(height: 16),
-                // Module boxes
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  children: sortedModules.map((module) {
-                    return SizedBox(
-                      width: crossAxisCount == 1
-                          ? double.infinity
-                          : (screenWidth - 48) / 2, // Account for padding and spacing
-                      child: _ModuleBox(module: module),
-                    );
-                  }).toList(),
-                ),
+                // Module boxes (vertical stack)
+                ...sortedModules.map((module) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _ModuleBox(module: module),
+                  );
+                }),
               ],
             ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Text('Error: $error'),
-        ),
+        error: (error, stack) => Center(child: Text('Error: $error')),
       ),
     );
   }
@@ -190,7 +200,9 @@ class _SemesterOverviewCard extends ConsumerWidget {
     return allSemestersAsync.when(
       data: (allSemesters) {
         // Find the selected semester
-        final semester = allSemesters.where((s) => s.id == semesterId).firstOrNull;
+        final semester = allSemesters
+            .where((s) => s.id == semesterId)
+            .firstOrNull;
         if (semester == null) return const SizedBox.shrink();
 
         return Container(
@@ -229,7 +241,8 @@ class _SemesterOverviewCard extends ConsumerWidget {
                   // Dropdown button
                   allSemestersAsync.when(
                     data: (allSemesters) {
-                      if (allSemesters.length <= 1) return const SizedBox.shrink();
+                      if (allSemesters.length <= 1)
+                        return const SizedBox.shrink();
 
                       return PopupMenuButton<String>(
                         icon: const Icon(Icons.arrow_drop_down, size: 24),
@@ -254,7 +267,9 @@ class _SemesterOverviewCard extends ConsumerWidget {
                                       s.name,
                                       style: GoogleFonts.inter(
                                         fontSize: 14,
-                                        fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
+                                        fontWeight: isCurrent
+                                            ? FontWeight.w600
+                                            : FontWeight.w400,
                                         color: s.isArchived
                                             ? const Color(0xFF94A3B8)
                                             : const Color(0xFF0F172A),
@@ -263,7 +278,10 @@ class _SemesterOverviewCard extends ConsumerWidget {
                                   ),
                                   if (isCurrent)
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFF8B5CF6),
                                         borderRadius: BorderRadius.circular(4),
@@ -321,8 +339,8 @@ class _SemesterOverviewCard extends ConsumerWidget {
                         _StatBox(
                           label: 'Credits',
                           value: accountedCredits == totalCredits
-                            ? '$totalCredits'
-                            : '$accountedCredits/$totalCredits',
+                              ? '$totalCredits'
+                              : '$accountedCredits/$totalCredits',
                           isIncomplete: accountedCredits != totalCredits,
                         ),
                         // Credits warning message
@@ -345,19 +363,19 @@ class _SemesterOverviewCard extends ConsumerWidget {
                   Expanded(
                     child: Consumer(
                       builder: (context, ref, _) {
-                        final overallGrade = ref.watch(currentSemesterOverallGradeProvider);
+                        final overallGrade = ref.watch(
+                          currentSemesterOverallGradeProvider,
+                        );
 
                         if (overallGrade == null) {
-                          return const _StatBox(
-                            label: 'Overall',
-                            value: '-',
-                          );
+                          return const _StatBox(label: 'Overall', value: '-');
                         }
 
                         final (percentage, classification) = overallGrade;
                         return _StatBox(
                           label: 'Overall',
-                          value: '${percentage.toStringAsFixed(1)}% (${classification.replaceAll(' Class', '').replaceAll('Upper Second ', '').replaceAll('Lower Second ', '')})',
+                          value:
+                              '${percentage.toStringAsFixed(1)}% (${classification.replaceAll(' Class', '').replaceAll('Upper Second ', '').replaceAll('Lower Second ', '')})',
                         );
                       },
                     ),
@@ -389,7 +407,8 @@ class _StatBox extends StatefulWidget {
   State<_StatBox> createState() => _StatBoxState();
 }
 
-class _StatBoxState extends State<_StatBox> with SingleTickerProviderStateMixin {
+class _StatBoxState extends State<_StatBox>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
 
@@ -483,7 +502,9 @@ class _StatBoxState extends State<_StatBox> with SingleTickerProviderStateMixin 
               style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
-                color: widget.isIncomplete ? const Color(0xFFEF4444) : const Color(0xFF8B5CF6),
+                color: widget.isIncomplete
+                    ? const Color(0xFFEF4444)
+                    : const Color(0xFF8B5CF6),
               ),
               textAlign: TextAlign.center,
             );
@@ -517,17 +538,26 @@ class _ModuleBox extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFFEF4444).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.3),
+                  ),
                 ),
                 child: const Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 20),
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Color(0xFFEF4444),
+                      size: 20,
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'This action cannot be undone. All tasks, assessments, and grades will be permanently deleted.',
-                        style: TextStyle(fontSize: 13, color: Color(0xFFEF4444)),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFFEF4444),
+                        ),
                       ),
                     ),
                   ],
@@ -590,10 +620,7 @@ class _ModuleBox extends ConsumerWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-          width: 2,
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -618,141 +645,172 @@ class _ModuleBox extends ConsumerWidget {
                     topRight: Radius.circular(14),
                   ),
                 ),
-                child: Column(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Module name row with menu
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                module.name,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF0F172A),
-                                ),
-                              ),
-                              if (module.code.isNotEmpty || module.credits > 0) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  [
-                                    if (module.code.isNotEmpty) module.code,
-                                    if (module.credits > 0) '(${module.credits} credits)',
-                                  ].join(' '),
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: const Color(0xFF64748B),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        // Three dots menu with hover animation
-                        Builder(
-                          builder: (context) => UniversalInteractiveWidget(
-                            style: InteractiveStyle.elastic,
-                            onTap: () {
-                              final RenderBox button = context.findRenderObject() as RenderBox;
-                              final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
-                              final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
-
-                              showMenu<String>(
-                                context: context,
-                                position: RelativeRect.fromLTRB(
-                                  buttonPosition.dx - 80, // Move left 80px
-                                  buttonPosition.dy + 30, // Move down 30px
-                                  overlay.size.width - buttonPosition.dx - button.size.width + 80,
-                                  overlay.size.height - buttonPosition.dy - button.size.height - 30,
-                                ),
-                                items: const [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.edit_outlined, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Edit Module'),
-                                      ],
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'share',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.share_rounded, size: 18, color: Color(0xFF0EA5E9)),
-                                        SizedBox(width: 8),
-                                        Text('Share Module'),
-                                      ],
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.delete_outline, size: 18, color: Color(0xFFEF4444)),
-                                        SizedBox(width: 8),
-                                        Text('Delete Module', style: TextStyle(color: Color(0xFFEF4444))),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ).then((value) {
-                                if (!context.mounted) return;
-
-                                if (value == 'share') {
-                                  // Show module selection dialog
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) => ModuleSelectionDialog(
-                                      preSelectedModule: module,
-                                      semesterId: module.semesterId,
-                                    ),
-                                  );
-                                } else if (value == 'edit') {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => ModuleFormScreen(
-                                        existingModule: module,
-                                        semesterId: module.semesterId,
-                                      ),
-                                    ),
-                                  );
-                                } else if (value == 'delete') {
-                                  _showDeleteDialog(context, ref, module);
-                                }
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              child: const Icon(
-                                Icons.more_vert,
-                                size: 20,
-                                color: Color(0xFF64748B),
-                              ),
+                    // Left side: Module info
+                    Expanded(
+                      flex: 5,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            module.name,
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF0F172A),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    // Progress Indicators
-                    if (assessments.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      _ModuleProgressIndicator(
-                        assessments: assessments,
-                        module: module,
+                          if (module.code.isNotEmpty || module.credits > 0) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              [
+                                if (module.code.isNotEmpty) module.code,
+                                if (module.credits > 0)
+                                  '(${module.credits} credits)',
+                              ].join(' '),
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 12),
+                    // Right side: Stats (will be added by _ModuleProgressIndicator)
+                    if (assessments.isNotEmpty)
+                      Expanded(
+                        flex: 6,
+                        child: _ModuleProgressIndicator(
+                          assessments: assessments,
+                          module: module,
+                          isCompact: true,
+                        ),
+                      ),
+                    // Three dots menu with hover animation
+                    Builder(
+                      builder: (context) => UniversalInteractiveWidget(
+                        style: InteractiveStyle.elastic,
+                        onTap: () {
+                          final RenderBox button =
+                              context.findRenderObject() as RenderBox;
+                          final RenderBox overlay =
+                              Navigator.of(
+                                    context,
+                                  ).overlay!.context.findRenderObject()
+                                  as RenderBox;
+                          final buttonPosition = button.localToGlobal(
+                            Offset.zero,
+                            ancestor: overlay,
+                          );
+
+                          showMenu<String>(
+                            context: context,
+                            position: RelativeRect.fromLTRB(
+                              buttonPosition.dx - 80, // Move left 80px
+                              buttonPosition.dy + 30, // Move down 30px
+                              overlay.size.width -
+                                  buttonPosition.dx -
+                                  button.size.width +
+                                  80,
+                              overlay.size.height -
+                                  buttonPosition.dy -
+                                  button.size.height -
+                                  30,
+                            ),
+                            items: const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Edit Module'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'share',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.share_rounded,
+                                      size: 18,
+                                      color: Color(0xFF0EA5E9),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text('Share Module'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline,
+                                      size: 18,
+                                      color: Color(0xFFEF4444),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Delete Module',
+                                      style: TextStyle(
+                                        color: Color(0xFFEF4444),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ).then((value) {
+                            if (!context.mounted) return;
+
+                            if (value == 'share') {
+                              // Show module selection dialog
+                              showDialog(
+                                context: context,
+                                builder: (context) => ModuleSelectionDialog(
+                                  preSelectedModule: module,
+                                  semesterId: module.semesterId,
+                                ),
+                              );
+                            } else if (value == 'edit') {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ModuleFormScreen(
+                                    existingModule: module,
+                                    semesterId: module.semesterId,
+                                  ),
+                                ),
+                              );
+                            } else if (value == 'delete') {
+                              _showDeleteDialog(context, ref, module);
+                            }
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          child: const Icon(
+                            Icons.more_vert,
+                            size: 20,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
+              // Divider between header and content
+              const SizedBox(height: 16),
               const Divider(height: 1, color: Color(0xFFE2E8F0)),
+              const SizedBox(height: 4),
               // Content
               if (assessments.isEmpty)
                 Padding(
@@ -779,17 +837,8 @@ class _ModuleBox extends ConsumerWidget {
                   ),
                 )
               else ...[
-                // Pie Chart Section
-                _PieChartSection(
-                  module: module,
-                  assessments: assessments,
-                ),
-                const Divider(height: 1, color: Color(0xFFE2E8F0)),
                 // Assessments List
-                _AssessmentsList(
-                  module: module,
-                  assessments: assessments,
-                ),
+                _AssessmentsList(module: module, assessments: assessments),
               ],
             ],
           );
@@ -820,17 +869,21 @@ class _ModuleBox extends ConsumerWidget {
 class _ModuleProgressIndicator extends ConsumerStatefulWidget {
   final List<Assessment> assessments;
   final Module module;
+  final bool isCompact;
 
   const _ModuleProgressIndicator({
     required this.assessments,
     required this.module,
+    this.isCompact = false,
   });
 
   @override
-  ConsumerState<_ModuleProgressIndicator> createState() => _ModuleProgressIndicatorState();
+  ConsumerState<_ModuleProgressIndicator> createState() =>
+      _ModuleProgressIndicatorState();
 }
 
-class _ModuleProgressIndicatorState extends ConsumerState<_ModuleProgressIndicator>
+class _ModuleProgressIndicatorState
+    extends ConsumerState<_ModuleProgressIndicator>
     with SingleTickerProviderStateMixin {
   late AnimationController _progressController;
   late Animation<double> _progressAnimation;
@@ -859,7 +912,9 @@ class _ModuleProgressIndicatorState extends ConsumerState<_ModuleProgressIndicat
   Widget build(BuildContext context) {
     final targetGrade = ref.watch(userPreferencesProvider).targetGrade;
     final moduleGrade = ref.watch(moduleGradeProvider(widget.module.id));
-    final completedCount = widget.assessments.where((a) => a.markEarned != null).length;
+    final completedCount = widget.assessments
+        .where((a) => a.markEarned != null)
+        .length;
     final totalCount = widget.assessments.length;
 
     // Calculate current grade (weighted average of completed work)
@@ -879,13 +934,151 @@ class _ModuleProgressIndicatorState extends ConsumerState<_ModuleProgressIndicat
       return sum;
     });
 
-    // Calculate max possible grade (current + remaining if get 100%)
-    final maxGrade = currentGrade + gradeAvailable;
-
     // Calculate lost/unreachable percentage
-    final totalWeight = widget.assessments.fold<double>(0.0, (sum, a) => sum + a.weighting);
+    final totalWeight = widget.assessments.fold<double>(
+      0.0,
+      (sum, a) => sum + a.weighting,
+    );
     final lostPercentage = 100.0 - totalWeight;
 
+    // Compact mode for side-by-side layout
+    if (widget.isCompact && moduleGrade != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Line 1: Current → Projected + completion
+          Row(
+            children: [
+              Text(
+                'Current: ',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+              Text(
+                '${moduleGrade.currentGrade.toStringAsFixed(1)}%',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              Text(
+                ' → ',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: const Color(0xFF94A3B8),
+                ),
+              ),
+              Text(
+                '${moduleGrade.projectedGrade.toStringAsFixed(1)}%',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '$completedCount/$totalCount',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Line 2: Progress bar + Target
+          AnimatedBuilder(
+            animation: _progressAnimation,
+            builder: (context, child) {
+              final animatedCurrentGrade =
+                  currentGrade * _progressAnimation.value;
+              final animatedGradeAvailable =
+                  gradeAvailable * _progressAnimation.value;
+              final animatedLostPercentage =
+                  lostPercentage * _progressAnimation.value;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 16,
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Row(
+                            children: [
+                              if (animatedCurrentGrade > 0)
+                                Expanded(
+                                  flex: (animatedCurrentGrade * 100)
+                                      .toInt()
+                                      .clamp(1, 10000),
+                                  child: Container(
+                                    color: const Color(0xFF10B981),
+                                  ),
+                                ),
+                              if (animatedGradeAvailable > 0)
+                                Expanded(
+                                  flex: (animatedGradeAvailable * 100)
+                                      .toInt()
+                                      .clamp(1, 10000),
+                                  child: Container(
+                                    color: const Color(
+                                      0xFF10B981,
+                                    ).withOpacity(0.3),
+                                  ),
+                                ),
+                              if (animatedLostPercentage > 0 ||
+                                  _progressAnimation.value < 1.0)
+                                Expanded(
+                                  flex:
+                                      (animatedLostPercentage * 100)
+                                          .toInt()
+                                          .clamp(1, 10000) +
+                                      ((currentGrade +
+                                                  gradeAvailable +
+                                                  lostPercentage -
+                                                  animatedCurrentGrade -
+                                                  animatedGradeAvailable -
+                                                  animatedLostPercentage) *
+                                              100)
+                                          .toInt()
+                                          .clamp(0, 10000),
+                                  child: Container(
+                                    color: const Color(0xFFE2E8F0),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Target: ${targetGrade.toStringAsFixed(0)}%',
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      );
+    }
+
+    // Full mode (original layout)
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -938,9 +1131,12 @@ class _ModuleProgressIndicatorState extends ConsumerState<_ModuleProgressIndicat
         AnimatedBuilder(
           animation: _progressAnimation,
           builder: (context, child) {
-            final animatedCurrentGrade = currentGrade * _progressAnimation.value;
-            final animatedGradeAvailable = gradeAvailable * _progressAnimation.value;
-            final animatedLostPercentage = lostPercentage * _progressAnimation.value;
+            final animatedCurrentGrade =
+                currentGrade * _progressAnimation.value;
+            final animatedGradeAvailable =
+                gradeAvailable * _progressAnimation.value;
+            final animatedLostPercentage =
+                lostPercentage * _progressAnimation.value;
 
             return LayoutBuilder(
               builder: (context, constraints) {
@@ -956,7 +1152,9 @@ class _ModuleProgressIndicatorState extends ConsumerState<_ModuleProgressIndicat
                             // Current grade (green)
                             if (animatedCurrentGrade > 0)
                               Expanded(
-                                flex: (animatedCurrentGrade * 100).toInt().clamp(1, 10000),
+                                flex: (animatedCurrentGrade * 100)
+                                    .toInt()
+                                    .clamp(1, 10000),
                                 child: Container(
                                   color: const Color(0xFF10B981),
                                 ),
@@ -964,16 +1162,32 @@ class _ModuleProgressIndicatorState extends ConsumerState<_ModuleProgressIndicat
                             // Max potential (light green)
                             if (animatedGradeAvailable > 0)
                               Expanded(
-                                flex: (animatedGradeAvailable * 100).toInt().clamp(1, 10000),
+                                flex: (animatedGradeAvailable * 100)
+                                    .toInt()
+                                    .clamp(1, 10000),
                                 child: Container(
-                                  color: const Color(0xFF10B981).withOpacity(0.3),
+                                  color: const Color(
+                                    0xFF10B981,
+                                  ).withOpacity(0.3),
                                 ),
                               ),
                             // Lost/Unreachable (light grey)
-                            if (animatedLostPercentage > 0 || _progressAnimation.value < 1.0)
+                            if (animatedLostPercentage > 0 ||
+                                _progressAnimation.value < 1.0)
                               Expanded(
-                                flex: (animatedLostPercentage * 100).toInt().clamp(1, 10000) +
-                                    ((currentGrade + gradeAvailable + lostPercentage - animatedCurrentGrade - animatedGradeAvailable - animatedLostPercentage) * 100).toInt().clamp(0, 10000),
+                                flex:
+                                    (animatedLostPercentage * 100)
+                                        .toInt()
+                                        .clamp(1, 10000) +
+                                    ((currentGrade +
+                                                gradeAvailable +
+                                                lostPercentage -
+                                                animatedCurrentGrade -
+                                                animatedGradeAvailable -
+                                                animatedLostPercentage) *
+                                            100)
+                                        .toInt()
+                                        .clamp(0, 10000),
                                 child: Container(
                                   color: const Color(0xFFE2E8F0),
                                 ),
@@ -981,55 +1195,58 @@ class _ModuleProgressIndicatorState extends ConsumerState<_ModuleProgressIndicat
                           ],
                         ),
                       ),
-                  // Pass mark line at 40% with tooltip
-                  Positioned(
-                    left: constraints.maxWidth * 0.4,
-                    top: 0,
-                    bottom: 0,
-                    child: Tooltip(
-                      message: 'Pass Mark (40%)',
-                      preferBelow: false,
-                      child: GestureDetector(
-                        onTap: () {
-                          // Show snackbar on mobile tap
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Pass Mark (40%)'),
-                              duration: Duration(seconds: 1),
+                      // Pass mark line at 40% with tooltip
+                      Positioned(
+                        left: constraints.maxWidth * 0.4,
+                        top: 0,
+                        bottom: 0,
+                        child: Tooltip(
+                          message: 'Pass Mark (40%)',
+                          preferBelow: false,
+                          child: GestureDetector(
+                            onTap: () {
+                              // Show snackbar on mobile tap
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Pass Mark (40%)'),
+                                  duration: Duration(seconds: 1),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              width: 2,
+                              color: const Color(0xFFEF4444),
                             ),
-                          );
-                        },
-                        child: Container(
-                          width: 2,
-                          color: const Color(0xFFEF4444),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  // Target grade line with tooltip
-                  Positioned(
-                    left: constraints.maxWidth * (targetGrade / 100),
-                    top: 0,
-                    bottom: 0,
-                    child: Tooltip(
-                      message: 'Target (${targetGrade.toStringAsFixed(0)}%)',
-                      preferBelow: false,
-                      child: GestureDetector(
-                        onTap: () {
-                          // Show snackbar on mobile tap
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Target (${targetGrade.toStringAsFixed(0)}%)'),
-                              duration: const Duration(seconds: 1),
+                      // Target grade line with tooltip
+                      Positioned(
+                        left: constraints.maxWidth * (targetGrade / 100),
+                        top: 0,
+                        bottom: 0,
+                        child: Tooltip(
+                          message:
+                              'Target (${targetGrade.toStringAsFixed(0)}%)',
+                          preferBelow: false,
+                          child: GestureDetector(
+                            onTap: () {
+                              // Show snackbar on mobile tap
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Target (${targetGrade.toStringAsFixed(0)}%)',
+                                  ),
+                                  duration: const Duration(seconds: 1),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              width: 2,
+                              color: const Color(0xFF0EA5E9),
                             ),
-                          );
-                        },
-                        child: Container(
-                          width: 2,
-                          color: const Color(0xFF0EA5E9),
+                          ),
                         ),
-                      ),
-                    ),
                       ),
                     ],
                   ),
@@ -1038,39 +1255,33 @@ class _ModuleProgressIndicatorState extends ConsumerState<_ModuleProgressIndicat
             );
           },
         ),
-        const SizedBox(height: 12),
-        // Info boxes
+        const SizedBox(height: 8),
+        // Completion and Target info
         Row(
           children: [
-            Expanded(
-              child: _InfoBox(
-                label: 'Completed',
-                value: '$completedCount/$totalCount',
+            Text(
+              '$completedCount/$totalCount complete',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
                 color: const Color(0xFF64748B),
               ),
             ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: _InfoBox(
-                label: 'Progress',
-                value: '${currentGrade.toStringAsFixed(0)}%',
-                color: const Color(0xFF10B981),
+            const SizedBox(width: 12),
+            Text(
+              '•',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: const Color(0xFF94A3B8),
               ),
             ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: _InfoBox(
-                label: 'Target',
-                value: '${targetGrade.toStringAsFixed(0)}%',
-                color: const Color(0xFF0EA5E9),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: _InfoBox(
-                label: 'Maximum',
-                value: '${maxGrade.toStringAsFixed(0)}%',
-                color: const Color(0xFF8B5CF6),
+            const SizedBox(width: 12),
+            Text(
+              'Target: ${targetGrade.toStringAsFixed(0)}%',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF64748B),
               ),
             ),
           ],
@@ -1080,417 +1291,29 @@ class _ModuleProgressIndicatorState extends ConsumerState<_ModuleProgressIndicat
   }
 }
 
-class _InfoBox extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-
-  const _InfoBox({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  IconData _getIcon() {
-    switch (label) {
-      case 'Completed':
-        return Icons.task_alt;
-      case 'Progress':
-        return Icons.show_chart;
-      case 'Target':
-        return Icons.flag_outlined;
-      case 'Maximum':
-        return Icons.stars_outlined;
-      default:
-        return Icons.info_outline;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                _getIcon(),
-                size: 16,
-                color: color,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF64748B),
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PieChartSection extends StatefulWidget {
-  final Module module;
-  final List<Assessment> assessments;
-
-  const _PieChartSection({
-    required this.module,
-    required this.assessments,
-  });
-
-  @override
-  State<_PieChartSection> createState() => _PieChartSectionState();
-}
-
-class _PieChartSectionState extends State<_PieChartSection> with SingleTickerProviderStateMixin {
-  int? _selectedIndex;
-  late AnimationController _animationController;
-  late Animation<double> _radiusAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-    _radiusAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  List<Color> _generateColors(int count) {
-    final colors = [
-      const Color(0xFF3B82F6), // Blue
-      const Color(0xFFF59E0B), // Amber
-      const Color(0xFF10B981), // Green
-      const Color(0xFFEF4444), // Red
-      const Color(0xFF8B5CF6), // Purple
-      const Color(0xFFEC4899), // Pink
-      const Color(0xFF06B6D4), // Cyan
-      const Color(0xFFF97316), // Orange
-    ];
-
-    if (count <= colors.length) {
-      return colors.sublist(0, count);
-    }
-
-    return List.generate(count, (i) => colors[i % colors.length]);
-  }
-
-  void _handleTapDown(TapDownDetails details, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final tapPosition = details.localPosition;
-
-    // Calculate angle of tap
-    final dx = tapPosition.dx - center.dx;
-    final dy = tapPosition.dy - center.dy;
-    final distance = math.sqrt(dx * dx + dy * dy);
-    final radius = math.min(size.width, size.height) / 2 * 0.85;
-
-    // Check if tap is within pie chart
-    if (distance > radius * 1.15) {
-      // Tapped outside, clear selection
-      _clearSelection();
-      return;
-    }
-
-    double angle = math.atan2(dy, dx);
-    if (angle < 0) angle += 2 * math.pi;
-
-    // Adjust for starting at top
-    angle = (angle + math.pi / 2) % (2 * math.pi);
-
-    // Find which slice was tapped
-    double currentAngle = 0;
-    final totalWeighting = widget.assessments.fold<double>(0, (sum, a) => sum + a.weighting);
-    final unaccountedPercentage = math.max(0.0, 100.0 - totalWeighting);
-
-    for (int i = 0; i < widget.assessments.length; i++) {
-      final assessment = widget.assessments[i];
-      final sweepAngle = (assessment.weighting / 100) * 2 * math.pi;
-
-      if (angle >= currentAngle && angle < currentAngle + sweepAngle) {
-        setState(() {
-          _selectedIndex = i;
-        });
-        _animationController.forward();
-        return;
-      }
-
-      currentAngle += sweepAngle;
-    }
-
-    // Check unaccounted slice
-    if (unaccountedPercentage > 0) {
-      final sweepAngle = (unaccountedPercentage / 100) * 2 * math.pi;
-      if (angle >= currentAngle && angle < currentAngle + sweepAngle) {
-        // Tapped on unaccounted, clear selection
-        _clearSelection();
-      }
-    }
-  }
-
-  void _clearSelection() {
-    if (_selectedIndex != null) {
-      setState(() {
-        _selectedIndex = null;
-      });
-      _animationController.reverse();
-    }
-  }
-
-  void _handleHover(PointerEvent event, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final hoverPosition = event.localPosition;
-
-    // Calculate angle of hover
-    final dx = hoverPosition.dx - center.dx;
-    final dy = hoverPosition.dy - center.dy;
-    final distance = math.sqrt(dx * dx + dy * dy);
-    final radius = math.min(size.width, size.height) / 2 * 0.85;
-
-    // Check if hover is within pie chart
-    if (distance > radius * 1.15) {
-      _clearSelection();
-      return;
-    }
-
-    double angle = math.atan2(dy, dx);
-    if (angle < 0) angle += 2 * math.pi;
-
-    // Adjust for starting at top
-    angle = (angle + math.pi / 2) % (2 * math.pi);
-
-    // Find which slice is being hovered
-    double currentAngle = 0;
-
-    for (int i = 0; i < widget.assessments.length; i++) {
-      final assessment = widget.assessments[i];
-      final sweepAngle = (assessment.weighting / 100) * 2 * math.pi;
-
-      if (angle >= currentAngle && angle < currentAngle + sweepAngle) {
-        if (_selectedIndex != i) {
-          setState(() {
-            _selectedIndex = i;
-          });
-          _animationController.forward();
-        }
-        return;
-      }
-
-      currentAngle += sweepAngle;
-    }
-
-    // Hovering over unaccounted or nothing
-    _clearSelection();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final totalWeighting = widget.assessments.fold<double>(0, (sum, a) => sum + a.weighting);
-    final unaccountedPercentage = math.max(0.0, 100.0 - totalWeighting);
-    final colors = _generateColors(widget.assessments.length);
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Credit Breakdown',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Pie chart and legend side by side
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Pie chart on the left with tooltip overlay
-              SizedBox(
-                width: 120,
-                height: 120,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    MouseRegion(
-                      onHover: (event) => _handleHover(event, const Size(120, 120)),
-                      onExit: (_) => _clearSelection(),
-                      child: GestureDetector(
-                        onTapDown: (details) => _handleTapDown(details, const Size(120, 120)),
-                        onTapUp: (_) => _clearSelection(),
-                        onTapCancel: () => _clearSelection(),
-                        child: AnimatedBuilder(
-                          animation: _radiusAnimation,
-                          builder: (context, child) {
-                            return CustomPaint(
-                              painter: _PieChartPainter(
-                                assessments: widget.assessments,
-                                colors: colors,
-                                unaccountedPercentage: unaccountedPercentage,
-                                selectedIndex: _selectedIndex,
-                                radiusMultiplier: _radiusAnimation.value,
-                              ),
-                              child: const SizedBox.expand(),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 20),
-              // Legend on the right
-              Expanded(
-                child: Column(
-                  children: [
-                    ...widget.assessments.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final assessment = entry.value;
-                      final typeString = assessment.type.toString().split('.').last[0].toUpperCase() +
-                          assessment.type.toString().split('.').last.substring(1);
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Tooltip(
-                          message: typeString,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 12,
-                                height: 12,
-                                margin: const EdgeInsets.only(top: 2),
-                                decoration: BoxDecoration(
-                                  color: colors[index],
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  assessment.name,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF0F172A),
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                    if (unaccountedPercentage > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 12,
-                              height: 12,
-                              margin: const EdgeInsets.only(top: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[300],
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Unaccounted',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _AssessmentsList extends ConsumerWidget {
   final Module module;
   final List<Assessment> assessments;
 
-  const _AssessmentsList({
-    required this.module,
-    required this.assessments,
-  });
+  const _AssessmentsList({required this.module, required this.assessments});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Sort assessments by due date (upcoming first, then completed)
-    final sortedAssessments = [...assessments]..sort((a, b) {
-      if (a.dueDate == null && b.dueDate == null) return 0;
-      if (a.dueDate == null) return 1; // TBC items go to end
-      if (b.dueDate == null) return -1;
-      return a.dueDate!.compareTo(b.dueDate!);
-    });
+    final sortedAssessments = [...assessments]
+      ..sort((a, b) {
+        if (a.dueDate == null && b.dueDate == null) return 0;
+        if (a.dueDate == null) return 1; // TBC items go to end
+        if (b.dueDate == null) return -1;
+        return a.dueDate!.compareTo(b.dueDate!);
+      });
 
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: sortedAssessments.map((assessment) {
-          return _AssessmentCard(
-            assessment: assessment,
-            module: module,
-          );
+          return _AssessmentCard(assessment: assessment, module: module);
         }).toList(),
       ),
     );
@@ -1501,17 +1324,16 @@ class _AssessmentCard extends ConsumerStatefulWidget {
   final Assessment assessment;
   final Module module;
 
-  const _AssessmentCard({
-    required this.assessment,
-    required this.module,
-  });
+  const _AssessmentCard({required this.assessment, required this.module});
 
   @override
   ConsumerState<_AssessmentCard> createState() => _AssessmentCardState();
 }
 
-class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerProviderStateMixin {
+class _AssessmentCardState extends ConsumerState<_AssessmentCard>
+    with TickerProviderStateMixin {
   bool _isEditingDescription = false;
+  bool _isDescriptionExpanded = false;
   bool _hasValidationError = false;
   late TextEditingController _gradeController;
   late TextEditingController _descriptionController;
@@ -1533,13 +1355,16 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
       duration: const Duration(milliseconds: 600),
       vsync: this,
     );
-    _successFlashAnimation = ColorTween(
-      begin: Colors.white,
-      end: const Color(0xFF10B981).withOpacity(0.2),
-    ).animate(CurvedAnimation(
-      parent: _successFlashController,
-      curve: Curves.easeInOut,
-    ));
+    _successFlashAnimation =
+        ColorTween(
+          begin: Colors.white,
+          end: const Color(0xFF10B981).withOpacity(0.2),
+        ).animate(
+          CurvedAnimation(
+            parent: _successFlashController,
+            curve: Curves.easeInOut,
+          ),
+        );
   }
 
   @override
@@ -1587,9 +1412,7 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
         widget.module.semesterId,
         widget.module.id,
         widget.assessment.id,
-        widget.assessment.copyWith(
-          markEarned: grade,
-        ).toFirestore(),
+        widget.assessment.copyWith(markEarned: grade).toFirestore(),
       );
 
       if (mounted) {
@@ -1612,7 +1435,9 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
         widget.module.semesterId,
         widget.module.id,
         widget.assessment.id,
-        widget.assessment.copyWith(description: description.isEmpty ? null : description).toFirestore(),
+        widget.assessment
+            .copyWith(description: description.isEmpty ? null : description)
+            .toFirestore(),
       );
 
       if (mounted) {
@@ -1629,7 +1454,8 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
 
     final repository = ref.read(firestoreRepositoryProvider);
 
-    await repository.updateAssessment(
+    // Optimistic update - save in background without waiting
+    repository.updateAssessment(
       user.uid,
       widget.module.semesterId,
       widget.module.id,
@@ -1686,7 +1512,6 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final typeBadgeColor = _getTypeBadgeColor();
@@ -1696,62 +1521,50 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
       animation: _successFlashAnimation,
       builder: (context, child) {
         return Container(
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
             color: _successFlashAnimation.value ?? Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: const Color(0xFFE2E8F0),
-              width: 1.5,
-            ),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
               ),
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header row: Name + Weighting + Type badge + Status badge + Grade
+                // Header row: Name + Weighting + Badges + Grade (all one line)
                 Row(
                   children: [
                     // Name and weighting
                     Expanded(
-                      child: RichText(
-                        text: TextSpan(
-                          children: [
-                            TextSpan(
-                              text: widget.assessment.name,
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF0F172A),
-                              ),
-                            ),
-                            TextSpan(
-                              text: ' • ${widget.assessment.weighting.toStringAsFixed(0)}%',
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF64748B),
-                              ),
-                            ),
-                          ],
+                      child: Text(
+                        '${widget.assessment.name} • ${widget.assessment.weighting.toStringAsFixed(0)}%',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF0F172A),
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    // Type badge
+                    const SizedBox(width: 6),
+                    // Type badge (smaller)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: typeBadgeColor.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(4),
                         border: Border.all(
                           color: typeBadgeColor.withOpacity(0.3),
                           width: 1,
@@ -1760,19 +1573,22 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
                       child: Text(
                         typeName,
                         style: GoogleFonts.inter(
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: typeBadgeColor,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    // Status badge (no emoji)
+                    const SizedBox(width: 4),
+                    // Status badge (smaller)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: _getStatusColor().withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(4),
                         border: Border.all(
                           color: _getStatusColor().withOpacity(0.3),
                           width: 1,
@@ -1781,7 +1597,7 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
                       child: Text(
                         _getStatusName(),
                         style: GoogleFonts.inter(
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: _getStatusColor(),
                         ),
@@ -1789,11 +1605,11 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
                     ),
                     // Grade display (right side)
                     if (widget.assessment.markEarned != null) ...[
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Text(
                         '${widget.assessment.markEarned!.toStringAsFixed(1)}%',
                         style: GoogleFonts.poppins(
-                          fontSize: 14,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF10B981),
                         ),
@@ -1801,164 +1617,180 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
                     ],
                   ],
                 ),
-                // Divider
-                const SizedBox(height: 12),
-                Divider(height: 1, color: Colors.grey[300]),
-                const SizedBox(height: 12),
-                // Description section with edit button
+                // Description toggle (collapsed by default)
+                if (widget.assessment.description?.isNotEmpty == true ||
+                    _isEditingDescription)
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _isDescriptionExpanded = !_isDescriptionExpanded;
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _isDescriptionExpanded
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                            size: 16,
+                            color: const Color(0xFF64748B),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _isDescriptionExpanded
+                                ? 'Hide Description'
+                                : 'Show Description',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                          if (!_isDescriptionExpanded &&
+                              !_isEditingDescription) ...[
+                            const SizedBox(width: 4),
+                            UniversalInteractiveWidget(
+                              style: InteractiveStyle.elastic,
+                              onTap: () {
+                                setState(() {
+                                  _isEditingDescription = true;
+                                  _isDescriptionExpanded = true;
+                                });
+                              },
+                              child: const Icon(
+                                Icons.edit_outlined,
+                                size: 14,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                // Description content (when expanded)
+                if (_isDescriptionExpanded) ...[
+                  const SizedBox(height: 4),
+                  if (_isEditingDescription) ...[
+                    TextField(
+                      controller: _descriptionController,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        hintText: 'Add a description...',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.all(10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                      ),
+                      style: GoogleFonts.inter(fontSize: 12),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _isEditingDescription = false;
+                              _descriptionController.text =
+                                  widget.assessment.description ?? '';
+                            });
+                          },
+                          child: Text(
+                            'Cancel',
+                            style: GoogleFonts.inter(fontSize: 12),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _saveDescription,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                          ),
+                          child: Text(
+                            'Save',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[200]!, width: 1),
+                      ),
+                      child: Text(
+                        widget.assessment.description?.isNotEmpty == true
+                            ? widget.assessment.description!
+                            : 'No description provided',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color:
+                              widget.assessment.description?.isNotEmpty == true
+                              ? const Color(0xFF64748B)
+                              : Colors.grey[400],
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+                // Status section (more compact)
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Text(
-                      'Description',
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
+                      'Status: ${_getStatusName()}',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: const Color(0xFF0F172A),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    UniversalInteractiveWidget(
-                      style: InteractiveStyle.elastic,
-                      onTap: () {
-                        setState(() {
-                          _isEditingDescription = !_isEditingDescription;
-                        });
-                      },
-                      child: Icon(
-                        _isEditingDescription ? Icons.close : Icons.edit_outlined,
-                        size: 16,
-                        color: const Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                // Description box or editor
-                if (_isEditingDescription) ...[
-                  TextField(
-                    controller: _descriptionController,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: 'Add a description...',
-                      isDense: true,
-                      contentPadding: const EdgeInsets.all(10),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                    ),
-                    style: GoogleFonts.inter(fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            _isEditingDescription = false;
-                            _descriptionController.text = widget.assessment.description ?? '';
-                          });
-                        },
-                        child: Text(
-                          'Cancel',
-                          style: GoogleFonts.inter(fontSize: 12),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: _saveDescription,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        ),
-                        child: Text(
-                          'Save',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ] else ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.grey[200]!,
-                        width: 1,
-                      ),
-                    ),
-                    child: Text(
-                      widget.assessment.description?.isNotEmpty == true
-                          ? widget.assessment.description!
-                          : 'No description provided',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: widget.assessment.description?.isNotEmpty == true
-                            ? const Color(0xFF64748B)
-                            : Colors.grey[400],
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-                // Divider
-                const SizedBox(height: 12),
-                Divider(height: 1, color: Colors.grey[300]),
-                const SizedBox(height: 12),
-                // Progress section
-                Text(
-                  'Progress',
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // 4 status buttons (all on one line)
-                Row(
-                  children: [
-                    Expanded(
-                      child: _StatusButton(
-                        label: 'Not Started',
-                        status: AssessmentStatus.notStarted,
-                        isSelected: widget.assessment.status == AssessmentStatus.notStarted,
-                        onTap: () => _updateStatus(AssessmentStatus.notStarted),
-                      ),
+                    const Spacer(),
+                    _StatusCircle(
+                      status: AssessmentStatus.notStarted,
+                      isSelected:
+                          widget.assessment.status ==
+                          AssessmentStatus.notStarted,
+                      onTap: () => _updateStatus(AssessmentStatus.notStarted),
                     ),
                     const SizedBox(width: 6),
-                    Expanded(
-                      child: _StatusButton(
-                        label: 'Working',
-                        status: AssessmentStatus.working,
-                        isSelected: widget.assessment.status == AssessmentStatus.working,
-                        onTap: () => _updateStatus(AssessmentStatus.working),
-                      ),
+                    _StatusCircle(
+                      status: AssessmentStatus.working,
+                      isSelected:
+                          widget.assessment.status == AssessmentStatus.working,
+                      onTap: () => _updateStatus(AssessmentStatus.working),
                     ),
                     const SizedBox(width: 6),
-                    Expanded(
-                      child: _StatusButton(
-                        label: 'Submitted',
-                        status: AssessmentStatus.submitted,
-                        isSelected: widget.assessment.status == AssessmentStatus.submitted,
-                        onTap: () => _updateStatus(AssessmentStatus.submitted),
-                      ),
+                    _StatusCircle(
+                      status: AssessmentStatus.submitted,
+                      isSelected:
+                          widget.assessment.status ==
+                          AssessmentStatus.submitted,
+                      onTap: () => _updateStatus(AssessmentStatus.submitted),
                     ),
                     const SizedBox(width: 6),
-                    Expanded(
-                      child: _StatusButton(
-                        label: 'Graded',
-                        status: AssessmentStatus.graded,
-                        isSelected: widget.assessment.status == AssessmentStatus.graded,
-                        onTap: () => _updateStatus(AssessmentStatus.graded),
-                      ),
+                    _StatusCircle(
+                      status: AssessmentStatus.graded,
+                      isSelected:
+                          widget.assessment.status == AssessmentStatus.graded,
+                      onTap: () => _updateStatus(AssessmentStatus.graded),
                     ),
                   ],
                 ),
@@ -1986,31 +1818,41 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
                                   width: 100,
                                   child: TextField(
                                     controller: _gradeController,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
                                     decoration: InputDecoration(
                                       hintText: '0-100',
                                       suffixText: '%',
                                       isDense: true,
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 10,
-                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 10,
+                                          ),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(6),
                                         borderSide: BorderSide(
-                                          color: _hasValidationError ? Colors.red : Colors.grey[300]!,
+                                          color: _hasValidationError
+                                              ? Colors.red
+                                              : Colors.grey[300]!,
                                         ),
                                       ),
                                       enabledBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(6),
                                         borderSide: BorderSide(
-                                          color: _hasValidationError ? Colors.red : Colors.grey[300]!,
+                                          color: _hasValidationError
+                                              ? Colors.red
+                                              : Colors.grey[300]!,
                                         ),
                                       ),
                                       focusedBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(6),
                                         borderSide: BorderSide(
-                                          color: _hasValidationError ? Colors.red : const Color(0xFF0EA5E9),
+                                          color: _hasValidationError
+                                              ? Colors.red
+                                              : const Color(0xFF0EA5E9),
                                           width: 2,
                                         ),
                                       ),
@@ -2051,14 +1893,12 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard> with TickerPro
   }
 }
 
-class _StatusButton extends StatelessWidget {
-  final String label;
+class _StatusCircle extends StatelessWidget {
   final AssessmentStatus status;
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _StatusButton({
-    required this.label,
+  const _StatusCircle({
     required this.status,
     required this.isSelected,
     required this.onTap,
@@ -2067,171 +1907,52 @@ class _StatusButton extends StatelessWidget {
   Color _getStatusColor() {
     switch (status) {
       case AssessmentStatus.notStarted:
-        return const Color(0xFFEF4444); // Red
+        return const Color(0xFFFECDD3); // Light red
       case AssessmentStatus.working:
-        return const Color(0xFFF59E0B); // Yellow/Amber
+        return const Color(0xFFFDE047); // Strong yellow
       case AssessmentStatus.submitted:
-        return const Color(0xFF3B82F6); // Blue
+        return const Color(0xFFBAE6FD); // Light blue
       case AssessmentStatus.graded:
-        return const Color(0xFF10B981); // Green
+        return const Color(0xFFBBF7D0); // Light green
+    }
+  }
+
+  Color _getStrongColor() {
+    switch (status) {
+      case AssessmentStatus.notStarted:
+        return const Color(0xFFF43F5E); // Strong red
+      case AssessmentStatus.working:
+        return const Color(0xFFEAB308); // Strong yellow
+      case AssessmentStatus.submitted:
+        return const Color(0xFF0EA5E9); // Strong blue
+      case AssessmentStatus.graded:
+        return const Color(0xFF22C55E); // Strong green
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _getStatusColor();
+    final bgColor = _getStatusColor();
+    final strongColor = _getStrongColor();
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(20),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        width: 28,
+        height: 28,
         decoration: BoxDecoration(
-          color: isSelected
-              ? statusColor
-              : statusColor.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(6),
+          color: bgColor,
+          shape: BoxShape.circle,
           border: Border.all(
-            color: statusColor.withOpacity(0.3),
-            width: 1,
+            color: isSelected ? strongColor : bgColor,
+            width: isSelected ? 2 : 1,
           ),
         ),
-        child: Center(
-          child: Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: isSelected ? Colors.white : statusColor,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
+        child: isSelected
+            ? Center(child: Icon(Icons.check, size: 16, color: strongColor))
+            : null,
       ),
     );
-  }
-}
-
-class _PieChartPainter extends CustomPainter {
-  final List<Assessment> assessments;
-  final List<Color> colors;
-  final double unaccountedPercentage;
-  final int? selectedIndex;
-  final double radiusMultiplier;
-
-  _PieChartPainter({
-    required this.assessments,
-    required this.colors,
-    required this.unaccountedPercentage,
-    this.selectedIndex,
-    this.radiusMultiplier = 1.0,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final baseRadius = math.min(size.width, size.height) / 2 * 0.85;
-
-    double startAngle = -math.pi / 2; // Start from top
-
-    // Draw each assessment slice
-    for (int i = 0; i < assessments.length; i++) {
-      final assessment = assessments[i];
-      final sweepAngle = (assessment.weighting / 100) * 2 * math.pi;
-
-      // Determine color and radius for this slice
-      final isSelected = selectedIndex == i;
-      Color sliceColor = colors[i];
-      double sliceRadius = baseRadius;
-
-      if (isSelected) {
-        // Lighten the color by mixing with white
-        sliceColor = Color.lerp(colors[i], Colors.white, 0.3)!;
-        // Increase radius by multiplier (1.0 to 1.15)
-        sliceRadius = baseRadius * radiusMultiplier;
-      }
-
-      final paint = Paint()
-        ..color = sliceColor
-        ..style = PaintingStyle.fill;
-
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: sliceRadius),
-        startAngle,
-        sweepAngle,
-        true,
-        paint,
-      );
-
-      startAngle += sweepAngle;
-    }
-
-    // Draw unaccounted slice if exists
-    if (unaccountedPercentage > 0) {
-      final sweepAngle = (unaccountedPercentage / 100) * 2 * math.pi;
-
-      final paint = Paint()
-        ..color = Colors.grey[300]!
-        ..style = PaintingStyle.fill;
-
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: baseRadius),
-        startAngle,
-        sweepAngle,
-        true,
-        paint,
-      );
-    }
-
-    // Draw white borders between slices
-    startAngle = -math.pi / 2;
-    final borderPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-
-    for (int i = 0; i < assessments.length; i++) {
-      final assessment = assessments[i];
-      final sweepAngle = (assessment.weighting / 100) * 2 * math.pi;
-      final isSelected = selectedIndex == i;
-      double sliceRadius = baseRadius;
-
-      if (isSelected) {
-        sliceRadius = baseRadius * radiusMultiplier;
-      }
-
-      // Draw border line at start of slice
-      final lineEnd = Offset(
-        center.dx + math.cos(startAngle) * sliceRadius,
-        center.dy + math.sin(startAngle) * sliceRadius,
-      );
-      canvas.drawLine(center, lineEnd, borderPaint);
-
-      startAngle += sweepAngle;
-    }
-
-    // Draw final border line
-    if (assessments.isNotEmpty) {
-      // Check if last slice is selected
-      final isLastSelected = selectedIndex == assessments.length - 1;
-      double sliceRadius = baseRadius;
-      if (isLastSelected) {
-        sliceRadius = baseRadius * radiusMultiplier;
-      }
-
-      final lineEnd = Offset(
-        center.dx + math.cos(startAngle) * sliceRadius,
-        center.dy + math.sin(startAngle) * sliceRadius,
-      );
-      canvas.drawLine(center, lineEnd, borderPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _PieChartPainter oldDelegate) {
-    return oldDelegate.selectedIndex != selectedIndex ||
-        oldDelegate.radiusMultiplier != radiusMultiplier;
   }
 }

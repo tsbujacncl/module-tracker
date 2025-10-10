@@ -219,7 +219,7 @@ class _WeeklyCompletionDialogState extends State<WeeklyCompletionDialog>
                           ),
                         ),
                         child: Text(
-                          widget.isBirthdayCelebration ? 'Continue!' : 'Awesome!',
+                          'Continue',
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

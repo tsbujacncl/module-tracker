@@ -14,6 +14,7 @@ import 'package:module_tracker/utils/date_picker_utils.dart';
 import 'package:module_tracker/screens/semester/semester_setup_screen.dart';
 import 'package:module_tracker/screens/assessments/assessments_screen.dart'
     show AssignmentsScreen;
+import 'package:module_tracker/widgets/gradient_header.dart';
 
 // Provider to get all unique custom task names from all modules
 final customTaskNamesProvider = FutureProvider<List<String>>((ref) async {
@@ -427,8 +428,9 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-            widget.existingModule != null ? 'Edit Module' : 'Create Module'),
+        title: GradientHeader(
+          title: widget.existingModule != null ? 'Edit Module' : 'Create Module',
+        ),
       ),
       body: Form(
         key: _formKey,

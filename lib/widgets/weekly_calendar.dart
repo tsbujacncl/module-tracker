@@ -479,7 +479,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                   fontWeight: FontWeight.w600,
                   color: isToday
                       ? const Color(0xFF0EA5E9)
-                      : (isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                      : (isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF0284C7)),
                 ),
               ),
               const SizedBox(height: 4),
@@ -587,7 +587,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final cardColor = Theme.of(context).cardTheme.color ?? (isDarkMode ? const Color(0xFF1E293B) : Colors.white);
     final headerColor = isDarkMode ? const Color(0xFF334155) : const Color(0xFFF0F9FF);
-    final legendColor = isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFFAFAFA);
+    final legendColor = isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFF0F9FF);
     final borderColor = isDarkMode ? const Color(0xFF334155) : const Color(0xFFE0F2FE);
 
     return LayoutBuilder(
@@ -659,11 +659,6 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
         });
         // Re-enable parent scroll
         ref.read(isDraggingCheckboxProvider.notifier).state = false;
-
-        // Check for weekly completion celebration after drag completes
-        if (context.mounted) {
-          await checkAndShowWeeklyCelebration(context, ref, widget.currentWeek);
-        }
       },
       onPanCancel: () {
         setState(() {
@@ -682,8 +677,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.05),
-              blurRadius: 10,
+              color: Colors.black.withValues(alpha: isDarkMode ? 0.2 : 0.1),
+              blurRadius: 12,
               offset: const Offset(0, 4),
             ),
           ],
@@ -880,8 +875,9 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                 totalHeight += pixelsPerHour * (hourMultipliers[h] ?? 1);
               }
 
-              return SizedBox(
+              return Container(
                 height: totalHeight,
+                color: headerColor,
                 child: Stack(
                   children: [
                     // Day columns - SWIPEABLE (with time column and right margin)
@@ -890,8 +886,10 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                       right: rightMargin,
                       top: 0,
                       bottom: 0,
-                      child: ClipRect(
-                        child: widget.isSwipeable
+                      child: Container(
+                        color: cardColor,
+                        child: ClipRect(
+                          child: widget.isSwipeable
                             ? OverflowBox(
                                 alignment: Alignment.centerLeft,
                                 minWidth: 0,
@@ -1479,6 +1477,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                       ),
                     ),
                     // Time labels on the left (flush left, no left margin)
+                    ),
                     Positioned(
                       left: 0,
                       top: 0,
@@ -1500,8 +1499,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                   fontSize: useFullTimeFormat ? 9 : 10,
                                   fontWeight: FontWeight.w500,
                                   color: isDarkMode
-                                      ? const Color(0xFF64748B)
-                                      : const Color(0xFF94A3B8),
+                                      ? const Color(0xFF94A3B8)
+                                      : const Color(0xFF64748B),
                                 ),
                               ),
                             ),
@@ -1687,8 +1686,8 @@ class _LegendItem extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 12,
-              height: 12,
+              width: 14,
+              height: 14,
               decoration: BoxDecoration(
                 color: color,
                 borderRadius: BorderRadius.circular(3),
@@ -1698,7 +1697,8 @@ class _LegendItem extends StatelessWidget {
             Text(
               label,
               style: GoogleFonts.inter(
-                fontSize: 11,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
                 color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
               ),
             ),

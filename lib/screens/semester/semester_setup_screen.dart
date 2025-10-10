@@ -7,6 +7,7 @@ import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/customization_provider.dart';
 import 'package:module_tracker/utils/date_utils.dart' as utils;
 import 'package:module_tracker/utils/date_picker_utils.dart';
+import 'package:module_tracker/widgets/gradient_header.dart';
 
 class SemesterSetupScreen extends ConsumerStatefulWidget {
   final Semester? semesterToEdit;
@@ -297,7 +298,9 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditMode ? 'Edit Semester' : 'Create Semester'),
+        title: GradientHeader(
+          title: _isEditMode ? 'Edit Semester' : 'Create Semester',
+        ),
       ),
       body: Form(
         key: _formKey,

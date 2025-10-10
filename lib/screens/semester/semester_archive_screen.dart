@@ -9,6 +9,7 @@ import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/screens/semester/semester_setup_screen.dart';
 import 'package:module_tracker/screens/assessments/assessments_screen.dart'
     show AssignmentsScreen;
+import 'package:module_tracker/widgets/gradient_header.dart';
 
 class SemesterArchiveScreen extends ConsumerStatefulWidget {
   const SemesterArchiveScreen({super.key});
@@ -125,19 +126,7 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: ShaderMask(
-          shaderCallback: (bounds) => const LinearGradient(
-            colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4), Color(0xFF10B981)],
-          ).createShader(bounds),
-          child: Text(
-            'Semesters',
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-        ),
+        title: const GradientHeader(title: 'Semesters'),
         actions: [
           // Year filter
           if (years.isNotEmpty)

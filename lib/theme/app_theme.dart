@@ -23,7 +23,7 @@ class AppTheme {
       ),
       useMaterial3: true,
       textTheme: GoogleFonts.interTextTheme(),
-      scaffoldBackgroundColor: const Color(0xFFF0F9FF),
+      scaffoldBackgroundColor: const Color(0xFFE0F2FE),
 
       // Card theme
       cardTheme: CardThemeData(
