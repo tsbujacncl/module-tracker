@@ -24,6 +24,11 @@ class DateUtils {
     return _getStartOfWeek(date).add(const Duration(days: 6));
   }
 
+  /// Get Saturday of the week for a given date
+  static DateTime getSaturday(DateTime date) {
+    return _getStartOfWeek(date).add(const Duration(days: 5));
+  }
+
   /// Get date for a specific week number in a semester
   static DateTime getDateForWeek(int weekNumber, DateTime semesterStart) {
     final startOfWeek = _getStartOfWeek(semesterStart);

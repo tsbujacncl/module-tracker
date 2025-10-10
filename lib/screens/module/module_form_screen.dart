@@ -11,6 +11,9 @@ import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/module_provider.dart';
 import 'package:module_tracker/utils/date_utils.dart' as utils;
 import 'package:module_tracker/utils/date_picker_utils.dart';
+import 'package:module_tracker/screens/semester/semester_setup_screen.dart';
+import 'package:module_tracker/screens/assessments/assessments_screen.dart'
+    show AssignmentsScreen;
 
 // Provider to get all unique custom task names from all modules
 final customTaskNamesProvider = FutureProvider<List<String>>((ref) async {
@@ -1640,6 +1643,52 @@ class _SemesterSelectionField extends ConsumerWidget {
                                   ),
                               ],
                             ),
+                          ),
+                          const SizedBox(width: 8),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert, size: 20),
+                            tooltip: 'Semester options',
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => SemesterSetupScreen(
+                                      semesterToEdit: semester,
+                                    ),
+                                  ),
+                                );
+                              } else if (value == 'assignments') {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const AssignmentsScreen(),
+                                  ),
+                                );
+                              }
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Edit Semester'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'assignments',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.assessment_outlined, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('View Assignments'),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

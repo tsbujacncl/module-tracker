@@ -247,44 +247,80 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               automaticallyImplyLeading: false,
               toolbarHeight: kToolbarHeight,
               flexibleSpace: SafeArea(
-                child: Stack(
-                  children: [
-                    // Main layout matching calendar structure
-                    Row(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Account for ListView padding to match calendar's available width
+                    final listViewPadding = screenWidth < 600 ? 8.0 : 10.0;
+                    final adjustedWidth = constraints.maxWidth - (listViewPadding * 2);
+
+                    // Same responsive breakpoints as calendar
+                    final bool isSmall = adjustedWidth < 400;
+                    final bool isLarge = adjustedWidth >= 500;
+
+                    final double marginSize;
+                    if (isSmall) {
+                      marginSize = 16.0;
+                    } else if (isLarge) {
+                      marginSize = 30.0;
+                    } else {
+                      marginSize = 20.0;
+                    }
+
+                    // Total left offset = ListView padding + time column width
+                    final totalLeftOffset = listViewPadding + marginSize;
+
+                    // Responsive title font size - larger on wider screens
+                    final double titleFontSize;
+                    if (screenWidth >= 1600) {
+                      titleFontSize = 40.0; // Extra large screens
+                    } else if (screenWidth >= 1200) {
+                      titleFontSize = 36.0; // Large desktop
+                    } else if (screenWidth >= 900) {
+                      titleFontSize = 32.0; // Medium desktop
+                    } else {
+                      titleFontSize = 28.0; // Small desktop/tablet landscape
+                    }
+
+                    return Stack(
                       children: [
-                        // Match calendar structure: 32px + 5 columns
-                        const SizedBox(width: 32),
-                        const Expanded(child: SizedBox.shrink()), // Mon
-                        const Expanded(child: SizedBox.shrink()), // Tue
-                        Expanded(
-                          child: Center(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: ShaderMask(
-                                shaderCallback: (bounds) => const LinearGradient(
-                                  colors: [
-                                    Color(0xFF0EA5E9),
-                                    Color(0xFF06B6D4),
-                                    Color(0xFF10B981),
-                                  ],
-                                ).createShader(bounds),
-                                child: Text(
-                                  'Module Tracker',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
+                        // Main layout matching calendar structure
+                        Row(
+                          children: [
+                            // Match calendar structure: ListView padding + time column
+                            SizedBox(width: totalLeftOffset),
+                            const Expanded(child: SizedBox.shrink()), // Mon
+                            const Expanded(child: SizedBox.shrink()), // Tue
+                            Expanded(
+                              child: Center(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: ShaderMask(
+                                    shaderCallback: (bounds) => const LinearGradient(
+                                      colors: [
+                                        Color(0xFF0EA5E9),
+                                        Color(0xFF06B6D4),
+                                        Color(0xFF10B981),
+                                      ],
+                                    ).createShader(bounds),
+                                    child: Text(
+                                      'Module Tracker',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: titleFontSize,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
+                                      maxLines: 1,
+                                    ),
                                   ),
-                                  maxLines: 1,
                                 ),
                               ),
-                            ),
-                          ),
-                        ), // Wed - centered
-                        const Expanded(child: SizedBox.shrink()), // Thu
-                        const Expanded(child: SizedBox.shrink()), // Fri
-                      ],
-                    ),
+                            ), // Wed - centered
+                            const Expanded(child: SizedBox.shrink()), // Thu
+                            const Expanded(child: SizedBox.shrink()), // Fri
+                            // Right margin to balance
+                            SizedBox(width: listViewPadding + marginSize),
+                          ],
+                        ),
                     // Logo on left with Elastic bounce (no movement)
                     Positioned(
                       left: 8,
@@ -333,6 +369,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ),
                   ],
+                );
+              },
                 ),
               ),
               actions: [

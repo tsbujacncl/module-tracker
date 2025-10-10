@@ -437,22 +437,22 @@ class _SemesterCard extends StatelessWidget {
                         ),
                         items: [
                           const PopupMenuItem(
-                            value: 'assignments',
-                            child: Row(
-                              children: [
-                                Icon(Icons.assessment_outlined, size: 18),
-                                SizedBox(width: 8),
-                                Text('View Assignments'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
                             value: 'edit',
                             child: Row(
                               children: [
                                 Icon(Icons.edit_outlined, size: 18),
                                 SizedBox(width: 8),
                                 Text('Edit Semester'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'assignments',
+                            child: Row(
+                              children: [
+                                Icon(Icons.assessment_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('View Assignments'),
                               ],
                             ),
                           ),
