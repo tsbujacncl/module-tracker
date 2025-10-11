@@ -78,7 +78,7 @@ class _AssignmentsScreenState extends ConsumerState<AssignmentsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const GradientHeader(title: 'Assignments', fontSize: 28),
+        title: const GradientHeader(title: 'Assignments'),
       ),
       body: modulesAsync.when(
         data: (modules) {

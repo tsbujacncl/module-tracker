@@ -231,33 +231,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       SizedBox(width: 3),
                       UniversalInteractiveWidget(
                         style: InteractiveStyle.elastic,
-                        color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const SemesterArchiveScreen(),
-                          ),
-                        ),
-                        child: Container(
-                          padding: EdgeInsets.all(6.5 * scaleFactor),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFFF59E0B,
-                            ).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(
-                              7 * scaleFactor,
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.archive_outlined,
-                            size: 20 * scaleFactor,
-                            color: const Color(0xFFF59E0B),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 3),
-                      UniversalInteractiveWidget(
-                        style: InteractiveStyle.elastic,
                         color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
                         onTap: () => Navigator.push(
                           context,
@@ -279,6 +252,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             Icons.assessment_outlined,
                             size: 20 * scaleFactor,
                             color: const Color(0xFF8B5CF6),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 3),
+                      UniversalInteractiveWidget(
+                        style: InteractiveStyle.elastic,
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SemesterArchiveScreen(),
+                          ),
+                        ),
+                        child: Container(
+                          padding: EdgeInsets.all(6.5 * scaleFactor),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFFF59E0B,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(
+                              7 * scaleFactor,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.archive_outlined,
+                            size: 20 * scaleFactor,
+                            color: const Color(0xFFF59E0B),
                           ),
                         ),
                       ),
@@ -568,32 +568,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 const SizedBox(width: 8),
                 ElasticBounceWidget(
                   backgroundColor: const Color(
-                    0xFF8B5CF6,
-                  ).withValues(alpha: 0.1),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const AssignmentsScreen(),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.assessment_outlined,
-                      size: 22,
-                      color: Color(0xFF8B5CF6),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElasticBounceWidget(
-                  backgroundColor: const Color(
                     0xFFF59E0B,
                   ).withValues(alpha: 0.1),
                   onTap: () {
@@ -614,6 +588,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       Icons.archive_outlined,
                       size: 22,
                       color: Color(0xFFF59E0B),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElasticBounceWidget(
+                  backgroundColor: const Color(
+                    0xFF8B5CF6,
+                  ).withValues(alpha: 0.1),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AssignmentsScreen(),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.assessment_outlined,
+                      size: 22,
+                      color: Color(0xFF8B5CF6),
                     ),
                   ),
                 ),

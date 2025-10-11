@@ -605,29 +605,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     size: 44 * scaleFactor,
                                   ),
                                   const SizedBox(width: 12),
-                                  // Account: 'Name' text
+                                  // Account: Name text
                                   Expanded(
-                                    child: RichText(
-                                      text: TextSpan(
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 17 * scaleFactor,
-                                          fontWeight: FontWeight.w700,
-                                          color: Theme.of(
-                                            context,
-                                          ).textTheme.bodyLarge?.color,
-                                        ),
-                                        children: [
-                                          const TextSpan(text: 'Account: '),
-                                          TextSpan(
-                                            text:
-                                                "'${userPreferences.userName ?? 'Set name'}'",
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 17 * scaleFactor,
-                                              fontWeight: FontWeight.w600,
-                                              color: const Color(0xFF0EA5E9),
-                                            ),
-                                          ),
-                                        ],
+                                    child: Text(
+                                      'Account: ${userPreferences.userName ?? 'Set name'}',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 18 * scaleFactor,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(
+                                          context,
+                                        ).textTheme.bodyLarge?.color,
                                       ),
                                     ),
                                   ),
