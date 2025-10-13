@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -26,7 +27,27 @@ enum AppThemeMode {
       case AppThemeMode.dark:
         return Icons.dark_mode;
       case AppThemeMode.system:
-        return Icons.brightness_auto;
+        return Icons.brightness_auto; // Default fallback
+    }
+  }
+
+  /// Get context-aware icon (for system theme, shows device-specific icon)
+  IconData getIconForContext(BuildContext context) {
+    switch (this) {
+      case AppThemeMode.light:
+        return Icons.light_mode;
+      case AppThemeMode.dark:
+        return Icons.dark_mode;
+      case AppThemeMode.system:
+        // Return device-specific icon for system theme
+        if (kIsWeb) {
+          return Icons.computer; // Web/Desktop browser
+        }
+        final isTablet = MediaQuery.of(context).size.shortestSide >= 600;
+        if (isTablet) {
+          return Icons.tablet_mac; // Tablet
+        }
+        return Icons.phone_android; // Phone
     }
   }
 

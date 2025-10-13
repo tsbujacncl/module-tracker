@@ -209,12 +209,19 @@ class _SemesterOverviewCard extends ConsumerWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF8B5CF6).withOpacity(0.1),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color(0xFF8B5CF6).withOpacity(0.2),
-              width: 1,
+              color: const Color(0xFFE2E8F0),
+              width: 2,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -308,77 +315,91 @@ class _SemesterOverviewCard extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 16),
-              // Stats row
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              // Stats rows (2 rows for better balance)
+              Column(
                 children: [
-                  Expanded(
-                    child: _StatBox(
-                      label: 'Semester',
-                      value: '${semesterAverage.toStringAsFixed(1)}%',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _StatBox(
-                      label: 'Total',
-                      value: '${semesterContribution.toStringAsFixed(1)}%',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _StatBox(
-                      label: 'Completion',
-                      value: '$completedCount/$totalCount',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        _StatBox(
-                          label: 'Credits',
-                          value: accountedCredits == totalCredits
-                              ? '$totalCredits'
-                              : '$accountedCredits/$totalCredits',
-                          isIncomplete: accountedCredits != totalCredits,
+                  // First row: Main grades
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _StatBox(
+                          label: 'Semester',
+                          value: '${semesterAverage.toStringAsFixed(1)}%',
                         ),
-                        // Credits warning message
-                        if (accountedCredits != totalCredits) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            '${totalCredits - accountedCredits} credits unaccounted for',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: const Color(0xFFEF4444),
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatBox(
+                          label: 'Total',
+                          value: '${semesterContribution.toStringAsFixed(1)}%',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Consumer(
+                          builder: (context, ref, _) {
+                            final overallGrade = ref.watch(
+                              currentSemesterOverallGradeProvider,
+                            );
+
+                            if (overallGrade == null) {
+                              return const _StatBox(label: 'Overall', value: '-');
+                            }
+
+                            final (percentage, classification) = overallGrade;
+                            return _StatBox(
+                              label: 'Overall',
+                              value:
+                                  '${percentage.toStringAsFixed(1)}% (${classification.replaceAll(' Class', '').replaceAll('Upper Second ', '').replaceAll('Lower Second ', '')})',
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Consumer(
-                      builder: (context, ref, _) {
-                        final overallGrade = ref.watch(
-                          currentSemesterOverallGradeProvider,
-                        );
-
-                        if (overallGrade == null) {
-                          return const _StatBox(label: 'Overall', value: '-');
-                        }
-
-                        final (percentage, classification) = overallGrade;
-                        return _StatBox(
-                          label: 'Overall',
-                          value:
-                              '${percentage.toStringAsFixed(1)}% (${classification.replaceAll(' Class', '').replaceAll('Upper Second ', '').replaceAll('Lower Second ', '')})',
-                        );
-                      },
-                    ),
+                  const SizedBox(height: 12),
+                  // Second row: Progress metrics
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _StatBox(
+                          label: 'Completion',
+                          value: '$completedCount/$totalCount',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            _StatBox(
+                              label: 'Credits',
+                              value: accountedCredits == totalCredits
+                                  ? '$totalCredits'
+                                  : '$accountedCredits/$totalCredits',
+                              isIncomplete: accountedCredits != totalCredits,
+                            ),
+                            // Credits warning message
+                            if (accountedCredits != totalCredits) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                '${totalCredits - accountedCredits} credits unaccounted for',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFFEF4444),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Empty space to balance layout
+                      const Expanded(child: SizedBox()),
+                    ],
                   ),
                 ],
               ),
@@ -1576,30 +1597,6 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard>
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: typeBadgeColor,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    // Status badge (smaller)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor().withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: _getStatusColor().withOpacity(0.3),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        _getStatusName(),
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: _getStatusColor(),
                         ),
                       ),
                     ),

@@ -22,6 +22,7 @@ class SemesterSetupScreen extends ConsumerStatefulWidget {
 class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _creditsController = TextEditingController();
   DateTime? _startDate;
   DateTime? _endDate;
   DateTime? _examPeriodStart;
@@ -29,6 +30,8 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
   DateTime? _readingWeekStart;
   DateTime? _readingWeekEnd;
   bool _isLoading = false;
+  bool _examPeriodExpanded = false;
+  bool _readingWeekExpanded = false;
 
   bool get _isEditMode => widget.semesterToEdit != null;
 
@@ -44,18 +47,26 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
     // Pre-populate fields if editing
     if (_isEditMode) {
       _nameController.text = widget.semesterToEdit!.name;
+      if (widget.semesterToEdit!.totalCredits != null) {
+        _creditsController.text = widget.semesterToEdit!.totalCredits.toString();
+      }
       _startDate = widget.semesterToEdit!.startDate;
       _endDate = widget.semesterToEdit!.endDate;
       _examPeriodStart = widget.semesterToEdit!.examPeriodStart;
       _examPeriodEnd = widget.semesterToEdit!.examPeriodEnd;
       _readingWeekStart = widget.semesterToEdit!.readingWeekStart;
       _readingWeekEnd = widget.semesterToEdit!.readingWeekEnd;
+
+      // Expand optional sections if they have values
+      _examPeriodExpanded = _examPeriodStart != null || _examPeriodEnd != null;
+      _readingWeekExpanded = _readingWeekStart != null || _readingWeekEnd != null;
     }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _creditsController.dispose();
     super.dispose();
   }
 
@@ -204,6 +215,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
 
         final updatedSemester = widget.semesterToEdit!.copyWith(
           name: _nameController.text.trim(),
+          totalCredits: _creditsController.text.trim().isNotEmpty ? int.tryParse(_creditsController.text.trim()) : null,
           startDate: _startDate!,
           endDate: _endDate!,
           numberOfWeeks: numberOfWeeks,
@@ -242,6 +254,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
         final semester = Semester(
           id: '',
           name: _nameController.text.trim(),
+          totalCredits: _creditsController.text.trim().isNotEmpty ? int.tryParse(_creditsController.text.trim()) : null,
           startDate: _startDate!,
           endDate: _endDate!,
           numberOfWeeks: numberOfWeeks,
@@ -305,11 +318,11 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
           children: [
             Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 700),
+                constraints: const BoxConstraints(maxWidth: 600),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -322,25 +335,29 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Semester Information',
-                      style: GoogleFonts.poppins(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onSurface,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Semester Information',
+                        style: GoogleFonts.poppins(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
                       ),
-                    ),
-                    Text(
-                      'Set up your semester details to start tracking modules',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: Colors.grey[600],
+                      Text(
+                        'Add semester details',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -368,6 +385,33 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                 return null;
               },
             ),
+            const SizedBox(height: 16),
+
+            // Total Credits Field
+            TextFormField(
+              controller: _creditsController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Total Credits (Optional)',
+                hintText: 'e.g., 120',
+                border: const OutlineInputBorder(),
+                filled: true,
+                fillColor: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                helperText: 'Number of credits for this semester',
+              ),
+              validator: (value) {
+                if (value != null && value.isNotEmpty) {
+                  final credits = int.tryParse(value);
+                  if (credits == null) {
+                    return 'Please enter a valid number';
+                  }
+                  if (credits <= 0) {
+                    return 'Credits must be greater than 0';
+                  }
+                }
+                return null;
+              },
+            ),
             const SizedBox(height: 32),
 
             // Dates Section Header
@@ -375,10 +419,10 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
               context,
               icon: Icons.calendar_month,
               title: 'Semester Duration',
-              subtitle: 'Define the start and end of your semester',
+              subtitle: '',
               color: const Color(0xFF0EA5E9),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
             // Start & End Dates
             Row(
@@ -437,42 +481,47 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
             _buildSectionHeader(
               context,
               icon: Icons.assignment,
-              title: 'Exam Period',
-              subtitle: 'Optional: Set exam dates for this semester',
+              title: 'Exam Period (Optional)',
+              subtitle: '',
               color: const Color(0xFFF87171),
+              isOptional: true,
+              isExpanded: _examPeriodExpanded,
+              onToggle: () => setState(() => _examPeriodExpanded = !_examPeriodExpanded),
             ),
-            const SizedBox(height: 16),
 
-            // Exam Period Dates
-            Row(
-              children: [
-                Expanded(
-                  child: _buildDateCard(
-                    context: context,
-                    title: 'Exam Start',
-                    subtitle: 'first exam',
-                    date: _examPeriodStart,
-                    onTap: _selectExamPeriodStart,
-                    onClear: _examPeriodStart != null
-                        ? () => setState(() => _examPeriodStart = null)
-                        : null,
+            // Exam Period Dates (Collapsible)
+            if (_examPeriodExpanded) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDateCard(
+                      context: context,
+                      title: 'Exam Start',
+                      subtitle: 'first exam',
+                      date: _examPeriodStart,
+                      onTap: _selectExamPeriodStart,
+                      onClear: _examPeriodStart != null
+                          ? () => setState(() => _examPeriodStart = null)
+                          : null,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildDateCard(
-                    context: context,
-                    title: 'Exam End',
-                    subtitle: 'last exam',
-                    date: _examPeriodEnd,
-                    onTap: _selectExamPeriodEnd,
-                    onClear: _examPeriodEnd != null
-                        ? () => setState(() => _examPeriodEnd = null)
-                        : null,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildDateCard(
+                      context: context,
+                      title: 'Exam End',
+                      subtitle: 'last exam',
+                      date: _examPeriodEnd,
+                      onTap: _selectExamPeriodEnd,
+                      onClear: _examPeriodEnd != null
+                          ? () => setState(() => _examPeriodEnd = null)
+                          : null,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
 
             const SizedBox(height: 32),
 
@@ -480,79 +529,104 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
             _buildSectionHeader(
               context,
               icon: Icons.book_outlined,
-              title: 'Reading Week',
-              subtitle: 'Optional: Set reading week dates',
+              title: 'Reading Week (Optional)',
+              subtitle: '',
               color: const Color(0xFFA78BFA),
+              isOptional: true,
+              isExpanded: _readingWeekExpanded,
+              onToggle: () => setState(() => _readingWeekExpanded = !_readingWeekExpanded),
             ),
-            const SizedBox(height: 16),
 
-            // Reading Week Dates
-            Row(
-              children: [
-                Expanded(
-                  child: _buildDateCard(
-                    context: context,
-                    title: 'Reading Week Start',
-                    subtitle: weekStartLabel,
-                    date: _readingWeekStart,
-                    onTap: _selectReadingWeekStart,
-                    onClear: _readingWeekStart != null
-                        ? () => setState(() {
-                            _readingWeekStart = null;
-                            _readingWeekEnd = null;
-                          })
-                        : null,
+            // Reading Week Dates (Collapsible)
+            if (_readingWeekExpanded) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDateCard(
+                      context: context,
+                      title: 'Reading Week Start',
+                      subtitle: weekStartLabel,
+                      date: _readingWeekStart,
+                      onTap: _selectReadingWeekStart,
+                      onClear: _readingWeekStart != null
+                          ? () => setState(() {
+                              _readingWeekStart = null;
+                              _readingWeekEnd = null;
+                            })
+                          : null,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildDateCard(
-                    context: context,
-                    title: 'Reading Week End',
-                    subtitle: weekEndLabel,
-                    date: _readingWeekEnd,
-                    onTap: _readingWeekStart != null ? _selectReadingWeekEnd : null,
-                    onClear: _readingWeekEnd != null
-                        ? () => setState(() => _readingWeekEnd = null)
-                        : null,
-                    isDisabled: _readingWeekStart == null,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildDateCard(
+                      context: context,
+                      title: 'Reading Week End',
+                      subtitle: weekEndLabel,
+                      date: _readingWeekEnd,
+                      onTap: _readingWeekStart != null ? _selectReadingWeekEnd : null,
+                      onClear: _readingWeekEnd != null
+                          ? () => setState(() => _readingWeekEnd = null)
+                          : null,
+                      isDisabled: _readingWeekStart == null,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
 
             const SizedBox(height: 40),
 
-            // Save Button
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: (_isLoading || !_canSave) ? null : _saveSemester,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  minimumSize: const Size(double.infinity, 56),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
+            // Action Buttons
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: (_isLoading || !_canSave) ? null : _saveSemester,
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
-                      )
-                    : Text(
-                        _isEditMode ? 'Update Semester' : 'Create Semester',
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                _isEditMode ? 'Update Semester' : 'Create Semester',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: _isLoading ? null : () => Navigator.pop(context),
+                      child: Text(
+                        'Cancel',
                         style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
+                    ),
+                  ],
+                ),
               ),
             ),
+            const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -569,51 +643,54 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
     required String title,
     required String subtitle,
     required Color color,
+    bool isOptional = false,
+    bool isExpanded = false,
+    VoidCallback? onToggle,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: 1,
+    return InkWell(
+      onTap: isOptional ? onToggle : null,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  if (subtitle.isNotEmpty)
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+            if (isOptional) ...[
+              const SizedBox(width: 8),
+              Icon(
+                isExpanded ? Icons.expand_less : Icons.expand_more,
+                color: Colors.grey[600],
+                size: 24,
+              ),
+            ],
+          ],
         ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

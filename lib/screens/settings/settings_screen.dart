@@ -5,14 +5,18 @@ import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/theme_provider.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/providers/customization_provider.dart';
+import 'package:module_tracker/providers/semester_provider.dart';
+import 'package:module_tracker/providers/module_provider.dart';
 import 'package:module_tracker/models/customization_preferences.dart';
 import 'package:module_tracker/screens/settings/notification_settings_screen.dart';
 import 'package:module_tracker/screens/settings/event_colors_screen.dart';
 import 'package:module_tracker/screens/import_module/import_module_screen.dart';
+import 'package:module_tracker/utils/date_picker_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:module_tracker/widgets/hover_scale_widget.dart';
 import 'package:module_tracker/widgets/gradient_header.dart';
 import 'package:module_tracker/widgets/user_avatar.dart';
+import 'package:module_tracker/widgets/module_selection_dialog.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -27,6 +31,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _confirmPasswordController = TextEditingController();
   final _nameController = TextEditingController();
   bool _isChangingPassword = false;
+  bool _showCurrentPassword = false;
+  bool _showNewPassword = false;
+  bool _showConfirmPassword = false;
 
   /// Get responsive scale factor for smooth scaling across screen sizes
   /// Mobile (<600px): 1.0x
@@ -88,137 +95,331 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _currentPasswordController.clear();
     _newPasswordController.clear();
     _confirmPasswordController.clear();
+    _showCurrentPassword = false;
+    _showNewPassword = false;
+    _showConfirmPassword = false;
 
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Change Password'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _currentPasswordController,
-              decoration: const InputDecoration(
-                labelText: 'Current Password',
-                border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Change Password'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _currentPasswordController,
+                decoration: InputDecoration(
+                  labelText: 'Current Password',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _showCurrentPassword ? Icons.visibility : Icons.visibility_off,
+                    ),
+                    onPressed: () {
+                      setDialogState(() {
+                        _showCurrentPassword = !_showCurrentPassword;
+                      });
+                    },
+                  ),
+                ),
+                obscureText: !_showCurrentPassword,
               ),
-              obscureText: true,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _newPasswordController,
-              decoration: const InputDecoration(
-                labelText: 'New Password',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _newPasswordController,
+                decoration: InputDecoration(
+                  labelText: 'New Password',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _showNewPassword ? Icons.visibility : Icons.visibility_off,
+                    ),
+                    onPressed: () {
+                      setDialogState(() {
+                        _showNewPassword = !_showNewPassword;
+                      });
+                    },
+                  ),
+                ),
+                obscureText: !_showNewPassword,
               ),
-              obscureText: true,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _confirmPasswordController,
-              decoration: const InputDecoration(
-                labelText: 'Confirm New Password',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _confirmPasswordController,
+                decoration: InputDecoration(
+                  labelText: 'Confirm New Password',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _showConfirmPassword ? Icons.visibility : Icons.visibility_off,
+                    ),
+                    onPressed: () {
+                      setDialogState(() {
+                        _showConfirmPassword = !_showConfirmPassword;
+                      });
+                    },
+                  ),
+                ),
+                obscureText: !_showConfirmPassword,
               ),
-              obscureText: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            ],
           ),
-          FilledButton(
-            onPressed: () async {
-              if (_newPasswordController.text !=
-                  _confirmPasswordController.text) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Passwords do not match'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-
-              if (_newPasswordController.text.length < 6) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Password must be at least 6 characters'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-
-              setState(() => _isChangingPassword = true);
-
-              try {
-                final authService = ref.read(authServiceProvider);
-                await authService.changePassword(
-                  _currentPasswordController.text,
-                  _newPasswordController.text,
-                );
-
-                if (mounted) {
-                  Navigator.pop(context);
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (_newPasswordController.text !=
+                    _confirmPasswordController.text) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Password changed successfully'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
+                      content: Text('Passwords do not match'),
                       backgroundColor: Colors.red,
                     ),
                   );
+                  return;
                 }
-              } finally {
-                if (mounted) {
-                  setState(() => _isChangingPassword = false);
+
+                if (_newPasswordController.text.length < 6) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Password must be at least 6 characters'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
                 }
-              }
-            },
-            child: _isChangingPassword
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Change Password'),
-          ),
-        ],
+
+                setDialogState(() => _isChangingPassword = true);
+
+                try {
+                  final authService = ref.read(authServiceProvider);
+                  await authService.changePassword(
+                    _currentPasswordController.text,
+                    _newPasswordController.text,
+                  );
+
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Password changed successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } finally {
+                  if (mounted) {
+                    setDialogState(() => _isChangingPassword = false);
+                  }
+                }
+              },
+              child: _isChangingPassword
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Change Password'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Future<void> _showLogoutDialog() async {
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Log Out'),
-        content: const Text('Are you sure you want to log out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+    final isGuest = ref.read(isGuestUserProvider);
+
+    if (isGuest) {
+      // Guest-specific warning dialog
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(
+                Icons.warning_rounded,
+                color: const Color(0xFFF59E0B),
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              const Expanded(child: Text('Exit Guest Mode?')),
+            ],
           ),
-          FilledButton(
-            onPressed: () async {
-              final authService = ref.read(authServiceProvider);
-              await authService.signOut();
-              if (mounted) {
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Color(0xFFEF4444),
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'All your data will be permanently deleted!',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFFEF4444),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'This includes:',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildDataItem('All semesters'),
+              _buildDataItem('All modules and course info'),
+              _buildDataItem('All tasks and assessments'),
+              _buildDataItem('All settings and preferences'),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.lightbulb_outline,
+                      color: Color(0xFF10B981),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Create an account first to save your data.',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: const Color(0xFF10B981),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFF10B981)),
+              ),
+              onPressed: () {
                 Navigator.pop(context);
-                Navigator.pop(context); // Go back to login screen
-              }
-            },
-            child: const Text('Log Out'),
+                _showCreateAccountFromGuestDialog();
+              },
+              child: Text(
+                'Create Account',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF10B981),
+                ),
+              ),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+              ),
+              onPressed: () async {
+                final authService = ref.read(authServiceProvider);
+                await authService.signOut();
+                if (mounted) {
+                  Navigator.pop(context);
+                  Navigator.pop(context); // Go back to login screen
+                }
+              },
+              child: const Text('Delete Data & Exit'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Normal logout dialog for authenticated users
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Log Out'),
+          content: const Text('Are you sure you want to log out?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final authService = ref.read(authServiceProvider);
+                await authService.signOut();
+                if (mounted) {
+                  Navigator.pop(context);
+                  Navigator.pop(context); // Go back to login screen
+                }
+              },
+              child: const Text('Log Out'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Widget _buildDataItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.close,
+            size: 16,
+            color: Color(0xFFEF4444),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: const Color(0xFF64748B),
+            ),
           ),
         ],
       ),
@@ -227,35 +428,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _showThemeDialog() async {
     final currentTheme = ref.read(themeProvider);
+    AppThemeMode? tempTheme = currentTheme;
 
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Choose Theme'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: AppThemeMode.values.map((mode) {
-            return RadioListTile<AppThemeMode>(
-              title: Text(mode.displayName),
-              subtitle: Text(_getThemeDescription(mode)),
-              secondary: Icon(mode.icon),
-              value: mode,
-              groupValue: currentTheme,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(themeProvider.notifier).setThemeMode(value);
-                  Navigator.pop(context);
-                }
-              },
-            );
-          }).toList(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Choose Theme'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: AppThemeMode.values.map((mode) {
+              return RadioListTile<AppThemeMode>(
+                title: Text(mode.displayName),
+                subtitle: Text(_getThemeDescription(mode)),
+                secondary: Icon(mode.icon),
+                value: mode,
+                groupValue: tempTheme,
+                onChanged: (value) {
+                  setState(() {
+                    tempTheme = value;
+                  });
+                },
+              );
+            }).toList(),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (tempTheme != null) {
+                  ref.read(themeProvider.notifier).setThemeMode(tempTheme!);
+                }
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0EA5E9),
+              ),
+              child: const Text('Save', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -272,54 +487,96 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _showWeekStartDialog(WeekStartDay current) async {
+    WeekStartDay? tempWeekStart = current;
+
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Week Starts On'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: WeekStartDay.values.map((day) {
-            return RadioListTile<WeekStartDay>(
-              title: Text(day.displayName),
-              value: day,
-              groupValue: current,
-              onChanged: (value) {
-                if (value != null) {
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Week Starts On'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: WeekStartDay.values.map((day) {
+              return RadioListTile<WeekStartDay>(
+                title: Text(day.displayName),
+                value: day,
+                groupValue: tempWeekStart,
+                onChanged: (value) {
+                  setState(() {
+                    tempWeekStart = value;
+                  });
+                },
+              );
+            }).toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (tempWeekStart != null) {
                   ref
                       .read(customizationProvider.notifier)
-                      .setWeekStartDay(value);
-                  Navigator.pop(context);
+                      .setWeekStartDay(tempWeekStart!);
                 }
+                Navigator.pop(context);
               },
-            );
-          }).toList(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0EA5E9),
+              ),
+              child: const Text('Save', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Future<void> _showGradeFormatDialog(GradeDisplayFormat current) async {
+    GradeDisplayFormat? tempFormat = current;
+
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Grade Display Format'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: GradeDisplayFormat.values.map((format) {
-            return RadioListTile<GradeDisplayFormat>(
-              title: Text(format.displayName),
-              value: format,
-              groupValue: current,
-              onChanged: (value) {
-                if (value != null) {
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Grade Display Format'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: GradeDisplayFormat.values.map((format) {
+              return RadioListTile<GradeDisplayFormat>(
+                title: Text(format.displayName),
+                value: format,
+                groupValue: tempFormat,
+                onChanged: (value) {
+                  setState(() {
+                    tempFormat = value;
+                  });
+                },
+              );
+            }).toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (tempFormat != null) {
                   ref
                       .read(customizationProvider.notifier)
-                      .setGradeDisplayFormat(value);
-                  Navigator.pop(context);
+                      .setGradeDisplayFormat(tempFormat!);
                 }
+                Navigator.pop(context);
               },
-            );
-          }).toList(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0EA5E9),
+              ),
+              child: const Text('Save', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         ),
       ),
     );
@@ -475,8 +732,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _showBirthdayPicker() async {
     final currentBirthday = ref.read(userPreferencesProvider).birthday;
 
-    final selectedDate = await showDatePicker(
+    final selectedDate = await showAppDatePicker(
       context: context,
+      ref: ref,
       initialDate: currentBirthday ?? DateTime(2000, 1, 1),
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
@@ -497,23 +755,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Account'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'This action cannot be undone. All your data will be permanently deleted.',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: passwordController,
-              decoration: const InputDecoration(
-                labelText: 'Enter your password to confirm',
-                border: OutlineInputBorder(),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 350),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'This action cannot be undone. All your data will be permanently deleted.',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
               ),
-              obscureText: true,
-            ),
-          ],
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                decoration: const InputDecoration(
+                  labelText: 'Enter your password to confirm',
+                  border: OutlineInputBorder(),
+                ),
+                obscureText: true,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -565,9 +826,340 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  Future<void> _showCreateAccountFromGuestDialog() async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.account_circle,
+                color: Color(0xFF10B981),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(child: Text('Create Your Account')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Convert your guest account to a full account to sync your data across devices.',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Choose how to create your account:',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Email/Password Option
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              icon: const Icon(Icons.email, color: Colors.white),
+              label: Text(
+                'Continue with Email',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                _showEmailPasswordLinkDialog();
+              },
+            ),
+            const SizedBox(height: 12),
+            // Google Option
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                side: BorderSide(color: Colors.grey[300]!),
+              ),
+              icon: Image.asset(
+                'assets/images/google_logo.png',
+                height: 24,
+                width: 24,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          Color(0xFF4285F4),
+                          Color(0xFFDB4437),
+                          Color(0xFFF4B400),
+                          Color(0xFF0F9D58),
+                        ],
+                      ),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'G',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              label: Text(
+                'Continue with Google',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF1E293B),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                _linkWithGoogle();
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showEmailPasswordLinkDialog() async {
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    bool showPassword = false;
+    bool showConfirmPassword = false;
+    bool isLoading = false;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Create Account with Email'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Enter your email and password to create your account. Your guest data will be preserved.',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.email_outlined),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passwordController,
+                  obscureText: !showPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        showPassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                      onPressed: () {
+                        setState(() => showPassword = !showPassword);
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: confirmPasswordController,
+                  obscureText: !showConfirmPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm Password',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        showConfirmPassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                      onPressed: () {
+                        setState(
+                          () => showConfirmPassword = !showConfirmPassword,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+              ),
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      // Validation
+                      if (emailController.text.isEmpty ||
+                          !emailController.text.contains('@')) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter a valid email'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (passwordController.text.length < 6) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Password must be at least 6 characters',
+                            ),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (passwordController.text !=
+                          confirmPasswordController.text) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Passwords do not match'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      setState(() => isLoading = true);
+
+                      try {
+                        final authService = ref.read(authServiceProvider);
+                        await authService.linkWithEmailAndPassword(
+                          emailController.text.trim(),
+                          passwordController.text,
+                        );
+
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Account created successfully! Your data has been preserved.',
+                              ),
+                              backgroundColor: Color(0xFF10B981),
+                              duration: Duration(seconds: 4),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setState(() => isLoading = false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+              child: isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Create Account'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _linkWithGoogle() async {
+    try {
+      final authService = ref.read(authServiceProvider);
+      final result = await authService.linkWithGoogle();
+
+      if (result != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Account linked with Google successfully! Your data has been preserved.',
+            ),
+            backgroundColor: Color(0xFF10B981),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
+    final isGuest = ref.watch(isGuestUserProvider);
     final currentTheme = ref.watch(themeProvider);
     final userPreferences = ref.watch(userPreferencesProvider);
     final customizationPrefs = ref.watch(customizationProvider);
@@ -607,15 +1199,68 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   const SizedBox(width: 12),
                                   // Account: Name text
                                   Expanded(
-                                    child: Text(
-                                      'Account: ${userPreferences.userName ?? 'Set name'}',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 18 * scaleFactor,
-                                        fontWeight: FontWeight.w600,
-                                        color: Theme.of(
-                                          context,
-                                        ).textTheme.bodyLarge?.color,
-                                      ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                userPreferences.userName != null
+                                                    ? 'Account: ${userPreferences.userName}'
+                                                    : 'Your Name',
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 18 * scaleFactor,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).textTheme.bodyLarge?.color,
+                                                ),
+                                              ),
+                                            ),
+                                            if (isGuest) ...[
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(
+                                                    0xFFF59E0B,
+                                                  ).withValues(alpha: 0.2),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                child: Text(
+                                                  'GUEST',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 11 * scaleFactor,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: const Color(0xFFF59E0B),
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        if (userPreferences.userName == null && !isGuest)
+                                          Text(
+                                            'Tap to set your name',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 13 * scaleFactor,
+                                              color: const Color(0xFF64748B),
+                                            ),
+                                          ),
+                                        if (isGuest)
+                                          Text(
+                                            'Create account to sync across devices',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 13 * scaleFactor,
+                                              color: const Color(0xFF64748B),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                   Icon(
@@ -628,27 +1273,90 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                           ),
                           const Divider(height: 1),
-                          // Email row - informational only, no tap, no chevron
-                          ListTile(
-                            leading: Icon(
-                              Icons.email_outlined,
-                              color: Colors.grey.shade600,
-                              size: 24 * scaleFactor,
-                            ),
-                            title: Text(
-                              user?.email ?? 'Not logged in',
-                              style: TextStyle(
-                                color: Theme.of(
-                                  context,
-                                ).textTheme.bodyLarge?.color,
+                          // Email row - informational only for authenticated, guest mode info for guests
+                          if (isGuest)
+                            ListTile(
+                              leading: Icon(
+                                Icons.person_off_outlined,
+                                color: const Color(0xFFF59E0B),
+                                size: 24 * scaleFactor,
+                              ),
+                              title: const Text('Guest Mode'),
+                              subtitle: const Text(
+                                'Limited features - create account to unlock all features',
+                              ),
+                              trailing: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  'GUEST',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11 * scaleFactor,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFFF59E0B),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            ListTile(
+                              leading: Icon(
+                                Icons.email_outlined,
+                                color: Colors.grey.shade600,
+                                size: 24 * scaleFactor,
+                              ),
+                              title: Text(
+                                user?.email ?? 'Not logged in',
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyLarge?.color,
+                                ),
                               ),
                             ),
-                            subtitle: Text(
-                              'Email address',
-                              style: TextStyle(color: Colors.grey.shade500),
-                            ),
-                          ),
                           const Divider(height: 1),
+                          // Create Account button - only for guests
+                          if (isGuest) ...[
+                            ListTile(
+                              leading: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.account_circle,
+                                  color: const Color(0xFF10B981),
+                                  size: 24 * scaleFactor,
+                                ),
+                              ),
+                              title: Text(
+                                'Create Account',
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF10B981),
+                                ),
+                              ),
+                              subtitle: const Text(
+                                'Sync your data and access from any device',
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right,
+                                color: const Color(0xFF10B981),
+                                size: 24 * scaleFactor,
+                              ),
+                              tileColor: const Color(0xFF10B981).withValues(alpha: 0.05),
+                              onTap: _showCreateAccountFromGuestDialog,
+                            ),
+                            const Divider(height: 1),
+                          ],
                           ListTile(
                             leading: Icon(
                               Icons.cake_outlined,
@@ -656,66 +1364,85 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                             title: Text(
                               userPreferences.birthday != null
-                                  ? '${userPreferences.birthday!.day}/${userPreferences.birthday!.month}/${userPreferences.birthday!.year}'
-                                  : 'Set your birthday',
+                                  ? 'Birthday: ${userPreferences.birthday!.day}/${userPreferences.birthday!.month}/${userPreferences.birthday!.year}'
+                                  : 'Birthday',
                             ),
-                            subtitle: const Text('Birthday'),
+                            subtitle: userPreferences.birthday == null
+                                ? const Text('Tap to set your birthday')
+                                : null,
                             trailing: Icon(
                               Icons.chevron_right,
                               size: 24 * scaleFactor,
                             ),
                             onTap: _showBirthdayPicker,
                           ),
-                          const Divider(height: 1),
+                          // Hide Change Password for guests (they don't have a password)
+                          if (!isGuest) ...[
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: Icon(
+                                Icons.lock_outline,
+                                size: 24 * scaleFactor,
+                              ),
+                              title: const Text('Change Password'),
+                              subtitle: const Text(
+                                'Update your account password',
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right,
+                                size: 24 * scaleFactor,
+                              ),
+                              onTap: _showChangePasswordDialog,
+                            ),
+                            const Divider(height: 1),
+                          ] else
+                            const Divider(height: 1),
                           ListTile(
                             leading: Icon(
-                              Icons.lock_outline,
+                              isGuest ? Icons.exit_to_app : Icons.logout_outlined,
                               size: 24 * scaleFactor,
+                              color: isGuest ? const Color(0xFFEF4444) : null,
                             ),
-                            title: const Text('Change Password'),
-                            subtitle: const Text(
-                              'Update your account password',
+                            title: Text(
+                              isGuest ? 'Exit Guest Mode' : 'Log Out',
+                              style: TextStyle(
+                                color: isGuest ? const Color(0xFFEF4444) : null,
+                              ),
                             ),
-                            trailing: Icon(
-                              Icons.chevron_right,
-                              size: 24 * scaleFactor,
+                            subtitle: Text(
+                              isGuest
+                                  ? 'Warning: Your data will be deleted'
+                                  : 'Sign out of your account',
                             ),
-                            onTap: _showChangePasswordDialog,
-                          ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: Icon(
-                              Icons.logout_outlined,
-                              size: 24 * scaleFactor,
-                            ),
-                            title: const Text('Log Out'),
-                            subtitle: const Text('Sign out of your account'),
                             trailing: Icon(
                               Icons.chevron_right,
                               size: 24 * scaleFactor,
                             ),
                             onTap: _showLogoutDialog,
                           ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: Icon(
-                              Icons.delete_outline,
-                              color: const Color(0xFFEF4444),
-                              size: 24 * scaleFactor,
+                          // Hide Delete Account for guests
+                          if (!isGuest) ...[
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: Icon(
+                                Icons.delete_outline,
+                                color: const Color(0xFFEF4444),
+                                size: 24 * scaleFactor,
+                              ),
+                              title: const Text(
+                                'Delete Account',
+                                style: TextStyle(color: Color(0xFFEF4444)),
+                              ),
+                              subtitle: const Text(
+                                'Permanently delete your account',
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right,
+                                size: 24 * scaleFactor,
+                              ),
+                              onTap: _showDeleteAccountDialog,
                             ),
-                            title: const Text(
-                              'Delete Account',
-                              style: TextStyle(color: Color(0xFFEF4444)),
-                            ),
-                            subtitle: const Text(
-                              'Permanently delete your account',
-                            ),
-                            trailing: Icon(
-                              Icons.chevron_right,
-                              size: 24 * scaleFactor,
-                            ),
-                            onTap: _showDeleteAccountDialog,
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -788,14 +1515,59 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               size: 24 * scaleFactor,
                             ),
                             onTap: () {
-                              // Show module selection dialog for sharing
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Go to a module card and use the share option from the menu',
+                              // Get current semester and modules
+                              final selectedSemester = ref.read(selectedSemesterProvider);
+
+                              if (selectedSemester == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('No active semester found. Please set up a semester first.'),
+                                    backgroundColor: Color(0xFFEF4444),
                                   ),
-                                  backgroundColor: Color(0xFF0EA5E9),
-                                ),
+                                );
+                                return;
+                              }
+
+                              // Get modules for the current semester
+                              final modulesAsync = ref.read(modulesForSemesterProvider(selectedSemester.id));
+
+                              modulesAsync.when(
+                                data: (modules) {
+                                  if (modules.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('No modules found. Please add a module first.'),
+                                        backgroundColor: Color(0xFFEF4444),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  // Show module selection dialog with NO pre-selection
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => ModuleSelectionDialog(
+                                      preSelectedModule: null,
+                                      semesterId: selectedSemester.id,
+                                    ),
+                                  );
+                                },
+                                loading: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Loading modules...'),
+                                      backgroundColor: Color(0xFF0EA5E9),
+                                    ),
+                                  );
+                                },
+                                error: (error, _) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Error loading modules: $error'),
+                                      backgroundColor: const Color(0xFFEF4444),
+                                    ),
+                                  );
+                                },
                               );
                             },
                           ),
@@ -839,7 +1611,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           const Divider(height: 1),
                           ListTile(
                             leading: Icon(
-                              currentTheme.icon,
+                              currentTheme.getIconForContext(context),
                               size: 24 * scaleFactor,
                             ),
                             title: const Text('Theme'),
@@ -929,7 +1701,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                             title: const Text('Event Colors'),
                             subtitle: const Text(
-                              'Customize lecture, lab, and assignment colors',
+                              'Customise lecture, lab, and assignment colors',
                             ),
                             trailing: Icon(
                               Icons.chevron_right,

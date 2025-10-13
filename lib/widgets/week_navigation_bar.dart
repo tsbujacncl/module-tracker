@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:module_tracker/models/semester.dart';
 import 'package:module_tracker/screens/assessments/assessments_screen.dart'
     show AssignmentsScreen;
+import 'package:module_tracker/utils/responsive_text_utils.dart';
 
 class WeekNavigationBar extends StatelessWidget {
   final Semester semester;
@@ -47,13 +48,21 @@ class WeekNavigationBar extends StatelessWidget {
         final timeColumnWidth = marginSize; // Same as margin (always equal)
         final rightMargin = marginSize;
 
+        // Get full screen width for responsive scaling
+        final fullScreenWidth = MediaQuery.of(context).size.width;
+
+        // Responsive height to accommodate larger text on big screens
+        final navBarHeight = fullScreenWidth < 600 ? 44.0 : fullScreenWidth < 1200 ? 48.0 : fullScreenWidth < 1600 ? 52.0 : 56.0;
+        // Reduce gap on larger screens where text is bigger
+        final gapBetweenHeaders = fullScreenWidth < 1200 ? 2.0 : 1.0;
+
         return Padding(
           padding: const EdgeInsets.only(
             top: 4,
             bottom: 4,
           ),
           child: SizedBox(
-            height: 44, // Fixed height for the navigation bar
+            height: navBarHeight,
             child: Row(
               children: [
                 // Time column spacer (flush left) - matches calendar
@@ -70,7 +79,7 @@ class WeekNavigationBar extends StatelessWidget {
                             Text(
                               'Week $currentWeek (${dateFormat.format(weekStart)} - ${dateFormat.format(weekEnd)})',
                               style: GoogleFonts.poppins(
-                                fontSize: 14,
+                                fontSize: ResponsiveText.getSubtitleFontSize(fullScreenWidth),
                                 fontWeight: FontWeight.w600,
                                 color: const Color(0xFF0F172A),
                               ),
@@ -78,7 +87,7 @@ class WeekNavigationBar extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 2),
+                            SizedBox(height: gapBetweenHeaders),
                             GestureDetector(
                               onTap: () {
                                 Navigator.push(
@@ -91,7 +100,7 @@ class WeekNavigationBar extends StatelessWidget {
                               child: Text(
                                 semester.name,
                                 style: GoogleFonts.inter(
-                                  fontSize: 11,
+                                  fontSize: ResponsiveText.getWeekNavigationSubtitleFontSize(fullScreenWidth),
                                   color: const Color(0xFF64748B),
                                 ),
                                 textAlign: TextAlign.center,

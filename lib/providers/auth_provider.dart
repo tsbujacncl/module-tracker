@@ -20,3 +20,9 @@ final currentUserProvider = Provider<User?>((ref) {
     error: (_, __) => null,
   );
 });
+
+// Check if current user is anonymous (guest)
+final isGuestUserProvider = Provider<bool>((ref) {
+  final user = ref.watch(currentUserProvider);
+  return user?.isAnonymous ?? false;
+});

@@ -6,6 +6,7 @@ class Semester {
   final DateTime startDate;
   final DateTime endDate;
   final int numberOfWeeks;
+  final int? totalCredits;
   final DateTime? examPeriodStart;
   final DateTime? examPeriodEnd;
   final DateTime? readingWeekStart;
@@ -19,6 +20,7 @@ class Semester {
     required this.startDate,
     required this.endDate,
     required this.numberOfWeeks,
+    this.totalCredits,
     this.examPeriodStart,
     this.examPeriodEnd,
     this.readingWeekStart,
@@ -35,6 +37,7 @@ class Semester {
       startDate: (data['startDate'] as Timestamp).toDate(),
       endDate: (data['endDate'] as Timestamp).toDate(),
       numberOfWeeks: data['numberOfWeeks'] ?? 0,
+      totalCredits: data['totalCredits'] as int?,
       examPeriodStart: data['examPeriodStart'] != null ? (data['examPeriodStart'] as Timestamp).toDate() : null,
       examPeriodEnd: data['examPeriodEnd'] != null ? (data['examPeriodEnd'] as Timestamp).toDate() : null,
       readingWeekStart: data['readingWeekStart'] != null ? (data['readingWeekStart'] as Timestamp).toDate() : null,
@@ -50,6 +53,7 @@ class Semester {
       'startDate': Timestamp.fromDate(startDate),
       'endDate': Timestamp.fromDate(endDate),
       'numberOfWeeks': numberOfWeeks,
+      'totalCredits': totalCredits,
       'examPeriodStart': examPeriodStart != null ? Timestamp.fromDate(examPeriodStart!) : null,
       'examPeriodEnd': examPeriodEnd != null ? Timestamp.fromDate(examPeriodEnd!) : null,
       'readingWeekStart': readingWeekStart != null ? Timestamp.fromDate(readingWeekStart!) : null,
@@ -67,6 +71,7 @@ class Semester {
       startDate: DateTime.parse(map['startDate']),
       endDate: DateTime.parse(map['endDate']),
       numberOfWeeks: map['numberOfWeeks'] ?? 0,
+      totalCredits: map['totalCredits'] as int?,
       examPeriodStart: map['examPeriodStart'] != null ? DateTime.parse(map['examPeriodStart']) : null,
       examPeriodEnd: map['examPeriodEnd'] != null ? DateTime.parse(map['examPeriodEnd']) : null,
       readingWeekStart: map['readingWeekStart'] != null ? DateTime.parse(map['readingWeekStart']) : null,
@@ -83,6 +88,7 @@ class Semester {
       'startDate': startDate.toIso8601String(),
       'endDate': endDate.toIso8601String(),
       'numberOfWeeks': numberOfWeeks,
+      'totalCredits': totalCredits,
       'examPeriodStart': examPeriodStart?.toIso8601String(),
       'examPeriodEnd': examPeriodEnd?.toIso8601String(),
       'readingWeekStart': readingWeekStart?.toIso8601String(),
@@ -98,6 +104,7 @@ class Semester {
     DateTime? startDate,
     DateTime? endDate,
     int? numberOfWeeks,
+    int? totalCredits,
     DateTime? examPeriodStart,
     DateTime? examPeriodEnd,
     DateTime? readingWeekStart,
@@ -111,6 +118,7 @@ class Semester {
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
       numberOfWeeks: numberOfWeeks ?? this.numberOfWeeks,
+      totalCredits: totalCredits ?? this.totalCredits,
       examPeriodStart: examPeriodStart ?? this.examPeriodStart,
       examPeriodEnd: examPeriodEnd ?? this.examPeriodEnd,
       readingWeekStart: readingWeekStart ?? this.readingWeekStart,

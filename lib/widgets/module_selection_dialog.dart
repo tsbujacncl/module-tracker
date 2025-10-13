@@ -9,13 +9,13 @@ import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/widgets/module_share_dialog.dart';
 
 class ModuleSelectionDialog extends ConsumerStatefulWidget {
-  final Module preSelectedModule;
+  final Module? preSelectedModule;
   final String semesterId;
   final Set<String>? initialSelectedModuleIds;
 
   const ModuleSelectionDialog({
     super.key,
-    required this.preSelectedModule,
+    this.preSelectedModule,
     required this.semesterId,
     this.initialSelectedModuleIds,
   });
@@ -31,11 +31,11 @@ class _ModuleSelectionDialogState extends ConsumerState<ModuleSelectionDialog> {
   @override
   void initState() {
     super.initState();
-    // Use initial selected modules if provided, otherwise pre-select the clicked module
+    // Use initial selected modules if provided, otherwise pre-select the clicked module (if provided)
     if (widget.initialSelectedModuleIds != null) {
       _selectedModuleIds = Set.from(widget.initialSelectedModuleIds!);
-    } else {
-      _selectedModuleIds.add(widget.preSelectedModule.id);
+    } else if (widget.preSelectedModule != null) {
+      _selectedModuleIds.add(widget.preSelectedModule!.id);
     }
   }
 
@@ -200,14 +200,6 @@ class _ModuleSelectionDialogState extends ConsumerState<ModuleSelectionDialog> {
                             constraints: const BoxConstraints(),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Sharing from: ${allModules.firstOrNull?.semesterId ?? 'Current Semester'}',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: const Color(0xFF64748B),
-                        ),
                       ),
                     ],
                   ),

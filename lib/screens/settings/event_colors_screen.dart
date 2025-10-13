@@ -26,104 +26,110 @@ class EventColorsScreen extends ConsumerWidget {
       const Color(0xFF9E9E9E), // Grey
     ];
 
+    Color? selectedColor = currentColor;
+
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Choose Colour for $type',
-          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        content: SizedBox(
-          width: 300,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // First row (5 colors)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: availableColors.sublist(0, 5).map((color) {
-                  return InkWell(
-                    onTap: () {
-                      if (type == 'Lecture') {
-                        ref
-                            .read(userPreferencesProvider.notifier)
-                            .setLectureColor(color);
-                      } else if (type == 'Lab/Tutorial') {
-                        ref
-                            .read(userPreferencesProvider.notifier)
-                            .setLabTutorialColor(color);
-                      } else if (type == 'Assignment') {
-                        ref
-                            .read(userPreferencesProvider.notifier)
-                            .setAssignmentColor(color);
-                      }
-                      Navigator.of(context).pop();
-                    },
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: currentColor == color
-                              ? Colors.black
-                              : Colors.grey.shade300,
-                          width: currentColor == color ? 3 : 2,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(
+            'Choose Colour for $type',
+            style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+          content: SizedBox(
+            width: 300,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // First row (5 colors)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: availableColors.sublist(0, 5).map((color) {
+                    return InkWell(
+                      onTap: () {
+                        setState(() {
+                          selectedColor = color;
+                        });
+                      },
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: selectedColor == color
+                                ? Colors.black
+                                : Colors.grey.shade300,
+                            width: selectedColor == color ? 3 : 2,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 12),
-              // Second row (5 colors)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: availableColors.sublist(5, 10).map((color) {
-                  return InkWell(
-                    onTap: () {
-                      if (type == 'Lecture') {
-                        ref
-                            .read(userPreferencesProvider.notifier)
-                            .setLectureColor(color);
-                      } else if (type == 'Lab/Tutorial') {
-                        ref
-                            .read(userPreferencesProvider.notifier)
-                            .setLabTutorialColor(color);
-                      } else if (type == 'Assignment') {
-                        ref
-                            .read(userPreferencesProvider.notifier)
-                            .setAssignmentColor(color);
-                      }
-                      Navigator.of(context).pop();
-                    },
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: currentColor == color
-                              ? Colors.black
-                              : Colors.grey.shade300,
-                          width: currentColor == color ? 3 : 2,
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+                // Second row (5 colors)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: availableColors.sublist(5, 10).map((color) {
+                    return InkWell(
+                      onTap: () {
+                        setState(() {
+                          selectedColor = color;
+                        });
+                      },
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: selectedColor == color
+                                ? Colors.black
+                                : Colors.grey.shade300,
+                            width: selectedColor == color ? 3 : 2,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel', style: GoogleFonts.inter()),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (selectedColor != null) {
+                  if (type == 'Lecture') {
+                    ref
+                        .read(userPreferencesProvider.notifier)
+                        .setLectureColor(selectedColor!);
+                  } else if (type == 'Lab/Tutorial') {
+                    ref
+                        .read(userPreferencesProvider.notifier)
+                        .setLabTutorialColor(selectedColor!);
+                  } else if (type == 'Assignment') {
+                    ref
+                        .read(userPreferencesProvider.notifier)
+                        .setAssignmentColor(selectedColor!);
+                  }
+                }
+                Navigator.of(context).pop();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0EA5E9),
               ),
-            ],
-          ),
+              child: Text('Save', style: GoogleFonts.inter(color: Colors.white)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('Cancel', style: GoogleFonts.inter()),
-          ),
-        ],
       ),
     );
   }

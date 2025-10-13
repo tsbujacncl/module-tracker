@@ -27,6 +27,7 @@ import 'package:module_tracker/theme/design_tokens.dart';
 import 'package:module_tracker/utils/birthday_helper.dart';
 import 'package:module_tracker/widgets/weekly_completion_dialog.dart';
 import 'package:module_tracker/widgets/hover_scale_widget.dart';
+import 'package:module_tracker/utils/responsive_text_utils.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -47,11 +48,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
   }
 
-  /// Get responsive horizontal padding for smooth margin scaling
-  /// Mobile (<600px): 8px each side
-  /// Tablet (600-900px): smoothly 8px → 32px
-  /// Desktop (900-1200px): smoothly 32px → 60px
-  /// Large Desktop (>1200px): smoothly 60px → 100px
+  /// Get responsive horizontal padding with smooth scaling from 1080p desktop to 4K
+  /// Creates comfortable reading width on large displays (52% content on 4K)
+  ///
+  /// Mobile (<600px): 8px each side (~1-3% margins)
+  /// Tablet (600-900px): smoothly 8px → 32px (~1-5% margins)
+  /// Desktop (900-1080px): smoothly 32px → 84.2px (~3-7.8% margins) [baseline]
+  /// Desktop to 4K (1080-3840px): linear interpolation 84.2px → 921.6px (~7.8-24% margins)
+  /// 4K+ (>3840px): Cap at 24% of screen width (~24% margins, 52% content)
   double _getHorizontalPadding(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
 
@@ -61,17 +65,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Smooth interpolation from 8 to 32 between 600-900px
       final progress = (width - 600) / 300; // 0.0 to 1.0
       return 8.0 + (24.0 * progress); // 8 + 24 = 32
-    } else if (width < 1200) {
-      // Smooth interpolation from 32 to 60 between 900-1200px
-      final progress = (width - 900) / 300; // 0.0 to 1.0
-      return 32.0 + (28.0 * progress); // 32 + 28 = 60
+    } else if (width < 1080) {
+      // Smooth interpolation from 32 to 84.2 between 900-1080px (desktop baseline)
+      final progress = (width - 900) / 180; // 0.0 to 1.0
+      return 32.0 + (52.2 * progress); // 32 + 52.2 = 84.2
+    } else if (width < 3840) {
+      // Linear interpolation from 84.2 to 921.6 between 1080-3840px (desktop to 4K)
+      final progress = (width - 1080) / 2760; // 0.0 to 1.0
+      return 84.2 + (837.4 * progress); // 84.2 + 837.4 = 921.6 (24% of 3840)
     } else {
-      // Smooth interpolation from 60 to 100 for screens >1200px
-      final progress = ((width - 1200) / 400).clamp(
-        0.0,
-        1.0,
-      ); // Capped at 1600px
-      return 60.0 + (40.0 * progress); // 60 + 40 = 100
+      // Cap at 24% of screen width for 4K+ displays
+      return width * 0.24;
     }
   }
 
@@ -169,13 +173,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     child: Text(
                                       '🎂',
                                       style: TextStyle(
-                                        fontSize: 23 * scaleFactor,
+                                        fontSize: 21 * scaleFactor,
                                       ),
                                     ),
                                   )
                                 : Icon(
                                     Icons.school_rounded,
-                                    size: 23 * scaleFactor,
+                                    size: 21 * scaleFactor,
                                     color: Colors.white,
                                   ),
                           ),
@@ -184,26 +188,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       SizedBox(width: 6),
                       // Title next to logo - dynamically sized
                       Expanded(
-                        child: ShaderMask(
-                          shaderCallback: (bounds) => const LinearGradient(
-                            colors: [
-                              Color(0xFF0EA5E9),
-                              Color(0xFF06B6D4),
-                              Color(0xFF10B981),
-                            ],
-                          ).createShader(bounds),
-                          child: Text(
-                            'Module Tracker',
-                            style: GoogleFonts.poppins(
-                              fontSize: 19 * scaleFactor,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: ShaderMask(
+                              shaderCallback: (bounds) => const LinearGradient(
+                                colors: [
+                                  Color(0xFF0EA5E9),
+                                  Color(0xFF06B6D4),
+                                  Color(0xFF10B981),
+                                ],
+                              ).createShader(bounds),
+                              child: Text(
+                                'Module Tracker',
+                                style: GoogleFonts.poppins(
+                                  fontSize: ResponsiveText.getTitleFontSize(screenWidth) * scaleFactor,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                                maxLines: 1,
+                              ),
                             ),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
                           ),
                         ),
                       ),
+                      SizedBox(width: 10 * scaleFactor),
                       // 4 Icons on right - balanced size with Elastic animation
                       ExcludeSemantics(
                         child: UniversalInteractiveWidget(
@@ -211,7 +221,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           color: const Color(0xFF10B981).withValues(alpha: 0.1),
                           onTap: () => _showAddMenu(context),
                           child: Container(
-                            padding: EdgeInsets.all(6.5 * scaleFactor),
+                            padding: EdgeInsets.all(8 * scaleFactor),
                             decoration: BoxDecoration(
                               color: const Color(
                                 0xFF10B981,
@@ -219,10 +229,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               borderRadius: BorderRadius.circular(
                                 7 * scaleFactor,
                               ),
+                              border: Border.all(
+                                width: 0,
+                                color: Colors.transparent,
+                              ),
                             ),
                             child: Icon(
                               Icons.add_rounded,
-                              size: 20 * scaleFactor,
+                              size: 22 * scaleFactor,
                               color: const Color(0xFF10B981),
                             ),
                           ),
@@ -239,7 +253,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                         ),
                         child: Container(
-                          padding: EdgeInsets.all(6.5 * scaleFactor),
+                          padding: EdgeInsets.all(8 * scaleFactor),
                           decoration: BoxDecoration(
                             color: const Color(
                               0xFF8B5CF6,
@@ -247,10 +261,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             borderRadius: BorderRadius.circular(
                               7 * scaleFactor,
                             ),
+                            border: Border.all(
+                              width: 0,
+                              color: Colors.transparent,
+                            ),
                           ),
                           child: Icon(
                             Icons.assessment_outlined,
-                            size: 20 * scaleFactor,
+                            size: 22 * scaleFactor,
                             color: const Color(0xFF8B5CF6),
                           ),
                         ),
@@ -266,7 +284,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                         ),
                         child: Container(
-                          padding: EdgeInsets.all(6.5 * scaleFactor),
+                          padding: EdgeInsets.all(8 * scaleFactor),
                           decoration: BoxDecoration(
                             color: const Color(
                               0xFFF59E0B,
@@ -274,10 +292,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             borderRadius: BorderRadius.circular(
                               7 * scaleFactor,
                             ),
+                            border: Border.all(
+                              width: 0,
+                              color: Colors.transparent,
+                            ),
                           ),
                           child: Icon(
                             Icons.archive_outlined,
-                            size: 20 * scaleFactor,
+                            size: 22 * scaleFactor,
                             color: const Color(0xFFF59E0B),
                           ),
                         ),
@@ -293,7 +315,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                         ),
                         child: Container(
-                          padding: EdgeInsets.all(6.5 * scaleFactor),
+                          padding: EdgeInsets.all(8 * scaleFactor),
                           decoration: BoxDecoration(
                             color: const Color(
                               0xFF0EA5E9,
@@ -301,10 +323,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             borderRadius: BorderRadius.circular(
                               7 * scaleFactor,
                             ),
+                            border: Border.all(
+                              width: 0,
+                              color: Colors.transparent,
+                            ),
                           ),
                           child: Icon(
                             Icons.settings_outlined,
-                            size: 20 * scaleFactor,
+                            size: 22 * scaleFactor,
                             color: const Color(0xFF0EA5E9),
                           ),
                         ),
@@ -320,79 +346,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               flexibleSpace: SafeArea(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    // Account for ListView padding to match calendar's available width
-                    final listViewPadding = appBarHorizontalPadding;
-                    final adjustedWidth =
-                        constraints.maxWidth - (listViewPadding * 2);
-
-                    // Same responsive breakpoints as calendar
-                    final bool isSmall = adjustedWidth < 400;
-                    final bool isLarge = adjustedWidth >= 500;
-
-                    final double marginSize;
-                    if (isSmall) {
-                      marginSize = 16.0;
-                    } else if (isLarge) {
-                      marginSize = 30.0;
-                    } else {
-                      marginSize = 20.0;
-                    }
-
-                    // Total left offset = ListView padding + time column width
-                    final totalLeftOffset = listViewPadding + marginSize;
-
-                    // Responsive title font size - larger on wider screens
-                    final double titleFontSize;
-                    if (screenWidth >= 1600) {
-                      titleFontSize = 40.0; // Extra large screens
-                    } else if (screenWidth >= 1200) {
-                      titleFontSize = 36.0; // Large desktop
-                    } else if (screenWidth >= 900) {
-                      titleFontSize = 32.0; // Medium desktop
-                    } else {
-                      titleFontSize = 28.0; // Small desktop/tablet landscape
-                    }
+                    // Responsive title font size using utility
+                    final double titleFontSize = ResponsiveText.getTitleFontSize(screenWidth);
 
                     return Stack(
                       children: [
-                        // Main layout matching calendar structure
-                        Row(
-                          children: [
-                            // Match calendar structure: ListView padding + time column
-                            SizedBox(width: totalLeftOffset),
-                            const Expanded(child: SizedBox.shrink()), // Mon
-                            const Expanded(child: SizedBox.shrink()), // Tue
-                            Expanded(
-                              child: Center(
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: ShaderMask(
-                                    shaderCallback: (bounds) =>
-                                        const LinearGradient(
-                                          colors: [
-                                            Color(0xFF0EA5E9),
-                                            Color(0xFF06B6D4),
-                                            Color(0xFF10B981),
-                                          ],
-                                        ).createShader(bounds),
-                                    child: Text(
-                                      'Module Tracker',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: titleFontSize,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                      maxLines: 1,
-                                    ),
+                        // Title centered across full AppBar width
+                        Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: appBarHorizontalPadding + 60, // Space for logo (48px + 12px margin)
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: ShaderMask(
+                                shaderCallback: (bounds) =>
+                                    const LinearGradient(
+                                      colors: [
+                                        Color(0xFF0EA5E9),
+                                        Color(0xFF06B6D4),
+                                        Color(0xFF10B981),
+                                      ],
+                                    ).createShader(bounds),
+                                child: Text(
+                                  'Module Tracker',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: titleFontSize,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
                                   ),
+                                  maxLines: 1,
                                 ),
                               ),
-                            ), // Wed - centered
-                            const Expanded(child: SizedBox.shrink()), // Thu
-                            const Expanded(child: SizedBox.shrink()), // Fri
-                            // Right margin to balance
-                            SizedBox(width: listViewPadding + marginSize),
-                          ],
+                            ),
+                          ),
                         ),
                         // Logo on left with Elastic bounce (no movement)
                         Positioned(
@@ -568,32 +555,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 const SizedBox(width: 8),
                 ElasticBounceWidget(
                   backgroundColor: const Color(
-                    0xFFF59E0B,
-                  ).withValues(alpha: 0.1),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SemesterArchiveScreen(),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.archive_outlined,
-                      size: 22,
-                      color: Color(0xFFF59E0B),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElasticBounceWidget(
-                  backgroundColor: const Color(
                     0xFF8B5CF6,
                   ).withValues(alpha: 0.1),
                   onTap: () {
@@ -614,6 +575,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       Icons.assessment_outlined,
                       size: 22,
                       color: Color(0xFF8B5CF6),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElasticBounceWidget(
+                  backgroundColor: const Color(
+                    0xFFF59E0B,
+                  ).withValues(alpha: 0.1),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SemesterArchiveScreen(),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.archive_outlined,
+                      size: 22,
+                      color: Color(0xFFF59E0B),
                     ),
                   ),
                 ),
@@ -804,8 +791,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             final title = Text(
                               'This Week\'s Tasks',
                               style: GoogleFonts.poppins(
-                                fontSize: 20 * titleScale,
-                                fontWeight: FontWeight.w600,
+                                fontSize: ResponsiveText.getSectionHeaderFontSize(screenWidth) * titleScale,
+                                fontWeight: ResponsiveText.getSectionHeaderFontWeight(screenWidth),
                                 color: Theme.of(
                                   context,
                                 ).textTheme.titleLarge?.color,
@@ -828,13 +815,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             final screenWidth = MediaQuery.of(
                               context,
                             ).size.width;
-                            final isMobile = screenWidth < 600;
-                            final horizontalPadding = screenWidth < 400
-                                ? 1.0
-                                : 4.0;
+                            // Single gap size for both horizontal and vertical spacing
+                            // Increased by 20% from original 8px (4px * 2) to 9.6px
+                            final cardGap = screenWidth < 400
+                                ? 2.4  // 1.2px * 2 = 2.4px total gap
+                                : 9.6; // 4.8px * 2 = 9.6px total gap
 
-                            // On mobile, stack vertically. On desktop, use horizontal row
-                            if (isMobile) {
+                            // 3-tier responsive layout: Small (1 col), Medium (2 cols), Large (4 cols)
+                            if (screenWidth < 600) {
+                              // Small screens: 1 column vertical stack
                               return Column(
                                 children: sortedModules.map((module) {
                                   return Padding(
@@ -851,27 +840,84 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   );
                                 }).toList(),
                               );
+                            } else if (screenWidth < 1000) {
+                              // Medium screens: 2 columns (2x2 grid) with equal heights per row
+                              // Split modules into pairs for rows
+                              final rows = <Widget>[];
+                              for (int i = 0; i < sortedModules.length; i += 2) {
+                                final modulesInRow = sortedModules.skip(i).take(2).toList();
+
+                                // Add vertical gap BEFORE adding the row (except for first row)
+                                if (i > 0) {
+                                  rows.add(SizedBox(height: cardGap));
+                                }
+
+                                // Build row children with gap between cards
+                                final rowChildren = <Widget>[
+                                  Expanded(
+                                    child: ModuleCard(
+                                      module: modulesInRow[0],
+                                      weekNumber: selectedWeek,
+                                      totalModules: sortedModules.length,
+                                      isMobileStacked: false,
+                                    ),
+                                  ),
+                                ];
+
+                                if (modulesInRow.length > 1) {
+                                  // Add horizontal gap between cards
+                                  rowChildren.add(SizedBox(width: cardGap));
+                                  rowChildren.add(
+                                    Expanded(
+                                      child: ModuleCard(
+                                        module: modulesInRow[1],
+                                        weekNumber: selectedWeek,
+                                        totalModules: sortedModules.length,
+                                        isMobileStacked: false,
+                                      ),
+                                    ),
+                                  );
+                                } else {
+                                  // Empty space for odd number of modules
+                                  rowChildren.add(SizedBox(width: cardGap));
+                                  rowChildren.add(Expanded(child: SizedBox.shrink()));
+                                }
+
+                                rows.add(
+                                  IntrinsicHeight(
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: rowChildren,
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              return Column(children: rows);
                             } else {
-                              // Horizontal row for desktop - full width
+                              // Large screens: 4 columns horizontal row
+                              final cardWidgets = <Widget>[];
+                              for (int i = 0; i < sortedModules.length; i++) {
+                                if (i > 0) {
+                                  // Add gap between cards (not before first card)
+                                  cardWidgets.add(SizedBox(width: cardGap));
+                                }
+                                cardWidgets.add(
+                                  Expanded(
+                                    child: ModuleCard(
+                                      module: sortedModules[i],
+                                      weekNumber: selectedWeek,
+                                      totalModules: sortedModules.length,
+                                      isMobileStacked: false,
+                                    ),
+                                  ),
+                                );
+                              }
+
                               return IntrinsicHeight(
                                 child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: sortedModules.map((module) {
-                                    return Expanded(
-                                      child: Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: horizontalPadding,
-                                        ),
-                                        child: ModuleCard(
-                                          module: module,
-                                          weekNumber: selectedWeek,
-                                          totalModules: sortedModules.length,
-                                          isMobileStacked: false,
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: cardWidgets,
                                 ),
                               );
                             }
@@ -1189,27 +1235,88 @@ class _SwipeableCalendarState extends State<_SwipeableCalendar>
     if (_isAnimating) return;
     setState(() {
       _dragOffset += details.delta.dx;
-      // Limit drag to screen width
+      // Calculate available width for day columns (same as WeeklyCalendar)
       final screenWidth = MediaQuery.of(context).size.width;
-      _dragOffset = _dragOffset.clamp(
-        -screenWidth.toDouble(),
-        screenWidth.toDouble(),
-      );
+
+      // Account for ListView horizontal padding (same as WeeklyCalendar receives)
+      final double horizontalPadding;
+      if (screenWidth < 600) {
+        horizontalPadding = 8.0;
+      } else if (screenWidth < 900) {
+        final progress = (screenWidth - 600) / 300;
+        horizontalPadding = 8.0 + (24.0 * progress);
+      } else if (screenWidth < 1200) {
+        final progress = (screenWidth - 900) / 300;
+        horizontalPadding = 32.0 + (28.0 * progress);
+      } else {
+        final progress = ((screenWidth - 1200) / 400).clamp(0.0, 1.0);
+        horizontalPadding = 60.0 + (40.0 * progress);
+      }
+
+      final constraintsWidth = screenWidth - 2 * horizontalPadding;
+
+      final double marginSize;
+      if (constraintsWidth < 400) {
+        marginSize = 16.0;
+      } else if (constraintsWidth >= 500) {
+        marginSize = 30.0;
+      } else {
+        marginSize = 20.0;
+      }
+      final timeColumnWidth = marginSize;
+      final rightMargin = marginSize;
+      final availableForDays = constraintsWidth - timeColumnWidth - rightMargin;
+
+      // Limit drag to available day columns width
+      _dragOffset = _dragOffset.clamp(-availableForDays, availableForDays);
     });
   }
 
   void _handleDragEnd(DragEndDetails details) {
     if (_isAnimating) return;
 
+    // Calculate available width for day columns (same as WeeklyCalendar)
     final screenWidth = MediaQuery.of(context).size.width;
-    final threshold = screenWidth * 0.25; // 25% threshold
+
+    // Account for ListView horizontal padding (same as WeeklyCalendar receives)
+    final double horizontalPadding;
+    if (screenWidth < 600) {
+      horizontalPadding = 8.0;
+    } else if (screenWidth < 900) {
+      final progress = (screenWidth - 600) / 300;
+      horizontalPadding = 8.0 + (24.0 * progress);
+    } else if (screenWidth < 1200) {
+      final progress = (screenWidth - 900) / 300;
+      horizontalPadding = 32.0 + (28.0 * progress);
+    } else {
+      final progress = ((screenWidth - 1200) / 400).clamp(0.0, 1.0);
+      horizontalPadding = 60.0 + (40.0 * progress);
+    }
+
+    final constraintsWidth = screenWidth - 2 * horizontalPadding;
+
+    final double marginSize;
+    if (constraintsWidth < 400) {
+      marginSize = 16.0;
+    } else if (constraintsWidth >= 500) {
+      marginSize = 30.0;
+    } else {
+      marginSize = 20.0;
+    }
+    final timeColumnWidth = marginSize;
+    final rightMargin = marginSize;
+    final availableForDays = constraintsWidth - timeColumnWidth - rightMargin;
+
+    final threshold = availableForDays * 0.25; // 25% threshold
 
     // Check if we should snap to next/previous week
     if (_dragOffset.abs() > threshold) {
       // Commit the swipe - capture direction before animation
       _isAnimating = true;
       final isSwipingRight = _dragOffset > 0;
-      final targetOffset = _dragOffset > 0 ? screenWidth : -screenWidth;
+      final targetOffset = _dragOffset > 0
+          ? availableForDays
+          : -availableForDays;
 
       _animation =
           Tween<double>(
@@ -1251,19 +1358,32 @@ class _SwipeableCalendarState extends State<_SwipeableCalendar>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onHorizontalDragUpdate: _handleDragUpdate,
-      onHorizontalDragEnd: _handleDragEnd,
-      child: WeeklyCalendar(
-        semester: widget.semester,
-        currentWeek: widget.currentWeek,
-        modules: widget.modules,
-        tasksByModule: widget.tasksByModule,
-        assessmentsByModule: widget.assessmentsByModule,
-        weekStartDate: widget.weekStartDate,
-        dragOffset: _dragOffset,
-        isSwipeable: true,
-      ),
+    return Stack(
+      children: [
+        // The calendar widget (full)
+        WeeklyCalendar(
+          semester: widget.semester,
+          currentWeek: widget.currentWeek,
+          modules: widget.modules,
+          tasksByModule: widget.tasksByModule,
+          assessmentsByModule: widget.assessmentsByModule,
+          weekStartDate: widget.weekStartDate,
+          dragOffset: _dragOffset,
+          isSwipeable: true,
+        ),
+        // Positioned gesture detector - excludes legend at bottom
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 65, // Exclude bottom ~65px for legend (Lecture, Lab/Tutorial, Assignment)
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragUpdate: _handleDragUpdate,
+            onHorizontalDragEnd: _handleDragEnd,
+          ),
+        ),
+      ],
     );
   }
 }

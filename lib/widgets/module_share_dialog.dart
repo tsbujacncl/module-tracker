@@ -156,11 +156,11 @@ class _ModuleShareDialogState extends State<ModuleShareDialog> {
     Navigator.pop(context);
 
     // Reopen module selection dialog with previous state
-    if (widget.semesterId != null && widget.preSelectedModule != null) {
+    if (widget.semesterId != null) {
       showDialog(
         context: context,
         builder: (context) => ModuleSelectionDialog(
-          preSelectedModule: widget.preSelectedModule!,
+          preSelectedModule: widget.preSelectedModule,
           semesterId: widget.semesterId!,
           initialSelectedModuleIds: widget.selectedModuleIds,
         ),
@@ -184,8 +184,8 @@ class _ModuleShareDialogState extends State<ModuleShareDialog> {
             // Header
             Row(
               children: [
-                // Back button (only show if we have navigation state)
-                if (widget.semesterId != null && widget.preSelectedModule != null) ...[
+                // Back button (only show if we have semester ID for navigation)
+                if (widget.semesterId != null) ...[
                   IconButton(
                     icon: const Icon(Icons.arrow_back_rounded),
                     onPressed: _goBack,

@@ -183,6 +183,86 @@ class AuthService {
     }
   }
 
+  // Link anonymous account with email/password
+  Future<UserCredential?> linkWithEmailAndPassword(
+    String email,
+    String password,
+  ) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null || !user.isAnonymous) {
+        throw 'No anonymous user to link. Please sign in as a guest first.';
+      }
+
+      print('DEBUG AUTH: Linking anonymous account with email: $email');
+
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: password,
+      );
+
+      final userCredential = await user.linkWithCredential(credential);
+      print('DEBUG AUTH: Successfully linked anonymous account - UID: ${userCredential.user?.uid}');
+
+      return userCredential;
+    } on FirebaseAuthException catch (e) {
+      print('DEBUG AUTH: Link with email/password failed - ${e.code}: ${e.message}');
+      throw _handleAuthException(e);
+    } catch (e) {
+      print('DEBUG AUTH: Link with email/password error - $e');
+      throw 'Failed to link account: ${e.toString()}';
+    }
+  }
+
+  // Link anonymous account with Google
+  Future<UserCredential?> linkWithGoogle() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null || !user.isAnonymous) {
+        throw 'No anonymous user to link. Please sign in as a guest first.';
+      }
+
+      print('DEBUG AUTH: Linking anonymous account with Google');
+
+      // Trigger the authentication flow with timeout
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn().timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          print('DEBUG AUTH: Google Sign-In timed out');
+          return null;
+        },
+      );
+
+      if (googleUser == null) {
+        print('DEBUG AUTH: Google Sign-In cancelled by user');
+        return null; // User cancelled the sign-in
+      }
+
+      print('DEBUG AUTH: Google Sign-In successful - ${googleUser.email}');
+
+      // Obtain the auth details from the request
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      // Create a new credential
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Link the credential to the anonymous user
+      final userCredential = await user.linkWithCredential(credential);
+      print('DEBUG AUTH: Successfully linked anonymous account with Google - UID: ${userCredential.user?.uid}');
+
+      return userCredential;
+    } on FirebaseAuthException catch (e) {
+      print('DEBUG AUTH: Link with Google failed - ${e.code}: ${e.message}');
+      throw _handleAuthException(e);
+    } catch (e) {
+      print('DEBUG AUTH: Link with Google error - $e');
+      throw 'Failed to link account with Google: ${e.toString()}';
+    }
+  }
+
   // Handle Firebase Auth exceptions
   String _handleAuthException(FirebaseAuthException e) {
     switch (e.code) {
@@ -200,6 +280,10 @@ class AuthService {
         return 'This operation is not allowed.';
       case 'user-disabled':
         return 'This user account has been disabled.';
+      case 'credential-already-in-use':
+        return 'This credential is already associated with a different user account.';
+      case 'provider-already-linked':
+        return 'This account is already linked with this provider.';
       default:
         return 'An error occurred: ${e.message}';
     }

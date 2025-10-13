@@ -1,15 +1,76 @@
 # Module Tracker
 
-A Flutter application to help university students manage their weekly tasks across multiple modules.
+![Version](https://img.shields.io/badge/version-0.9-blue.svg)
+![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android%20%7C%20Web-lightgrey.svg)
+![Status](https://img.shields.io/badge/status-pre--release-orange.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-## Features
+A beautiful, intuitive, and **completely free** Flutter application designed for UK university students to effortlessly manage their modules, assignments, and weekly tasks across semesters.
 
-- **Semester Management**: Create and manage academic semesters with start/end dates
-- **Module Tracking**: Add modules with recurring weekly tasks and graded assessments
-- **Weekly Calendar View**: Visual weekly view with task completion tracking
-- **Task Status**: Track tasks as Not Started, In Progress, or Complete
-- **Assessment Management**: Track coursework and exams with weightings and due dates
-- **Cross-Device Sync**: Firebase backend for seamless synchronization
+**Perfect for all degree programs** - whether you're studying Computer Science, Medicine, Engineering, Business, Arts, or any other field, Module Tracker adapts to your unique academic structure.
+
+> 🚧 **Pre-Release Status**: Module Tracker is currently in version 0.9 and undergoing final testing before official release on the App Store, Google Play, and web hosting. Currently optimised for UK universities with plans to expand internationally.
+
+### Why Module Tracker?
+
+✨ **Easy & Intuitive** - No learning curve, just open and start organizing
+📱 **Cross-Platform** - Seamlessly sync between your phone, tablet, and computer
+💰 **Completely Free** - No subscriptions, no hidden costs, no ads
+🎯 **Built for UK Students** - Designed around UK grading systems and academic structure
+📊 **Progress at a Glance** - The easiest way to track your module performance and stay on top of your studies
+
+## 📋 Table of Contents
+
+- [Features](#-features)
+- [Setup Instructions](#setup-instructions)
+- [Usage Guide](#-usage-guide)
+- [Project Structure](#project-structure)
+- [Data Models](#data-models)
+- [Tech Stack](#️-tech-stack)
+- [Design Philosophy](#-design-philosophy)
+- [Privacy & Data](#-privacy--data)
+- [Platform Support](#-platform-support)
+- [Future Enhancements](#-future-enhancements)
+- [Troubleshooting](#troubleshooting)
+- [Developer](#-developer)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+## ✨ Features
+
+### 📚 Academic Management
+- **Semester Management**: Create and organise academic semesters with start/end dates
+- **Module Tracking**: Add modules with custom colours, codes, and detailed information
+- **Weekly Calendar View**: Beautiful calendar interface with drag-to-complete functionality
+- **Task Tracking**: Monitor tasks across multiple states (Not Started, In Progress, Complete)
+- **Assessment Management**: Track coursework and exams with weightings, due dates, and scores
+- **Automatic Archiving**: Old semesters are automatically archived when they end
+
+### 🎨 Customisation
+- **Theme Options**: Light, Dark, or System Default (with device-specific icons)
+- **Custom Event Colours**: Personalise colours for lectures, labs, and assignments
+- **Grade Display Formats**: Choose between Percentage, Letter grades, or GPA
+- **Flexible Week Start**: Set calendar to start on Monday or Sunday
+- **Responsive Design**: Optimised for phones, tablets, and desktop
+
+### 📊 Academic Insights
+- **Progress Tracking Made Easy**: The simplest way to visualise your module performance at a glance
+- **Grade Calculator**: Track your progress towards target grades with UK grading standards (40% Pass, 70% First)
+- **Module Statistics**: View overall performance across modules with colour-coded progress indicators
+- **This Week's Tasks**: Quick overview of pending work on your home screen
+- **Completion Percentages**: See exactly how much of each module you've completed
+- **Birthday Celebrations**: Fun birthday reminders with confetti
+
+### 🔄 Sync & Sharing
+- **Cross-Device Sync**: Firebase backend for seamless synchronisation
+- **Module Sharing**: Share module templates with friends via QR codes
+- **Cloud Backup**: Your data is safely stored in the cloud
+
+### 🔔 Smart Features
+- **Notifications**: Reminders for upcoming deadlines (customisable timing)
+- **Automatic Week Detection**: Always shows your current week
+- **Bulk Task Operations**: Complete multiple tasks at once with drag selection
+- **Archive System**: Keep your workspace clean by archiving old modules
 
 ## Setup Instructions
 
@@ -115,24 +176,61 @@ lib/
 └── main.dart           # App entry point
 ```
 
-## Usage Guide
+## 📖 Usage Guide
 
 ### First Time Setup
 
-1. **Create Account**: Sign up with email/password or continue as guest
-2. **Create Semester**: Set up your current semester with start/end dates
-3. **Add Modules**: Add your university modules with:
-   - Module name and code
-   - Weekly recurring tasks (lectures, labs, tutorials, flashcards)
-   - Assessments with due dates and weightings
+1. **Create Account**:
+   - Sign up with email/password
+   - Or use Google Sign-In for quick access
+
+2. **Personalise Your Profile**:
+   - Set your name in Settings
+   - Add your birthday for special celebrations
+   - Choose your preferred theme (Light/Dark/System)
+
+3. **Create Your First Semester**:
+   - Navigate to Semesters page
+   - Add semester with start and end dates
+   - The app automatically calculates weeks
+
+4. **Add Your Modules**:
+   - Click the green [+] button
+   - Enter module name and code
+   - Add weekly recurring tasks:
+     - Lectures, Labs, Tutorials
+     - Flashcard reviews, Custom tasks
+   - Add assessments with due dates and weightings
 
 ### Daily Usage
 
-1. **View Weekly Tasks**: See all your tasks for the current week
-2. **Update Task Status**: Tap tasks to cycle through:
-   - ❌ Not Started → 🔄 In Progress → ✅ Complete
-3. **Navigate Weeks**: Use the week navigation bar to move between weeks
-4. **Track Assessments**: See upcoming deadlines for coursework and exams
+1. **View This Week's Tasks**:
+   - Open the app to see your current week
+   - Drag over multiple tasks to mark them complete
+   - Tap individual tasks to cycle through states:
+     - ⭕ Not Started → 🔄 In Progress → ✅ Complete
+
+2. **Navigate Weeks**:
+   - Use arrow buttons to move between weeks
+   - Or tap the week selector to jump to any week
+
+3. **Track Your Progress**:
+   - View module cards showing completion percentages
+   - Check your overall grade progress
+   - See upcoming assignment deadlines
+
+4. **Customise Your Experience**:
+   - Go to Settings to adjust:
+     - Theme, colours, grade format
+     - Week start day, notification preferences
+     - Target grade for motivation
+
+### Pro Tips
+
+- **Bulk Complete**: Hold and drag across the calendar to complete multiple tasks at once
+- **Module Sharing**: Share your module setup with classmates via QR code
+- **Quick Access**: Use the top-right buttons for fast navigation to Assignments and Semesters
+- **Archive Old Semesters**: Completed semesters are automatically archived but can be restored anytime
 
 ## Data Models
 
@@ -164,16 +262,121 @@ lib/
 - Status (not started, in progress, complete)
 - Completion timestamp
 
-## Future Enhancements
+## 🚀 Future Enhancements
 
-- [ ] Notifications for upcoming deadlines
-- [ ] Weekend reminders for incomplete tasks
-- [ ] Module detail view with assessment list
-- [ ] Archive system for old modules
-- [ ] Grade calculator
-- [ ] Statistics and insights
-- [ ] Dark mode
-- [ ] Export data functionality
+### Near-Term Goals
+- [ ] App Store & Google Play release
+- [ ] Web hosting deployment
+- [ ] Export semester data to PDF/CSV
+- [ ] Screenshots and demo videos
+- [ ] Beta testing program
+
+### Feature Roadmap
+- [ ] International support (expanding beyond UK universities)
+- [ ] Multiple grading systems (US GPA, ECTS, etc.)
+- [ ] Study timer integration
+- [ ] AI-powered study schedule suggestions
+- [ ] Integration with university timetable systems
+- [ ] Pomodoro technique timer
+- [ ] Study streak tracking and gamification
+- [ ] Widget support for quick task overview
+- [ ] Collaborative study groups
+- [ ] Flashcard system with spaced repetition
+- [ ] Advanced analytics dashboard
+- [ ] Desktop applications (Windows, macOS, Linux)
+
+## 🛠️ Tech Stack
+
+- **Framework**: Flutter 3.35.2+
+- **Language**: Dart 3.9.0+
+- **State Management**: Riverpod
+- **Backend**: Firebase (Auth, Firestore)
+- **Local Storage**: Hive
+- **UI Components**:
+  - Google Fonts
+  - Material Design 3
+  - Custom animations and transitions
+- **Additional Features**:
+  - QR Code generation/scanning
+  - URL launching
+  - Notifications (local & scheduled)
+
+## 🎨 Design Philosophy
+
+Module Tracker is built with a focus on:
+- **User Experience**: Intuitive navigation and smooth animations
+- **Accessibility**: Responsive design for all screen sizes
+- **Performance**: Optimised for fast loading and smooth scrolling
+- **British English**: Proper spelling (colours, organise, etc.)
+- **Clean Architecture**: Separation of concerns with clear data flow
+
+## 🔒 Privacy & Data
+
+Your privacy and data security are paramount:
+
+### Data Storage
+- **Cloud Sync**: Your data is securely stored on Firebase (Google Cloud Platform)
+- **Local Cache**: Hive local storage for offline access and faster loading
+- **Encryption**: All data transmitted is encrypted using HTTPS/TLS
+
+### Privacy Commitment
+- ✅ **No Data Selling**: We will never sell, rent, or share your personal data with third parties
+- ✅ **No Advertisements**: Completely ad-free experience
+- ✅ **No Tracking**: No third-party analytics or tracking beyond essential Firebase services
+- ✅ **Data Ownership**: Your data belongs to you
+- ✅ **Right to Deletion**: Delete your account and all associated data at any time from Settings
+- ✅ **GDPR Compliant**: Built with GDPR principles in mind for European users
+
+### What Data We Store
+- Account information (email, name, birthday - optional)
+- Academic data (semesters, modules, tasks, assessments)
+- App preferences (theme, notifications, customisation settings)
+- Task completion history for progress tracking
+
+### Data Access
+- Only you can access your data (secured by Firebase Authentication)
+- Firestore security rules ensure users can only read/write their own data
+- No admin or developer access to your academic information
+
+### Data Portability
+- Currently working on export features (PDF/CSV) - coming soon!
+- Can request data deletion at any time through the Delete Account option
+
+### Why Is It Free?
+Module Tracker is a passion project built to help students succeed. There are no plans for:
+- ❌ Paid subscriptions or premium tiers
+- ❌ In-app purchases
+- ❌ Advertisements
+- ❌ Data monetisation
+
+If you find Module Tracker helpful, consider [supporting the development](https://buymeacoffee.com/tyrbujac) - but it's completely optional!
+
+For questions about data privacy, contact via [tyrbujac.com](https://tyrbujac.com).
+
+## 📱 Platform Support
+
+### Officially Supported Platforms
+- **iOS**: iPhone and iPad (coming to App Store)
+- **Android**: Phones and Tablets (coming to Google Play Store)
+- **Web**: All modern browsers (Chrome, Safari, Firefox, Edge) - coming soon
+
+### Minimum Requirements
+- **iOS**: Version determined by Flutter SDK requirements
+- **Android**: Version determined by Flutter SDK requirements
+- **Web**: Modern browser with JavaScript enabled
+- **Internet**: Required for initial sync, offline mode available for viewing
+
+### Cross-Platform Features
+All features work consistently across all platforms:
+- ✅ Full feature parity
+- ✅ Real-time synchronisation
+- ✅ Responsive design optimised for each screen size
+- ✅ Native performance and feel
+
+### Coming Soon
+- Desktop apps (Windows, macOS, Linux) - under consideration
+- Progressive Web App (PWA) for offline-first experience
+- Widget support for iOS and Android home screens
 
 ## Troubleshooting
 
@@ -200,10 +403,26 @@ Check that:
 2. Firestore security rules are set up correctly
 3. Authentication is enabled in Firebase Console
 
-## Contributing
+## 👨‍💻 Developer
 
-This is a personal project for educational purposes. Feel free to fork and customize for your own use.
+**Designed and Built by Tyr**
+- Website: [tyrbujac.com](https://tyrbujac.com)
+- Support: [Buy Me a Coffee](https://buymeacoffee.com/tyrbujac)
 
-## License
+## 🤝 Contributing
+
+This is a personal project for educational and productivity purposes. While this repository is primarily for personal use, you're welcome to:
+- Fork the project for your own use
+- Submit bug reports via GitHub Issues
+- Suggest new features or improvements
+- Share feedback on the user experience
+
+## 📄 License
 
 This project is open source and available under the MIT License.
+
+---
+
+**Made with ❤️ for university students**
+
+*Enjoying the app? Consider [supporting the development](https://buymeacoffee.com/tyrbujac)!*

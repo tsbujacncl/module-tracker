@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:module_tracker/providers/auth_provider.dart';
 
 /// User preferences model
 class UserPreferences {
@@ -63,16 +64,38 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
   static const String _notificationTimeKey = 'notification_time';
   static const String _hasCompletedOnboardingKey = 'has_completed_onboarding';
   Box? _settingsBox;
+  final String? _userId; // Firebase user ID for user-specific storage
 
-  UserPreferencesNotifier() : super(const UserPreferences()) {
+  UserPreferencesNotifier({String? userId})
+      : _userId = userId,
+        super(const UserPreferences()) {
     _loadPreferences();
+  }
+
+  /// Get user-specific key by prefixing with user ID
+  String _getUserKey(String baseKey) {
+    if (_userId != null && _userId!.isNotEmpty) {
+      return 'user_${_userId}_$baseKey';
+    }
+    // Fallback to global key if no user ID (shouldn't happen in normal flow)
+    return baseKey;
   }
 
   /// Ensure settings box is initialized
   Future<Box> _ensureBox() async {
+    // Try to get the already-opened box first
+    if (Hive.isBoxOpen('settings')) {
+      _settingsBox = Hive.box('settings');
+      print('DEBUG: Using already-opened settings box');
+      return _settingsBox!;
+    }
+
+    // If not open, open it (shouldn't happen if main.dart opens it first)
     if (_settingsBox != null && _settingsBox!.isOpen) {
       return _settingsBox!;
     }
+
+    print('DEBUG: Opening new settings box');
     _settingsBox = await Hive.openBox('settings');
     return _settingsBox!;
   }
@@ -80,17 +103,24 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
   /// Load saved preferences
   Future<void> _loadPreferences() async {
     try {
+      print('DEBUG: Starting to load preferences for user: $_userId');
       final box = await _ensureBox();
+      print('DEBUG: Box obtained: ${box.isOpen}');
 
-      final threeStateToggle = box.get(_threeStateToggleKey, defaultValue: false) as bool;
-      final lectureColorValue = box.get(_lectureColorKey) as int?;
-      final labTutorialColorValue = box.get(_labTutorialColorKey) as int?;
-      final assignmentColorValue = box.get(_assignmentColorKey) as int?;
-      final targetGrade = box.get(_targetGradeKey, defaultValue: 70.0) as double;
-      final userName = box.get(_userNameKey) as String?;
-      final birthdayString = box.get(_birthdayKey) as String?;
-      final notificationTime = box.get(_notificationTimeKey) as String?;
-      final hasCompletedOnboarding = box.get(_hasCompletedOnboardingKey, defaultValue: false) as bool;
+      final threeStateToggle = box.get(_getUserKey(_threeStateToggleKey), defaultValue: false) as bool;
+      final lectureColorValue = box.get(_getUserKey(_lectureColorKey)) as int?;
+      final labTutorialColorValue = box.get(_getUserKey(_labTutorialColorKey)) as int?;
+      final assignmentColorValue = box.get(_getUserKey(_assignmentColorKey)) as int?;
+      final targetGrade = box.get(_getUserKey(_targetGradeKey), defaultValue: 70.0) as double;
+      final userName = box.get(_getUserKey(_userNameKey)) as String?;
+      final birthdayString = box.get(_getUserKey(_birthdayKey)) as String?;
+      final notificationTime = box.get(_getUserKey(_notificationTimeKey)) as String?;
+      final hasCompletedOnboarding = box.get(_getUserKey(_hasCompletedOnboardingKey), defaultValue: false) as bool;
+
+      print('DEBUG: Loaded userName: $userName');
+      print('DEBUG: Loaded birthday: $birthdayString');
+      print('DEBUG: Loaded hasCompletedOnboarding: $hasCompletedOnboarding');
+      print('DEBUG: Using key: ${_getUserKey(_userNameKey)}');
 
       state = UserPreferences(
         enableThreeStateTaskToggle: threeStateToggle,
@@ -103,8 +133,10 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
         notificationTime: notificationTime,
         hasCompletedOnboarding: hasCompletedOnboarding,
       );
-    } catch (e) {
+      print('DEBUG: Preferences loaded successfully!');
+    } catch (e, stackTrace) {
       print('Error loading user preferences: $e');
+      print('Stack trace: $stackTrace');
     }
   }
 
@@ -114,7 +146,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
 
     try {
       final box = await _ensureBox();
-      await box.put(_threeStateToggleKey, enabled);
+      await box.put(_getUserKey(_threeStateToggleKey), enabled);
     } catch (e) {
       print('Error saving three-state toggle preference: $e');
     }
@@ -127,7 +159,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     try {
       final box = await _ensureBox();
       // ignore: deprecated_member_use
-      await box.put(_lectureColorKey, color.value);
+      await box.put(_getUserKey(_lectureColorKey), color.value);
     } catch (e) {
       print('Error saving lecture color: $e');
     }
@@ -140,7 +172,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     try {
       final box = await _ensureBox();
       // ignore: deprecated_member_use
-      await box.put(_labTutorialColorKey, color.value);
+      await box.put(_getUserKey(_labTutorialColorKey), color.value);
     } catch (e) {
       print('Error saving lab/tutorial color: $e');
     }
@@ -153,7 +185,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     try {
       final box = await _ensureBox();
       // ignore: deprecated_member_use
-      await box.put(_assignmentColorKey, color.value);
+      await box.put(_getUserKey(_assignmentColorKey), color.value);
     } catch (e) {
       print('Error saving assignment color: $e');
     }
@@ -165,7 +197,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
 
     try {
       final box = await _ensureBox();
-      await box.put(_targetGradeKey, grade);
+      await box.put(_getUserKey(_targetGradeKey), grade);
     } catch (e) {
       print('Error saving target grade: $e');
     }
@@ -177,8 +209,8 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
 
     try {
       final box = await _ensureBox();
-      await box.put(_userNameKey, name);
-      print('DEBUG: User name saved successfully: $name');
+      await box.put(_getUserKey(_userNameKey), name);
+      print('DEBUG: User name saved successfully: $name (key: ${_getUserKey(_userNameKey)})');
     } catch (e) {
       print('Error saving user name: $e');
     }
@@ -191,10 +223,10 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     try {
       final box = await _ensureBox();
       if (birthday != null) {
-        await box.put(_birthdayKey, birthday.toIso8601String());
-        print('DEBUG: Birthday saved successfully: ${birthday.toIso8601String()}');
+        await box.put(_getUserKey(_birthdayKey), birthday.toIso8601String());
+        print('DEBUG: Birthday saved successfully: ${birthday.toIso8601String()} (key: ${_getUserKey(_birthdayKey)})');
       } else {
-        await box.delete(_birthdayKey);
+        await box.delete(_getUserKey(_birthdayKey));
         print('DEBUG: Birthday cleared');
       }
     } catch (e) {
@@ -208,7 +240,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
 
     try {
       final box = await _ensureBox();
-      await box.put(_notificationTimeKey, time);
+      await box.put(_getUserKey(_notificationTimeKey), time);
     } catch (e) {
       print('Error saving notification time: $e');
     }
@@ -220,7 +252,8 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
 
     try {
       final box = await _ensureBox();
-      await box.put(_hasCompletedOnboardingKey, true);
+      await box.put(_getUserKey(_hasCompletedOnboardingKey), true);
+      print('DEBUG: Onboarding completed and saved (key: ${_getUserKey(_hasCompletedOnboardingKey)})');
     } catch (e) {
       print('Error saving onboarding status: $e');
     }
@@ -228,8 +261,15 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
 }
 
 /// User preferences provider
+/// Automatically uses the current Firebase user's ID for user-specific storage
 final userPreferencesProvider = StateNotifierProvider<UserPreferencesNotifier, UserPreferences>((ref) {
-  return UserPreferencesNotifier();
+  // Import Firebase Auth to get current user
+  // Note: We need to add this import at the top of the file
+  final currentUser = ref.watch(currentUserProvider);
+  final userId = currentUser?.uid;
+
+  print('DEBUG: Creating UserPreferencesNotifier for user: $userId');
+  return UserPreferencesNotifier(userId: userId);
 });
 
 // Provider to track when user is dragging over checkboxes (prevents scroll)

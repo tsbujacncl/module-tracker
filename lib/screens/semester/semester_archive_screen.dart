@@ -197,8 +197,6 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
                   _SemesterCard(
                     semester: currentSemester,
                     status: SemesterStatus.current,
-                    onArchive: () =>
-                        _archiveSemester(context, ref, currentSemester),
                   ),
                   const SizedBox(height: 32),
                 ],
@@ -219,8 +217,6 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
                       child: _SemesterCard(
                         semester: semester,
                         status: SemesterStatus.future,
-                        onArchive: () =>
-                            _archiveSemester(context, ref, semester),
                       ),
                     ),
                   ),
@@ -555,16 +551,6 @@ class _SemesterCardState extends ConsumerState<_SemesterCard> {
                               ),
                             ),
                     ),
-                    if (widget.status != SemesterStatus.archived && widget.onArchive != null)
-                      TextButton.icon(
-                        onPressed: widget.onArchive,
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          backgroundColor: Colors.white.withValues(alpha: 0.2),
-                        ),
-                        icon: const Icon(Icons.archive_outlined, size: 18),
-                        label: const Text('Archive'),
-                      ),
                     if (widget.status == SemesterStatus.archived && widget.onRestore != null)
                       TextButton.icon(
                         onPressed: widget.onRestore,

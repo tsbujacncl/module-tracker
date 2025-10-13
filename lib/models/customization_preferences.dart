@@ -122,7 +122,7 @@ enum GradeDisplayFormat {
   String get displayName {
     switch (this) {
       case GradeDisplayFormat.percentage:
-        return 'Percentage (85%)';
+        return 'Percentage (40%, 70%, etc.)';
       case GradeDisplayFormat.letter:
         return 'Letter (A, B+, etc.)';
       case GradeDisplayFormat.gpa:

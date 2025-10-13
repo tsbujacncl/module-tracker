@@ -13,6 +13,7 @@ import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/screens/module/module_form_screen.dart';
 import 'package:module_tracker/utils/celebration_helper.dart';
+import 'package:module_tracker/utils/responsive_text_utils.dart';
 import 'package:module_tracker/widgets/module_selection_dialog.dart';
 
 class ModuleCard extends ConsumerStatefulWidget {
@@ -45,10 +46,13 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
   // Track expanded weeks
   final Map<int, bool> _expandedWeeks = {};
 
-  // Track tasks that are fading out after completion
+  // Track tasks that are fading out after completion (using composite keys: taskId_week_weekNumber)
   final Map<String, DateTime> _completedTaskTimestamps = {};
   final Set<String> _fadingOutTaskIds = {};
   final Map<String, double> _fadeOpacities = {};
+
+  // Track temporary completions per week (using composite keys: taskId_week_weekNumber)
+  final Map<String, TaskStatus> _temporaryCompletionsByWeek = {};
 
   void onTouchDown(String taskId, TaskStatus currentStatus) {
     if (!_isDragging) {
@@ -75,6 +79,13 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
   void updateTemporaryStatus(String taskId, TaskStatus newStatus) {
     setState(() {
       _temporaryCompletions[taskId] = newStatus;
+    });
+  }
+
+  void updateTemporaryStatusWithWeek(String taskId, int weekNumber, TaskStatus newStatus) {
+    final compositeKey = '${taskId}_week_$weekNumber';
+    setState(() {
+      _temporaryCompletionsByWeek[compositeKey] = newStatus;
     });
   }
 
@@ -116,64 +127,114 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
     return tempStatus;
   }
 
+  TaskStatus? getTemporaryStatusWithWeek(String taskId, int weekNumber, TaskStatus dbStatus, {bool performCleanup = true}) {
+    final compositeKey = '${taskId}_week_$weekNumber';
+    final tempStatus = _temporaryCompletionsByWeek[compositeKey];
+
+    // If database has caught up to temporary status, remove from temp map
+    // Only perform cleanup when explicitly requested (during rendering, not during data collection)
+    if (performCleanup && tempStatus != null && tempStatus == dbStatus) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _temporaryCompletionsByWeek.remove(compositeKey);
+          });
+        }
+      });
+    }
+
+    return tempStatus;
+  }
+
+  // Read-only version for data collection - doesn't trigger cleanup
+  TaskStatus peekTemporaryStatusWithWeek(String taskId, int weekNumber, TaskStatus dbStatus) {
+    final compositeKey = '${taskId}_week_$weekNumber';
+    return _temporaryCompletionsByWeek[compositeKey] ?? dbStatus;
+  }
+
   // Handle task completion with fade-out animation
-  void handleTaskCompletedWithFade(String taskId) {
+  void handleTaskCompletedWithFade(String taskId, int weekNumber) {
+    final compositeKey = '${taskId}_week_$weekNumber';
+    final animationTimestamp = DateTime.now();
+
     setState(() {
-      _completedTaskTimestamps[taskId] = DateTime.now();
-      _fadeOpacities[taskId] = 1.0;
+      _completedTaskTimestamps[compositeKey] = animationTimestamp;
+      _fadeOpacities[compositeKey] = 0.8; // Start at 80% (20% faded) for visual feedback
     });
 
-    // After 2 seconds, start fade out
-    Future.delayed(const Duration(seconds: 2), () {
+    // After 3 seconds, start fade out (gives time to undo accidental clicks)
+    Future.delayed(const Duration(seconds: 3), () {
       if (!mounted) return;
+      // Check if this animation was cancelled (timestamp removed or changed)
+      if (_completedTaskTimestamps[compositeKey] != animationTimestamp) return;
+
       setState(() {
-        _fadingOutTaskIds.add(taskId);
+        _fadingOutTaskIds.add(compositeKey);
       });
 
-      // Animate opacity to 0 over 500ms
-      _animateFadeOut(taskId);
+      // Animate opacity from 0.8 to 0 over 3000ms (3 seconds)
+      _animateFadeOut(compositeKey, animationTimestamp);
 
       // After fade completes, remove from display
-      Future.delayed(const Duration(milliseconds: 500), () {
+      Future.delayed(const Duration(milliseconds: 3000), () {
         if (!mounted) return;
+        // Check if this animation was cancelled (timestamp removed or changed)
+        if (_completedTaskTimestamps[compositeKey] != animationTimestamp) return;
+
         setState(() {
-          _completedTaskTimestamps.remove(taskId);
-          _fadingOutTaskIds.remove(taskId);
-          _fadeOpacities.remove(taskId);
+          _completedTaskTimestamps.remove(compositeKey);
+          _fadingOutTaskIds.remove(compositeKey);
+          _fadeOpacities.remove(compositeKey);
         });
       });
     });
   }
 
-  void _animateFadeOut(String taskId) {
-    const steps = 10;
-    const stepDuration = Duration(milliseconds: 50);
+  void _animateFadeOut(String compositeKey, DateTime animationTimestamp) {
+    const steps = 30; // More steps for smoother 3-second fade
+    const stepDuration = Duration(milliseconds: 100);
 
     for (int i = 0; i < steps; i++) {
       Future.delayed(stepDuration * i, () {
-        if (!mounted || !_fadingOutTaskIds.contains(taskId)) return;
+        if (!mounted || !_fadingOutTaskIds.contains(compositeKey)) return;
+        // Check if this animation was cancelled (timestamp removed or changed)
+        if (_completedTaskTimestamps[compositeKey] != animationTimestamp) return;
+
         setState(() {
-          _fadeOpacities[taskId] = 1.0 - (i + 1) / steps;
+          // Fade from 0.8 to 0
+          _fadeOpacities[compositeKey] = 0.8 - (0.8 * (i + 1) / steps);
         });
       });
     }
   }
 
   // Check if task should be hidden (completed and past fade delay)
-  bool shouldShowTask(String taskId, TaskStatus status) {
+  bool shouldShowTask(String taskId, int weekNumber, TaskStatus status) {
     if (status != TaskStatus.complete) return true;
-    if (!_completedTaskTimestamps.containsKey(taskId)) return true;
+    final compositeKey = '${taskId}_week_$weekNumber';
+    if (!_completedTaskTimestamps.containsKey(compositeKey)) return true;
 
-    final completedTime = _completedTaskTimestamps[taskId]!;
+    final completedTime = _completedTaskTimestamps[compositeKey]!;
     final elapsed = DateTime.now().difference(completedTime);
 
-    // Hide after 2.5 seconds (2 second display + 0.5 second fade)
-    return elapsed.inMilliseconds < 2500;
+    // Hide after 6 seconds (3 seconds at 80% opacity + 3 second fade to 0%)
+    return elapsed.inMilliseconds < 6000;
   }
 
   // Get opacity for fading task
-  double getTaskOpacity(String taskId) {
-    return _fadeOpacities[taskId] ?? 1.0;
+  double getTaskOpacity(String taskId, int weekNumber) {
+    final compositeKey = '${taskId}_week_$weekNumber';
+    return _fadeOpacities[compositeKey] ?? 1.0;
+  }
+
+  // Cancel fade-out and restore task to full opacity (for undo)
+  void cancelFadeOut(String taskId, int weekNumber) {
+    final compositeKey = '${taskId}_week_$weekNumber';
+    setState(() {
+      _completedTaskTimestamps.remove(compositeKey);
+      _fadingOutTaskIds.remove(compositeKey);
+      _fadeOpacities.remove(compositeKey);
+    });
   }
 
   // Get display name for task type
@@ -392,7 +453,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                       ),
                       // Three dots menu button
                       Transform.translate(
-                        offset: const Offset(0, -3.5),
+                        offset: const Offset(8, -3.5),
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
@@ -852,10 +913,23 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                       data: (tasks) {
                         return assessmentsAsync.when(
                           data: (assessments) {
+                            // Calculate actual current week based on today's date
+                            final now = DateTime.now();
+                            final daysSinceStart = now.difference(semester.startDate).inDays;
+                            final actualCurrentWeek = (daysSinceStart / 7).floor() + 1;
+
                             // Collect outstanding tasks from previous weeks with their completion data
+                            // Only check weeks that have actually occurred (up to actualCurrentWeek)
                             final outstandingTasksData = <Map<String, dynamic>>[];
 
-                            for (int week = 1; week < widget.weekNumber; week++) {
+                            // When viewing a week, check all previous weeks up to the current actual week
+                            // Example: If viewing Week 6 but we're in Week 5, check weeks 1-5
+                            // Example: If viewing Week 5 and we're in Week 5, check weeks 1-4
+                            final maxWeekToCheck = widget.weekNumber <= actualCurrentWeek
+                                ? widget.weekNumber - 1
+                                : actualCurrentWeek;
+
+                            for (int week = 1; week <= maxWeekToCheck; week++) {
                               final prevWeekCompletionsAsync = ref.watch(
                                 taskCompletionsProvider((moduleId: widget.module.id, weekNumber: week)),
                               );
@@ -873,7 +947,18 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                 // Check recurring tasks - add date to name
                                 for (final task in tasks) {
                                   final completion = prevCompletionMap[task.id];
-                                  if (completion?.status != TaskStatus.complete) {
+                                  final dbStatus = completion?.status ?? TaskStatus.notStarted;
+                                  final compositeKey = '${task.id}_week_$week';
+
+                                  // Check temporary status first (for instant UI feedback) - use peek to avoid cleanup
+                                  final effectiveStatus = peekTemporaryStatusWithWeek(task.id, week, dbStatus);
+
+                                  // Include if not complete, OR if recently completed and actively fading
+                                  final isRecentlyCompleted = effectiveStatus == TaskStatus.complete &&
+                                                              _completedTaskTimestamps.containsKey(compositeKey) &&
+                                                              shouldShowTask(task.id, week, effectiveStatus);
+
+                                  if (effectiveStatus != TaskStatus.complete || isRecentlyCompleted) {
                                     // Generate task name with date
                                     final taskNameWithDate = generateTaskName(
                                       task,
@@ -888,7 +973,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                       'name': taskNameWithDate,
                                       'isAssessment': false,
                                       'completion': completion,
-                                      'status': completion?.status ?? TaskStatus.notStarted,
+                                      'status': effectiveStatus,
                                     });
                                   }
                                 }
@@ -896,7 +981,18 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                 // Check assessments - add date to name
                                 for (final assessment in prevWeekAssessments) {
                                   final completion = prevCompletionMap[assessment.id];
-                                  if (completion?.status != TaskStatus.complete) {
+                                  final dbStatus = completion?.status ?? TaskStatus.notStarted;
+                                  final compositeKey = '${assessment.id}_week_$week';
+
+                                  // Check temporary status first (for instant UI feedback) - use peek to avoid cleanup
+                                  final effectiveStatus = peekTemporaryStatusWithWeek(assessment.id, week, dbStatus);
+
+                                  // Include if not complete, OR if recently completed and actively fading
+                                  final isRecentlyCompleted = effectiveStatus == TaskStatus.complete &&
+                                                              _completedTaskTimestamps.containsKey(compositeKey) &&
+                                                              shouldShowTask(assessment.id, week, effectiveStatus);
+
+                                  if (effectiveStatus != TaskStatus.complete || isRecentlyCompleted) {
                                     // Calculate the due date for this assessment
                                     String dueDateStr = '';
                                     if (assessment.dueDate != null) {
@@ -923,7 +1019,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                       'name': '${assessment.name}$dueDateStr',
                                       'isAssessment': true,
                                       'completion': completion,
-                                      'status': completion?.status ?? TaskStatus.notStarted,
+                                      'status': effectiveStatus,
                                     });
                                   }
                                 }
@@ -937,8 +1033,9 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                             // Filter out tasks that should be hidden (completed and faded out)
                             final visibleTasks = outstandingTasksData.where((taskData) {
                               final taskId = taskData['taskId'] as String;
+                              final weekNumber = taskData['week'] as int;
                               final status = taskData['status'] as TaskStatus;
-                              return shouldShowTask(taskId, status);
+                              return shouldShowTask(taskId, weekNumber, status);
                             }).toList();
 
                             if (visibleTasks.isEmpty) {
@@ -948,10 +1045,16 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                Divider(
+                                  color: Colors.grey[300],
+                                  thickness: 1,
+                                  height: 16 * scaleFactor,
+                                ),
                                 SizedBox(height: 16 * scaleFactor),
 
                                 // Warning badge
                                 Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Icon(
                                       Icons.warning_amber_rounded,
@@ -959,12 +1062,14 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                       color: const Color(0xFFF59E0B),
                                     ),
                                     SizedBox(width: 6 * scaleFactor),
-                                    Text(
-                                      '${visibleTasks.length} outstanding from previous weeks',
-                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        fontSize: (Theme.of(context).textTheme.bodyMedium?.fontSize ?? 13) * scaleFactor,
-                                        fontWeight: FontWeight.w600,
-                                        color: const Color(0xFFF59E0B),
+                                    Expanded(
+                                      child: Text(
+                                        '${visibleTasks.length} outstanding from previous weeks',
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                          fontSize: (Theme.of(context).textTheme.bodyMedium?.fontSize ?? 13) * scaleFactor,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFFF59E0B),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -1016,7 +1121,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                       final status = taskData['status'] as TaskStatus;
 
                                       return Opacity(
-                                        opacity: getTaskOpacity(taskId),
+                                        opacity: getTaskOpacity(taskId, weekNumber),
                                         child: _TaskItem(
                                           taskName: '$taskName - Week $weekNumber',
                                           taskId: taskId,
@@ -1026,15 +1131,18 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                           scaleFactor: scaleFactor,
                                           onTouchDown: onTouchDown,
                                           onSelectTask: selectTask,
-                                          getTemporaryStatus: getTemporaryStatus,
-                                          onUpdateTemporaryStatus: updateTemporaryStatus,
+                                          getTemporaryStatus: (tid, dbStatus) => getTemporaryStatusWithWeek(tid, weekNumber, dbStatus),
+                                          onUpdateTemporaryStatus: (tid, newStatus) => updateTemporaryStatusWithWeek(tid, weekNumber, newStatus),
                                           onStatusChanged: (newStatus) async {
                                             final user = ref.read(currentUserProvider);
                                             if (user == null) return;
 
                                             // Trigger fade-out animation if completing
                                             if (newStatus == TaskStatus.complete) {
-                                              handleTaskCompletedWithFade(taskId);
+                                              handleTaskCompletedWithFade(taskId, weekNumber);
+                                            } else {
+                                              // Cancel fade-out and restore full opacity if unchecking
+                                              cancelFadeOut(taskId, weekNumber);
                                             }
 
                                             final repository = ref.read(firestoreRepositoryProvider);
@@ -1093,203 +1201,229 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                         return const SizedBox.shrink();
                       }
 
-                      return completionsAsync.when(
-                        data: (completions) {
-                          final completionMap = {for (var c in completions) c.taskId: c};
+                      return recurringTasksAsync.when(
+                        data: (tasks) {
+                          return completionsAsync.when(
+                            data: (completions) {
+                              final completionMap = {for (var c in completions) c.taskId: c};
 
-                          // Filter out completed assessments and those that should be hidden
-                          final visibleAssessments = upcomingAssessments.where((assessment) {
-                            final completion = completionMap[assessment.id];
-                            final status = completion?.status ?? TaskStatus.notStarted;
-                            return shouldShowTask(assessment.id, status);
-                          }).toList();
-
-                          if (visibleAssessments.isEmpty) {
-                            return const SizedBox.shrink();
-                          }
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(height: 16 * scaleFactor),
-
-                              // Section header
-                              Text(
-                                'Assignments Due',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: (Theme.of(context).textTheme.titleMedium?.fontSize ?? 16) * scaleFactor,
-                                  color: const Color(0xFF1E293B),
-                                ),
-                              ),
-                              SizedBox(height: 12 * scaleFactor),
-
-                              // Assessment items with bordered containers
-                              ...visibleAssessments.map((assessment) {
+                              // Filter out completed assessments and those that should be hidden
+                              final visibleAssessments = upcomingAssessments.where((assessment) {
                                 final completion = completionMap[assessment.id];
                                 final status = completion?.status ?? TaskStatus.notStarted;
-                                final daysUntilDue = assessment.dueDate!.difference(now).inDays;
+                                return shouldShowTask(assessment.id, widget.weekNumber, status);
+                              }).toList();
 
-                                // Determine urgency color
-                                Color borderColor;
-                                String timeText;
+                              if (visibleAssessments.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
 
-                                if (daysUntilDue <= 3) {
-                                  borderColor = const Color(0xFFEF4444); // Red
-                                  timeText = daysUntilDue == 0
-                                      ? 'Today'
-                                      : daysUntilDue == 1
-                                          ? 'Tomorrow'
-                                          : '$daysUntilDue days';
-                                } else if (daysUntilDue <= 7) {
-                                  borderColor = const Color(0xFFF59E0B); // Orange
-                                  timeText = '$daysUntilDue days';
-                                } else {
-                                  borderColor = const Color(0xFF64748B); // Grey
-                                  timeText = '$daysUntilDue days';
-                                }
+                              // Check if there are outstanding tasks from previous weeks
+                              bool hasOutstandingTasks = false;
+                              for (int week = 1; week < widget.weekNumber; week++) {
+                                final prevWeekCompletionsAsync = ref.watch(
+                                  taskCompletionsProvider((moduleId: widget.module.id, weekNumber: week)),
+                                );
 
-                                // Get assessment type name
-                                String typeName;
-                                switch (assessment.type) {
-                                  case AssessmentType.weekly:
-                                    typeName = 'Weekly';
-                                    break;
-                                  case AssessmentType.exam:
-                                    typeName = 'Exam';
-                                    break;
-                                  case AssessmentType.coursework:
-                                    typeName = 'Coursework';
-                                    break;
-                                }
+                                prevWeekCompletionsAsync.whenData((prevCompletions) {
+                                  final prevCompletionMap = {for (var c in prevCompletions) c.taskId: c};
 
-                                return Opacity(
-                                  opacity: getTaskOpacity(assessment.id),
-                                  child: Container(
-                                    margin: EdgeInsets.only(bottom: 8 * scaleFactor),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.center,
-                                      children: [
-                                        // Checkbox on left (outside border)
-                                        GestureDetector(
-                                          onTap: () async {
-                                            final user = ref.read(currentUserProvider);
-                                            if (user == null) return;
+                                  // Check recurring tasks
+                                  for (final task in tasks) {
+                                    final completion = prevCompletionMap[task.id];
+                                    final dbStatus = completion?.status ?? TaskStatus.notStarted;
+                                    final effectiveStatus = peekTemporaryStatusWithWeek(task.id, week, dbStatus);
+                                    final compositeKey = '${task.id}_week_$week';
+                                    final isRecentlyCompleted = effectiveStatus == TaskStatus.complete &&
+                                                                _completedTaskTimestamps.containsKey(compositeKey) &&
+                                                                shouldShowTask(task.id, week, effectiveStatus);
 
-                                            final newStatus = status == TaskStatus.complete
-                                                ? TaskStatus.notStarted
-                                                : TaskStatus.complete;
+                                    if ((effectiveStatus != TaskStatus.complete || isRecentlyCompleted) &&
+                                        shouldShowTask(task.id, week, effectiveStatus)) {
+                                      hasOutstandingTasks = true;
+                                      return;
+                                    }
+                                  }
 
-                                            // Trigger fade-out if completing
-                                            if (newStatus == TaskStatus.complete) {
-                                              handleTaskCompletedWithFade(assessment.id);
-                                            }
+                                  // Check assessments for previous week
+                                  final prevWeekAssessments = getAssessmentsForWeek(
+                                    allAssessments,
+                                    semester!.startDate,
+                                    week,
+                                  );
 
-                                            // Update temporary status for instant feedback
-                                            updateTemporaryStatus(assessment.id, newStatus);
+                                  for (final assessment in prevWeekAssessments) {
+                                    final completion = prevCompletionMap[assessment.id];
+                                    final dbStatus = completion?.status ?? TaskStatus.notStarted;
+                                    final effectiveStatus = peekTemporaryStatusWithWeek(assessment.id, week, dbStatus);
+                                    final compositeKey = '${assessment.id}_week_$week';
+                                    final isRecentlyCompleted = effectiveStatus == TaskStatus.complete &&
+                                                                _completedTaskTimestamps.containsKey(compositeKey) &&
+                                                                shouldShowTask(assessment.id, week, effectiveStatus);
 
-                                            final repository = ref.read(firestoreRepositoryProvider);
-                                            final newCompletion = TaskCompletion(
-                                              id: completion?.id ?? '',
-                                              moduleId: widget.module.id,
-                                              taskId: assessment.id,
-                                              weekNumber: widget.weekNumber,
-                                              status: newStatus,
-                                              completedAt: newStatus == TaskStatus.complete
-                                                  ? DateTime.now()
-                                                  : null,
-                                            );
+                                    if ((effectiveStatus != TaskStatus.complete || isRecentlyCompleted) &&
+                                        shouldShowTask(assessment.id, week, effectiveStatus)) {
+                                      hasOutstandingTasks = true;
+                                      return;
+                                    }
+                                  }
+                                });
 
-                                            await repository.upsertTaskCompletion(
-                                              user.uid,
-                                              widget.module.id,
-                                              newCompletion,
-                                            );
-                                          },
-                                          child: _StatusIcon(
-                                            status: getTemporaryStatus(assessment.id, status) ?? status,
-                                            scaleFactor: scaleFactor,
-                                          ),
-                                        ),
-                                        SizedBox(width: 12 * scaleFactor),
+                                if (hasOutstandingTasks) break;
+                              }
 
-                                        // Bordered content container
-                                        Expanded(
-                                          child: Container(
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal: 10 * scaleFactor,
-                                              vertical: 8 * scaleFactor,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              border: Border.all(color: borderColor, width: 1.5),
-                                              borderRadius: BorderRadius.circular(6 * scaleFactor),
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                // Assignment name
-                                                Text(
-                                                  assessment.name,
-                                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                                    fontSize: (Theme.of(context).textTheme.bodyLarge?.fontSize ?? 16) * scaleFactor,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: const Color(0xFF1E293B),
-                                                  ),
-                                                ),
-                                                SizedBox(height: 6 * scaleFactor),
-                                                // Two labels in a row
-                                                Row(
-                                                  children: [
-                                                    // Type label
-                                                    Container(
-                                                      padding: EdgeInsets.symmetric(
-                                                        horizontal: 6 * scaleFactor,
-                                                        vertical: 2 * scaleFactor,
-                                                      ),
-                                                      decoration: BoxDecoration(
-                                                        color: borderColor.withValues(alpha: 0.1),
-                                                        borderRadius: BorderRadius.circular(4 * scaleFactor),
-                                                      ),
-                                                      child: Text(
-                                                        typeName,
-                                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                          fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 11) * scaleFactor,
-                                                          color: borderColor,
-                                                          fontWeight: FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    SizedBox(width: 6 * scaleFactor),
-                                                    // Due label
-                                                    Container(
-                                                      padding: EdgeInsets.symmetric(
-                                                        horizontal: 6 * scaleFactor,
-                                                        vertical: 2 * scaleFactor,
-                                                      ),
-                                                      decoration: BoxDecoration(
-                                                        color: borderColor.withValues(alpha: 0.1),
-                                                        borderRadius: BorderRadius.circular(4 * scaleFactor),
-                                                      ),
-                                                      child: Text(
-                                                        timeText,
-                                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                          fontSize: (Theme.of(context).textTheme.bodySmall?.fontSize ?? 11) * scaleFactor,
-                                                          color: borderColor,
-                                                          fontWeight: FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Always show divider before upcoming assignments
+                                  Divider(
+                                    color: Colors.grey[300],
+                                    thickness: 1,
+                                    height: 16 * scaleFactor,
+                                  ),
+                                  SizedBox(height: 16 * scaleFactor),
+
+                              // Section header with icon
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.event_note,
+                                    size: 16 * scaleFactor,
+                                    color: const Color(0xFF7C3AED),
+                                  ),
+                                  SizedBox(width: 6 * scaleFactor),
+                                  Expanded(
+                                    child: Text(
+                                      '${visibleAssessments.length} upcoming assignment${visibleAssessments.length == 1 ? '' : 's'}',
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        fontSize: (Theme.of(context).textTheme.bodyMedium?.fontSize ?? 13) * scaleFactor,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF7C3AED),
+                                      ),
                                     ),
                                   ),
-                                );
-                              }),
+                                ],
+                              ),
+                              SizedBox(height: 8 * scaleFactor),
+
+                              // Assessment items - simple like regular tasks
+                              GestureDetector(
+                                behavior: HitTestBehavior.deferToChild,
+                                onPanStart: (details) {
+                                  if (!_isDragging) {
+                                    setState(() {
+                                      _isDragging = true;
+                                    });
+                                    ref.read(isDraggingCheckboxProvider.notifier).state = true;
+                                    if (_firstTouchedTaskId != null && _firstTouchedStatus != null) {
+                                      selectTask(_firstTouchedTaskId!, _firstTouchedStatus!);
+                                      _firstTouchedTaskId = null;
+                                      _firstTouchedStatus = null;
+                                    }
+                                  }
+                                },
+                                onPanEnd: (details) async {
+                                  setState(() {
+                                    _isDragging = false;
+                                    _selectedTaskIds.clear();
+                                    _firstTouchedTaskId = null;
+                                    _firstTouchedStatus = null;
+                                  });
+                                  ref.read(isDraggingCheckboxProvider.notifier).state = false;
+                                },
+                                onPanCancel: () {
+                                  setState(() {
+                                    _isDragging = false;
+                                    _selectedTaskIds.clear();
+                                    _firstTouchedTaskId = null;
+                                    _firstTouchedStatus = null;
+                                  });
+                                  ref.read(isDraggingCheckboxProvider.notifier).state = false;
+                                },
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: visibleAssessments.map((assessment) {
+                                    final completion = completionMap[assessment.id];
+                                    final status = completion?.status ?? TaskStatus.notStarted;
+                                    final daysUntilDue = assessment.dueDate!.difference(now).inDays;
+
+                                    // Determine time text
+                                    String timeText;
+                                    if (daysUntilDue == 0) {
+                                      timeText = 'Today';
+                                    } else if (daysUntilDue == 1) {
+                                      timeText = 'Tomorrow';
+                                    } else {
+                                      timeText = '$daysUntilDue days';
+                                    }
+
+                                    // Get assessment type name
+                                    String typeName;
+                                    switch (assessment.type) {
+                                      case AssessmentType.weekly:
+                                        typeName = 'Weekly';
+                                        break;
+                                      case AssessmentType.exam:
+                                        typeName = 'Exam';
+                                        break;
+                                      case AssessmentType.coursework:
+                                        typeName = 'Coursework';
+                                        break;
+                                    }
+
+                                    return Opacity(
+                                      opacity: getTaskOpacity(assessment.id, widget.weekNumber),
+                                      child: _TaskItem(
+                                        taskName: '${assessment.name} ($typeName) ($timeText)',
+                                        taskId: assessment.id,
+                                        status: status,
+                                        completedAt: completion?.completedAt,
+                                        scaleFactor: scaleFactor,
+                                        onTouchDown: onTouchDown,
+                                        onSelectTask: selectTask,
+                                        getTemporaryStatus: getTemporaryStatus,
+                                        onUpdateTemporaryStatus: updateTemporaryStatus,
+                                        onStatusChanged: (newStatus) async {
+                                          final user = ref.read(currentUserProvider);
+                                          if (user == null) return;
+
+                                          // Trigger fade-out if completing
+                                          if (newStatus == TaskStatus.complete) {
+                                            handleTaskCompletedWithFade(assessment.id, widget.weekNumber);
+                                          } else {
+                                            // Cancel fade-out if unchecking
+                                            cancelFadeOut(assessment.id, widget.weekNumber);
+                                          }
+
+                                          final repository = ref.read(firestoreRepositoryProvider);
+                                          final newCompletion = TaskCompletion(
+                                            id: completion?.id ?? '',
+                                            moduleId: widget.module.id,
+                                            taskId: assessment.id,
+                                            weekNumber: widget.weekNumber,
+                                            status: newStatus,
+                                            completedAt: newStatus == TaskStatus.complete
+                                                ? DateTime.now()
+                                                : null,
+                                          );
+
+                                          await repository.upsertTaskCompletion(
+                                            user.uid,
+                                            widget.module.id,
+                                            newCompletion,
+                                          );
+
+                                          // Check for weekly completion celebration
+                                          if (newStatus == TaskStatus.complete && context.mounted) {
+                                            await checkAndShowWeeklyCelebration(context, ref, widget.weekNumber);
+                                          }
+                                        },
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
                             ],
                           );
                         },
@@ -1299,7 +1433,11 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                     },
                     loading: () => const SizedBox.shrink(),
                     error: (_, __) => const SizedBox.shrink(),
-                  ),
+                  );
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
                 ],
               ),
             ],
@@ -1438,9 +1576,13 @@ class _TaskItemState extends ConsumerState<_TaskItem> {
     final currentStatus = temporaryStatus ?? widget.status;
 
     final taskContent = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _StatusIcon(status: currentStatus, scaleFactor: widget.scaleFactor),
-        SizedBox(width: 12 * widget.scaleFactor),
+        Padding(
+          padding: EdgeInsets.only(top: 3 * widget.scaleFactor),
+          child: _StatusIcon(status: currentStatus, scaleFactor: widget.scaleFactor),
+        ),
+        SizedBox(width: 6 * widget.scaleFactor),
         Expanded(
           child: Text(
             widget.taskName,
@@ -1490,19 +1632,10 @@ class _TaskItemState extends ConsumerState<_TaskItem> {
               bottom: 4 * widget.scaleFactor,
             ),
             padding: EdgeInsets.symmetric(
-              horizontal: widget.isAssessment ? 8 * widget.scaleFactor : 0,
-              vertical: widget.isAssessment ? 8 * widget.scaleFactor : 4 * widget.scaleFactor,
+              horizontal: 0,
+              vertical: 4 * widget.scaleFactor,
             ),
-            decoration: widget.isAssessment
-                ? BoxDecoration(
-                    color: const Color(0xFFB91C1C).withOpacity(0.08), // Light red background
-                    borderRadius: BorderRadius.circular(8 * widget.scaleFactor),
-                    border: Border.all(
-                      color: const Color(0xFFB91C1C).withOpacity(0.2),
-                      width: 1,
-                    ),
-                  )
-                : null,
+            decoration: null,
             child: taskContent,
           ),
         ),
@@ -1543,7 +1676,11 @@ class _StatusIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconSize = 24.0 * scaleFactor;
+    // Get screen width for responsive sizing
+    final screenWidth = MediaQuery.of(context).size.width;
+    // Use responsive checkbox size, scaled by module card's scaleFactor
+    final iconSize = ResponsiveText.getTaskCheckboxSize(screenWidth) * scaleFactor;
+
     return switch (status) {
       TaskStatus.notStarted => Icon(
         Icons.radio_button_unchecked,
