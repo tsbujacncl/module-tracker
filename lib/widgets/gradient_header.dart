@@ -13,21 +13,28 @@ class GradientHeader extends StatelessWidget {
     this.fontSize,
   });
 
-  /// Calculate responsive font size based on screen width
-  /// - Small screens (< 600): base size (20-24)
-  /// - Medium screens (600-900): medium size (24-28)
-  /// - Large screens (> 900): large size (28-32)
+  /// Calculate responsive font size based on screen width with smooth interpolation
+  /// - Small screens (< 600): 23-24 (smoothly scaled)
+  /// - Medium screens (600-900): 24-32 (smooth interpolation)
+  /// - Large screens (900-1200): 32-37 (smooth interpolation)
+  /// - XLarge screens (> 1200): 37
   double _getResponsiveFontSize(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
 
     if (width < 600) {
-      return 20;
+      // Smooth interpolation from 23 to 24 for mobile devices
+      final progress = (width / 600).clamp(0.0, 1.0);
+      return 23.0 + (1.0 * progress);
     } else if (width < 900) {
-      return 24;
+      // Smooth interpolation from 24 to 32 between 600-900px
+      final progress = (width - 600) / 300; // 0.0 to 1.0
+      return 24.0 + (8.0 * progress);
     } else if (width < 1200) {
-      return 28;
+      // Smooth interpolation from 32 to 37 between 900-1200px
+      final progress = (width - 900) / 300; // 0.0 to 1.0
+      return 32.0 + (5.0 * progress);
     } else {
-      return 32;
+      return 37.0;
     }
   }
 

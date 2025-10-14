@@ -389,39 +389,24 @@ class FirestoreRepository {
   }
 
   /// Create or update task completion
+  /// Uses a deterministic document ID to prevent race conditions
   Future<void> upsertTaskCompletion(
       String userId, String moduleId, TaskCompletion completion) async {
-    // Try to find existing completion
-    final existingQuery = await _firestore
+    // Use a composite document ID: taskId_weekNumber
+    // This prevents race conditions by ensuring only one document per task+week
+    final docId = '${completion.taskId}_w${completion.weekNumber}';
+
+    final docRef = _firestore
         .collection('users')
         .doc(userId)
         .collection('modules')
         .doc(moduleId)
         .collection('taskCompletions')
-        .where('taskId', isEqualTo: completion.taskId)
-        .where('weekNumber', isEqualTo: completion.weekNumber)
-        .get();
+        .doc(docId);
 
-    if (existingQuery.docs.isNotEmpty) {
-      // Update existing
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('modules')
-          .doc(moduleId)
-          .collection('taskCompletions')
-          .doc(existingQuery.docs.first.id)
-          .update(completion.toFirestore());
-    } else {
-      // Create new
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('modules')
-          .doc(moduleId)
-          .collection('taskCompletions')
-          .add(completion.toFirestore());
-    }
+    // Use set with merge to create or update atomically
+    // This is safe for concurrent calls - no race condition possible
+    await docRef.set(completion.toFirestore(), SetOptions(merge: false));
   }
 
   /// Batch create task completions for a week
@@ -441,5 +426,77 @@ class FirestoreRepository {
     }
 
     await batch.commit();
+  }
+
+  // ========== USER PREFERENCES OPERATIONS ==========
+
+  /// Get user preferences document reference
+  DocumentReference _getUserPrefsDoc(String userId) {
+    return _firestore.collection('users').doc(userId).collection('settings').doc('preferences');
+  }
+
+  /// Get user preferences stream
+  Stream<Map<String, dynamic>?> getUserPreferences(String userId) {
+    print('DEBUG REPO: Setting up user preferences stream for user: $userId');
+    return _getUserPrefsDoc(userId).snapshots().map((doc) {
+      if (doc.exists) {
+        print('DEBUG REPO: User preferences loaded from Firestore');
+        return doc.data() as Map<String, dynamic>?;
+      } else {
+        print('DEBUG REPO: No user preferences found in Firestore');
+        return null;
+      }
+    });
+  }
+
+  /// Save user preferences to Firestore
+  Future<void> saveUserPreferences(String userId, Map<String, dynamic> preferences) async {
+    print('DEBUG REPO: Saving user preferences to Firestore for user: $userId');
+    print('DEBUG REPO: Preferences: $preferences');
+
+    try {
+      await _getUserPrefsDoc(userId).set(preferences, SetOptions(merge: true));
+      print('DEBUG REPO: User preferences saved successfully');
+    } catch (e) {
+      print('DEBUG REPO: Error saving user preferences: $e');
+      rethrow;
+    }
+  }
+
+  /// Update specific user preference fields
+  Future<void> updateUserPreferences(String userId, Map<String, dynamic> updates) async {
+    print('DEBUG REPO: Updating user preferences for user: $userId');
+    print('DEBUG REPO: Updates: $updates');
+
+    try {
+      await _getUserPrefsDoc(userId).update(updates);
+      print('DEBUG REPO: User preferences updated successfully');
+    } catch (e) {
+      print('DEBUG REPO: Error updating user preferences: $e');
+      // If document doesn't exist, create it
+      if (e.toString().contains('NOT_FOUND')) {
+        await saveUserPreferences(userId, updates);
+      } else {
+        rethrow;
+      }
+    }
+  }
+
+  /// Get user preferences once (for initial load)
+  Future<Map<String, dynamic>?> getUserPreferencesOnce(String userId) async {
+    print('DEBUG REPO: Getting user preferences once for user: $userId');
+    try {
+      final doc = await _getUserPrefsDoc(userId).get();
+      if (doc.exists) {
+        print('DEBUG REPO: User preferences found in Firestore');
+        return doc.data() as Map<String, dynamic>?;
+      } else {
+        print('DEBUG REPO: No user preferences document found');
+        return null;
+      }
+    } catch (e) {
+      print('DEBUG REPO: Error getting user preferences: $e');
+      return null;
+    }
   }
 }

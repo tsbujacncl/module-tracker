@@ -685,6 +685,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   );
 
                   final horizontalPadding = _getHorizontalPadding(context);
+                  // Reduce vertical padding on small devices for tighter spacing
+                  final verticalPadding = screenWidth < 600 ? 3.0 : 8.0;
 
                   return RefreshIndicator(
                     onRefresh: () async {
@@ -697,7 +699,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           : const AlwaysScrollableScrollPhysics(),
                       padding: EdgeInsets.symmetric(
                         horizontal: horizontalPadding,
-                        vertical: 8,
+                        vertical: verticalPadding,
                       ),
                       children: [
                         // Week navigation bar (always shown)
@@ -730,7 +732,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             );
                           },
                         ),
-                        const SizedBox(height: 2),
+                        SizedBox(height: screenWidth < 600 ? 0 : 2),
                         // Weekly Calendar - always show
                         Builder(
                           builder: (context) {

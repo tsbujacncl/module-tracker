@@ -1,11 +1,11 @@
 {
-    "name": "module_tracker",
-    "short_name": "module_tracker",
+    "name": "Module Tracker",
+    "short_name": "Module Tracker",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0EA5E9",
-    "theme_color": "#0EA5E9",
-    "description": "A new Flutter project.",
+    "background_color": "#3B9EE8",
+    "theme_color": "#3B9EE8",
+    "description": "Track your university modules, assignments, and tasks with ease.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

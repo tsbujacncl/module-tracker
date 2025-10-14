@@ -33,6 +33,16 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
   bool _examPeriodExpanded = false;
   bool _readingWeekExpanded = false;
 
+  // Track initial state for unsaved changes detection
+  String _initialName = '';
+  String _initialCredits = '';
+  DateTime? _initialStartDate;
+  DateTime? _initialEndDate;
+  DateTime? _initialExamPeriodStart;
+  DateTime? _initialExamPeriodEnd;
+  DateTime? _initialReadingWeekStart;
+  DateTime? _initialReadingWeekEnd;
+
   bool get _isEditMode => widget.semesterToEdit != null;
 
   // Check if form is valid for submission
@@ -61,6 +71,16 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
       _examPeriodExpanded = _examPeriodStart != null || _examPeriodEnd != null;
       _readingWeekExpanded = _readingWeekStart != null || _readingWeekEnd != null;
     }
+
+    // Store initial state for unsaved changes detection
+    _initialName = _nameController.text;
+    _initialCredits = _creditsController.text;
+    _initialStartDate = _startDate;
+    _initialEndDate = _endDate;
+    _initialExamPeriodStart = _examPeriodStart;
+    _initialExamPeriodEnd = _examPeriodEnd;
+    _initialReadingWeekStart = _readingWeekStart;
+    _initialReadingWeekEnd = _readingWeekEnd;
   }
 
   @override
@@ -189,6 +209,78 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
     return utils.DateUtils.calculateWeeksBetween(_startDate!, _endDate!);
   }
 
+  // Check if there are unsaved changes
+  bool get _hasUnsavedChanges {
+    return _nameController.text != _initialName ||
+        _creditsController.text != _initialCredits ||
+        _startDate != _initialStartDate ||
+        _endDate != _initialEndDate ||
+        _examPeriodStart != _initialExamPeriodStart ||
+        _examPeriodEnd != _initialExamPeriodEnd ||
+        _readingWeekStart != _initialReadingWeekStart ||
+        _readingWeekEnd != _initialReadingWeekEnd;
+  }
+
+  // Show unsaved changes dialog
+  Future<bool> _showUnsavedChangesDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Unsaved Changes',
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          'You have unsaved changes. What would you like to do?',
+          style: GoogleFonts.inter(
+            fontSize: 14,
+          ),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red,
+              side: const BorderSide(color: Colors.red),
+            ),
+            child: Text(
+              'Discard',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(context, false);
+              await _saveSemester();
+            },
+            child: Text(
+              'Save',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
   Future<void> _saveSemester() async {
     if (!_formKey.currentState!.validate()) return;
     if (_startDate == null || _endDate == null) {
@@ -309,7 +401,19 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
     final weekStartLabel = firstDayOfWeek == 1 ? 'Monday' : 'Sunday';
     final weekEndLabel = firstDayOfWeek == 1 ? 'Sunday' : 'Saturday';
 
-    return Scaffold(
+    return PopScope(
+      canPop: !_hasUnsavedChanges,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        if (_hasUnsavedChanges) {
+          final shouldPop = await _showUnsavedChangesDialog();
+          if (shouldPop && mounted) {
+            Navigator.pop(context);
+          }
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: GradientHeader(
           title: _isEditMode ? 'Edit Semester' : 'Create Semester',
@@ -613,7 +717,18 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                     ),
                     const SizedBox(height: 12),
                     TextButton(
-                      onPressed: _isLoading ? null : () => Navigator.pop(context),
+                      onPressed: _isLoading
+                          ? null
+                          : () async {
+                              if (_hasUnsavedChanges) {
+                                final shouldPop = await _showUnsavedChangesDialog();
+                                if (shouldPop && mounted) {
+                                  Navigator.pop(context);
+                                }
+                              } else {
+                                Navigator.pop(context);
+                              }
+                            },
                       child: Text(
                         'Cancel',
                         style: GoogleFonts.inter(
@@ -633,6 +748,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

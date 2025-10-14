@@ -174,7 +174,7 @@ class ResponsiveText {
   /// More conservative scaling to prevent overflow in calendar boxes
   static double getCalendarModuleCodeFontSize(double screenWidth) {
     if (screenWidth < 600) {
-      return 9.0; // Smaller base for mobile
+      return 8.0; // Minimum readable size for mobile to fit full module codes like COMP201
     } else if (screenWidth < 900) {
       // 9 → 10
       final progress = (screenWidth - 600) / 300;
@@ -202,7 +202,7 @@ class ResponsiveText {
   /// More conservative scaling to prevent overflow in calendar boxes
   static double getCalendarEventTypeFontSize(double screenWidth) {
     if (screenWidth < 600) {
-      return 10.0; // Slightly larger than module code for readability
+      return 9.0; // Further reduced for mobile to provide more space
     } else if (screenWidth < 900) {
       // 10 → 11
       final progress = (screenWidth - 600) / 300;
@@ -240,7 +240,7 @@ class ResponsiveText {
   /// Scales aggressively from small on mobile to much larger on desktop
   static double getCalendarCheckboxSize(double screenWidth) {
     if (screenWidth < 600) {
-      return 10.0; // Mobile
+      return 9.4; // Mobile - 20% larger than original for better visibility
     } else if (screenWidth < 900) {
       // 10 → 14
       final progress = (screenWidth - 600) / 300;

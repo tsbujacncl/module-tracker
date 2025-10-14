@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
+import 'package:module_tracker/repositories/firestore_repository.dart';
 
 /// User preferences model
 class UserPreferences {
@@ -65,9 +66,11 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
   static const String _hasCompletedOnboardingKey = 'has_completed_onboarding';
   Box? _settingsBox;
   final String? _userId; // Firebase user ID for user-specific storage
+  final FirestoreRepository _repository;
 
-  UserPreferencesNotifier({String? userId})
+  UserPreferencesNotifier({String? userId, required FirestoreRepository repository})
       : _userId = userId,
+        _repository = repository,
         super(const UserPreferences()) {
     _loadPreferences();
   }
@@ -103,24 +106,55 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
   /// Load saved preferences
   Future<void> _loadPreferences() async {
     try {
-      print('DEBUG: Starting to load preferences for user: $_userId');
+      print('DEBUG LOAD: ========== LOADING PREFERENCES START ==========');
+      print('DEBUG LOAD: User ID: $_userId');
+
+      // First, try loading from Firestore if user is logged in
+      if (_userId != null && _userId!.isNotEmpty) {
+        print('DEBUG LOAD: Attempting to load from Firestore...');
+        final firestorePrefs = await _repository.getUserPreferencesOnce(_userId!);
+
+        if (firestorePrefs != null && firestorePrefs.isNotEmpty) {
+          print('DEBUG LOAD: Found preferences in Firestore: $firestorePrefs');
+          _applyPreferencesFromMap(firestorePrefs);
+          // Also cache in Hive for offline access
+          await _cachePreferencesToHive(firestorePrefs);
+          print('DEBUG LOAD: Loaded from Firestore - userName: ${state.userName}, birthday: ${state.birthday}');
+          return;
+        } else {
+          print('DEBUG LOAD: No preferences in Firestore (or empty), checking Hive...');
+        }
+      } else {
+        print('DEBUG LOAD: No user ID, skipping Firestore, loading from Hive...');
+      }
+
+      // Fall back to Hive if Firestore has no data (first time or offline)
+      print('DEBUG LOAD: Loading from Hive...');
       final box = await _ensureBox();
-      print('DEBUG: Box obtained: ${box.isOpen}');
+      print('DEBUG LOAD: Box obtained, isOpen: ${box.isOpen}');
+
+      // Debug: print all keys in the box for this user
+      final allKeys = box.keys.where((k) => k.toString().contains('user_')).toList();
+      print('DEBUG LOAD: All user keys in Hive: $allKeys');
 
       final threeStateToggle = box.get(_getUserKey(_threeStateToggleKey), defaultValue: false) as bool;
       final lectureColorValue = box.get(_getUserKey(_lectureColorKey)) as int?;
       final labTutorialColorValue = box.get(_getUserKey(_labTutorialColorKey)) as int?;
       final assignmentColorValue = box.get(_getUserKey(_assignmentColorKey)) as int?;
       final targetGrade = box.get(_getUserKey(_targetGradeKey), defaultValue: 70.0) as double;
-      final userName = box.get(_getUserKey(_userNameKey)) as String?;
-      final birthdayString = box.get(_getUserKey(_birthdayKey)) as String?;
-      final notificationTime = box.get(_getUserKey(_notificationTimeKey)) as String?;
-      final hasCompletedOnboarding = box.get(_getUserKey(_hasCompletedOnboardingKey), defaultValue: false) as bool;
 
-      print('DEBUG: Loaded userName: $userName');
-      print('DEBUG: Loaded birthday: $birthdayString');
-      print('DEBUG: Loaded hasCompletedOnboarding: $hasCompletedOnboarding');
-      print('DEBUG: Using key: ${_getUserKey(_userNameKey)}');
+      final userNameKey = _getUserKey(_userNameKey);
+      final birthdayKey = _getUserKey(_birthdayKey);
+      final onboardingKey = _getUserKey(_hasCompletedOnboardingKey);
+
+      print('DEBUG LOAD: Keys being used - Name: $userNameKey, Birthday: $birthdayKey, Onboarding: $onboardingKey');
+
+      final userName = box.get(userNameKey) as String?;
+      final birthdayString = box.get(birthdayKey) as String?;
+      final notificationTime = box.get(_getUserKey(_notificationTimeKey)) as String?;
+      final hasCompletedOnboarding = box.get(onboardingKey, defaultValue: false) as bool;
+
+      print('DEBUG LOAD: Loaded from Hive - userName: $userName, birthday: $birthdayString, onboarding: $hasCompletedOnboarding');
 
       state = UserPreferences(
         enableThreeStateTaskToggle: threeStateToggle,
@@ -133,10 +167,78 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
         notificationTime: notificationTime,
         hasCompletedOnboarding: hasCompletedOnboarding,
       );
-      print('DEBUG: Preferences loaded successfully!');
+      print('DEBUG LOAD: ========== LOADING PREFERENCES COMPLETE ==========');
     } catch (e, stackTrace) {
-      print('Error loading user preferences: $e');
-      print('Stack trace: $stackTrace');
+      print('ERROR LOAD: Error loading user preferences: $e');
+      print('ERROR LOAD: Stack trace: $stackTrace');
+    }
+  }
+
+  /// Apply preferences from Firestore map
+  void _applyPreferencesFromMap(Map<String, dynamic> map) {
+    state = UserPreferences(
+      enableThreeStateTaskToggle: map[_threeStateToggleKey] as bool? ?? false,
+      customLectureColor: map[_lectureColorKey] != null ? Color(map[_lectureColorKey] as int) : null,
+      customLabTutorialColor: map[_labTutorialColorKey] != null ? Color(map[_labTutorialColorKey] as int) : null,
+      customAssignmentColor: map[_assignmentColorKey] != null ? Color(map[_assignmentColorKey] as int) : null,
+      targetGrade: (map[_targetGradeKey] as num?)?.toDouble() ?? 70.0,
+      userName: map[_userNameKey] as String?,
+      birthday: map[_birthdayKey] != null ? DateTime.tryParse(map[_birthdayKey] as String) : null,
+      notificationTime: map[_notificationTimeKey] as String?,
+      hasCompletedOnboarding: map[_hasCompletedOnboardingKey] as bool? ?? false,
+    );
+  }
+
+  /// Cache Firestore preferences to Hive for offline access
+  Future<void> _cachePreferencesToHive(Map<String, dynamic> firestorePrefs) async {
+    try {
+      final box = await _ensureBox();
+      for (final entry in firestorePrefs.entries) {
+        await box.put(_getUserKey(entry.key), entry.value);
+      }
+      print('DEBUG: Cached Firestore preferences to Hive');
+    } catch (e) {
+      print('Error caching preferences to Hive: $e');
+    }
+  }
+
+  /// Save current state to Firestore
+  Future<void> _syncToFirestore() async {
+    if (_userId == null || _userId!.isEmpty) {
+      print('DEBUG: No user ID, skipping Firestore sync');
+      return;
+    }
+
+    try {
+      final map = <String, dynamic>{
+        _threeStateToggleKey: state.enableThreeStateTaskToggle,
+        _targetGradeKey: state.targetGrade,
+        _hasCompletedOnboardingKey: state.hasCompletedOnboarding,
+      };
+
+      if (state.customLectureColor != null) {
+        map[_lectureColorKey] = state.customLectureColor!.value;
+      }
+      if (state.customLabTutorialColor != null) {
+        map[_labTutorialColorKey] = state.customLabTutorialColor!.value;
+      }
+      if (state.customAssignmentColor != null) {
+        map[_assignmentColorKey] = state.customAssignmentColor!.value;
+      }
+      if (state.userName != null) {
+        map[_userNameKey] = state.userName!;
+      }
+      if (state.birthday != null) {
+        map[_birthdayKey] = state.birthday!.toIso8601String();
+      }
+      if (state.notificationTime != null) {
+        map[_notificationTimeKey] = state.notificationTime!;
+      }
+
+      await _repository.saveUserPreferences(_userId!, map);
+      print('DEBUG: Synced preferences to Firestore');
+    } catch (e) {
+      print('Error syncing to Firestore: $e');
     }
   }
 
@@ -147,6 +249,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     try {
       final box = await _ensureBox();
       await box.put(_getUserKey(_threeStateToggleKey), enabled);
+      await _syncToFirestore();
     } catch (e) {
       print('Error saving three-state toggle preference: $e');
     }
@@ -160,6 +263,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
       final box = await _ensureBox();
       // ignore: deprecated_member_use
       await box.put(_getUserKey(_lectureColorKey), color.value);
+      await _syncToFirestore();
     } catch (e) {
       print('Error saving lecture color: $e');
     }
@@ -173,6 +277,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
       final box = await _ensureBox();
       // ignore: deprecated_member_use
       await box.put(_getUserKey(_labTutorialColorKey), color.value);
+      await _syncToFirestore();
     } catch (e) {
       print('Error saving lab/tutorial color: $e');
     }
@@ -186,6 +291,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
       final box = await _ensureBox();
       // ignore: deprecated_member_use
       await box.put(_getUserKey(_assignmentColorKey), color.value);
+      await _syncToFirestore();
     } catch (e) {
       print('Error saving assignment color: $e');
     }
@@ -198,6 +304,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     try {
       final box = await _ensureBox();
       await box.put(_getUserKey(_targetGradeKey), grade);
+      await _syncToFirestore();
     } catch (e) {
       print('Error saving target grade: $e');
     }
@@ -205,32 +312,52 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
 
   /// Set user name
   Future<void> setUserName(String name) async {
+    print('DEBUG SAVE: setUserName called with: $name, userId: $_userId');
     state = state.copyWith(userName: () => name);
+    print('DEBUG SAVE: State updated, userName is now: ${state.userName}');
 
     try {
       final box = await _ensureBox();
-      await box.put(_getUserKey(_userNameKey), name);
-      print('DEBUG: User name saved successfully: $name (key: ${_getUserKey(_userNameKey)})');
+      final key = _getUserKey(_userNameKey);
+      await box.put(key, name);
+      print('DEBUG SAVE: User name saved to Hive: $name (key: $key)');
+
+      // Verify it was saved
+      final verify = box.get(key);
+      print('DEBUG SAVE: Verification read from Hive: $verify');
+
+      await _syncToFirestore();
     } catch (e) {
-      print('Error saving user name: $e');
+      print('ERROR SAVE: Error saving user name: $e');
+      print('ERROR SAVE: Stack trace: ${StackTrace.current}');
     }
   }
 
   /// Set birthday
   Future<void> setBirthday(DateTime? birthday) async {
+    print('DEBUG SAVE: setBirthday called with: $birthday, userId: $_userId');
     state = state.copyWith(birthday: () => birthday);
+    print('DEBUG SAVE: State updated, birthday is now: ${state.birthday}');
 
     try {
       final box = await _ensureBox();
+      final key = _getUserKey(_birthdayKey);
       if (birthday != null) {
-        await box.put(_getUserKey(_birthdayKey), birthday.toIso8601String());
-        print('DEBUG: Birthday saved successfully: ${birthday.toIso8601String()} (key: ${_getUserKey(_birthdayKey)})');
+        final isoString = birthday.toIso8601String();
+        await box.put(key, isoString);
+        print('DEBUG SAVE: Birthday saved to Hive: $isoString (key: $key)');
+
+        // Verify it was saved
+        final verify = box.get(key);
+        print('DEBUG SAVE: Verification read from Hive: $verify');
       } else {
-        await box.delete(_getUserKey(_birthdayKey));
-        print('DEBUG: Birthday cleared');
+        await box.delete(key);
+        print('DEBUG SAVE: Birthday cleared');
       }
+      await _syncToFirestore();
     } catch (e) {
-      print('Error saving birthday: $e');
+      print('ERROR SAVE: Error saving birthday: $e');
+      print('ERROR SAVE: Stack trace: ${StackTrace.current}');
     }
   }
 
@@ -241,6 +368,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     try {
       final box = await _ensureBox();
       await box.put(_getUserKey(_notificationTimeKey), time);
+      await _syncToFirestore();
     } catch (e) {
       print('Error saving notification time: $e');
     }
@@ -248,14 +376,27 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
 
   /// Complete onboarding
   Future<void> completeOnboarding() async {
+    print('DEBUG SAVE: completeOnboarding called, userId: $_userId');
     state = state.copyWith(hasCompletedOnboarding: true);
+    print('DEBUG SAVE: State updated, hasCompletedOnboarding is now: ${state.hasCompletedOnboarding}');
+    print('DEBUG SAVE: Current state - userName: ${state.userName}, birthday: ${state.birthday}');
 
     try {
       final box = await _ensureBox();
-      await box.put(_getUserKey(_hasCompletedOnboardingKey), true);
-      print('DEBUG: Onboarding completed and saved (key: ${_getUserKey(_hasCompletedOnboardingKey)})');
+      final key = _getUserKey(_hasCompletedOnboardingKey);
+      await box.put(key, true);
+      print('DEBUG SAVE: Onboarding completed and saved to Hive (key: $key)');
+
+      // Verify all data is in Hive
+      final verifyName = box.get(_getUserKey(_userNameKey));
+      final verifyBirthday = box.get(_getUserKey(_birthdayKey));
+      final verifyOnboarding = box.get(key);
+      print('DEBUG SAVE: VERIFICATION - Name: $verifyName, Birthday: $verifyBirthday, Onboarding: $verifyOnboarding');
+
+      await _syncToFirestore();
     } catch (e) {
-      print('Error saving onboarding status: $e');
+      print('ERROR SAVE: Error saving onboarding status: $e');
+      print('ERROR SAVE: Stack trace: ${StackTrace.current}');
     }
   }
 }
@@ -267,9 +408,10 @@ final userPreferencesProvider = StateNotifierProvider<UserPreferencesNotifier, U
   // Note: We need to add this import at the top of the file
   final currentUser = ref.watch(currentUserProvider);
   final userId = currentUser?.uid;
+  final repository = FirestoreRepository();
 
   print('DEBUG: Creating UserPreferencesNotifier for user: $userId');
-  return UserPreferencesNotifier(userId: userId);
+  return UserPreferencesNotifier(userId: userId, repository: repository);
 });
 
 // Provider to track when user is dragging over checkboxes (prevents scroll)

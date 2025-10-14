@@ -483,6 +483,10 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final userBirthday = ref.watch(userPreferencesProvider).birthday;
 
+    // Reduce gap on small devices for tighter spacing
+    final screenWidth = MediaQuery.of(context).size.width;
+    final dayNameNumberGap = screenWidth < 600 ? 2.0 : 4.0;
+
     return Row(
       children: [
         // Day headers (5 columns, equal width) - NO spacers
@@ -507,10 +511,11 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFF0EA5E9), // Always blue
+                    height: 1.1, // Tighter line height
                   ),
                 ),
-                const SizedBox(height: 4),
-                // Day number - black text, no background
+                SizedBox(height: dayNameNumberGap),
+                // Day number - blue circle for today, white text
                 SizedBox(
                   width: 32,
                   height: 32,
@@ -532,19 +537,33 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
                                 color: Colors.white,
+                                height: 1.1, // Tighter line height
                               ),
                             ),
                           ],
                         )
-                      : Center(
-                          child: Text(
-                            '${date.day}',
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: isDarkMode
-                                  ? Colors.white
-                                  : Colors.black, // Black text
+                      : Container(
+                          width: isToday ? 30.4 : 32,
+                          height: isToday ? 30.4 : 32,
+                          decoration: BoxDecoration(
+                            color: isToday
+                                ? const Color(0xFF38BDF8) // Lighter blue
+                                : Colors.transparent,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${date.day}',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: isToday ? FontWeight.w700 : FontWeight.w600,
+                                color: isToday
+                                    ? Colors.white
+                                    : (isDarkMode
+                                          ? Colors.white
+                                          : Colors.black),
+                                height: 1.1, // Tighter line height
+                              ),
                             ),
                           ),
                         ),
@@ -634,9 +653,11 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                           ],
                         )
                       : Container(
+                          width: isToday ? 30.4 : 32,
+                          height: isToday ? 30.4 : 32,
                           decoration: BoxDecoration(
                             color: isToday
-                                ? const Color(0xFF0EA5E9)
+                                ? const Color(0xFF38BDF8) // Lighter blue
                                 : Colors.transparent,
                             shape: BoxShape.circle,
                           ),
@@ -645,7 +666,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                               '${date.day}',
                               style: GoogleFonts.inter(
                                 fontSize: 14,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: isToday ? FontWeight.w700 : FontWeight.w600,
                                 color: isToday
                                     ? Colors.white
                                     : (isDarkMode
@@ -676,6 +697,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
     double pixelsPerHour,
     bool isDarkMode,
     Color borderColor,
+    double eventMargin,
+    double overlapGap,
   ) {
     // Calculate hour multipliers for this specific week
     final hourMultipliers = <int, int>{};
@@ -857,15 +880,15 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
         final stackPosition = overlappingEvents.indexOf(event);
         final totalInStack = overlappingEvents.length;
 
-        final itemHeight = (height - 4) / totalInStack;
+        final itemHeight = (height - overlapGap) / totalInStack;
         final itemTop = topPosition + (stackPosition * itemHeight);
 
         if (event.isTask) {
           allItems.add(
             Positioned(
               top: itemTop,
-              left: 2,
-              right: 2,
+              left: eventMargin,
+              right: eventMargin,
               child: _TimetableTaskBox(
                 task: event.taskWithModule!.task,
                 module: event.taskWithModule!.module,
@@ -886,8 +909,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
           allItems.add(
             Positioned(
               top: itemTop,
-              left: 2,
-              right: 2,
+              left: eventMargin,
+              right: eventMargin,
               child: _TimetableAssessmentBox(
                 assessment: event.assessmentWithModule!.assessment,
                 module: event.assessmentWithModule!.module,
@@ -1085,7 +1108,17 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
 
         final heightRatio = screenWidth < 400 ? 0.40 : 0.38;
         final maxHeight = MediaQuery.of(context).size.height * heightRatio;
-        final pixelsPerHour = maxHeight / totalHours;
+        final basePixelsPerHour = maxHeight / totalHours;
+        // Reduce vertical spacing by 10% for small devices to make calendar more compact
+        final pixelsPerHour = screenWidth < 600 ? basePixelsPerHour * 0.90 : basePixelsPerHour;
+
+        // Reduce padding on small devices for tighter spacing
+        final fullScreenWidth = MediaQuery.of(context).size.width;
+        final headerTopPadding = fullScreenWidth < 600 ? 3.0 : 8.0;
+        final headerBottomPadding = fullScreenWidth < 600 ? 2.0 : 8.0;
+        final legendPadding = fullScreenWidth < 600 ? 4.0 : 8.0;
+        final eventMargin = fullScreenWidth < 600 ? 1.0 : 2.0;
+        final overlapGap = fullScreenWidth < 600 ? 2.0 : 4.0;
 
         return GestureDetector(
           behavior: HitTestBehavior.deferToChild,
@@ -1150,7 +1183,10 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
               children: [
                 // Calendar header with days
                 Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: EdgeInsets.only(
+                    top: headerTopPadding,
+                    bottom: headerBottomPadding,
+                  ),
                   decoration: BoxDecoration(
                     color: headerColor,
                     borderRadius: const BorderRadius.only(
@@ -1418,6 +1454,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                         pixelsPerHour,
                                                         isDarkMode,
                                                         borderColor,
+                                                        eventMargin,
+                                                        overlapGap,
                                                       ),
                                                 ),
                                               ),
@@ -1659,7 +1697,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                               .length;
 
                                                       final itemHeight =
-                                                          (height - 4) /
+                                                          (height - overlapGap) /
                                                           totalInStack;
                                                       final itemTop =
                                                           topPosition +
@@ -1670,8 +1708,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                         allItems.add(
                                                           Positioned(
                                                             top: itemTop,
-                                                            left: 2,
-                                                            right: 2,
+                                                            left: eventMargin,
+                                                            right: eventMargin,
                                                             child: _TimetableTaskBox(
                                                               task: event
                                                                   .taskWithModule!
@@ -1706,8 +1744,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                         allItems.add(
                                                           Positioned(
                                                             top: itemTop,
-                                                            left: 2,
-                                                            right: 2,
+                                                            left: eventMargin,
+                                                            right: eventMargin,
                                                             child: _TimetableAssessmentBox(
                                                               assessment: event
                                                                   .assessmentWithModule!
@@ -1950,6 +1988,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                         pixelsPerHour,
                                                         isDarkMode,
                                                         borderColor,
+                                                        eventMargin,
+                                                        overlapGap,
                                                       ),
                                                 ),
                                               ),
@@ -2151,7 +2191,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                 overlappingEvents.length;
 
                                             final itemHeight =
-                                                (height - 4) / totalInStack;
+                                                (height - overlapGap) / totalInStack;
                                             final itemTop =
                                                 topPosition +
                                                 (stackPosition * itemHeight);
@@ -2160,8 +2200,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                               allItems.add(
                                                 Positioned(
                                                   top: itemTop,
-                                                  left: 2,
-                                                  right: 2,
+                                                  left: eventMargin,
+                                                  right: eventMargin,
                                                   child: _TimetableTaskBox(
                                                     task: event
                                                         .taskWithModule!
@@ -2190,8 +2230,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                               allItems.add(
                                                 Positioned(
                                                   top: itemTop,
-                                                  left: 2,
-                                                  right: 2,
+                                                  left: eventMargin,
+                                                  right: eventMargin,
                                                   child: _TimetableAssessmentBox(
                                                     assessment: event
                                                         .assessmentWithModule!
@@ -2434,7 +2474,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                 ),
                 // Legend
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(legendPadding),
                   decoration: BoxDecoration(
                     color: legendColor,
                     borderRadius: const BorderRadius.only(
@@ -2443,8 +2483,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                     ),
                   ),
                   child: Wrap(
-                    spacing: 16,
-                    runSpacing: 8,
+                    spacing: fullScreenWidth < 600 ? 12.0 : 16.0,
+                    runSpacing: fullScreenWidth < 600 ? 6.0 : 8.0,
                     children: [
                       _LegendItem(
                         color:
@@ -2454,6 +2494,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                             const Color(0xFF2196F3),
                         label: 'Lecture',
                         onTap: () => _showColorPicker(context, 'Lecture'),
+                        screenWidth: fullScreenWidth,
                       ),
                       _LegendItem(
                         color:
@@ -2463,6 +2504,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                             const Color(0xFF43A047),
                         label: 'Lab/Tutorial',
                         onTap: () => _showColorPicker(context, 'Lab/Tutorial'),
+                        screenWidth: fullScreenWidth,
                       ),
                       _LegendItem(
                         color:
@@ -2472,6 +2514,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                             const Color(0xFFE53935),
                         label: 'Assignment',
                         onTap: () => _showColorPicker(context, 'Assignment'),
+                        screenWidth: fullScreenWidth,
                       ),
                     ],
                   ),
@@ -2602,33 +2645,51 @@ class _LegendItem extends StatelessWidget {
   final Color color;
   final String label;
   final VoidCallback? onTap;
+  final double screenWidth;
 
-  const _LegendItem({required this.color, required this.label, this.onTap});
+  const _LegendItem({
+    required this.color,
+    required this.label,
+    this.onTap,
+    required this.screenWidth,
+  });
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Responsive values for small devices
+    final isSmall = screenWidth < 600;
+    final horizontalPadding = isSmall ? 6.0 : 8.0;
+    final verticalPadding = isSmall ? 3.0 : 4.0;
+    final boxSize = isSmall ? 12.0 : 14.0;
+    final gapSize = isSmall ? 5.0 : 6.0;
+    final fontSize = isSmall ? 11.0 : 12.0;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 14,
-              height: 14,
+              width: boxSize,
+              height: boxSize,
               decoration: BoxDecoration(
                 color: color,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
-            const SizedBox(width: 6),
+            SizedBox(width: gapSize),
             Text(
               label,
               style: GoogleFonts.inter(
-                fontSize: 12,
+                fontSize: fontSize,
                 fontWeight: FontWeight.w500,
                 color: isDarkMode
                     ? const Color(0xFF94A3B8)
@@ -2690,9 +2751,10 @@ class _TimetableAssessmentBox extends ConsumerWidget {
     final checkboxBorderWidth = screenWidth < 600 ? 1.0 : screenWidth < 1200 ? 1.5 : 2.0;
     final moduleCodeFontSize = ResponsiveText.getCalendarModuleCodeFontSize(screenWidth);
     final eventTypeFontSize = ResponsiveText.getCalendarEventTypeFontSize(screenWidth);
-    // Reduce padding on large screens to prevent overflow
-    final boxPadding = screenWidth < 1200 ? 4.0 : screenWidth < 1600 ? 3.0 : 2.5;
-    final textGap = screenWidth < 1200 ? 2.0 : 1.0;
+    // Reduce padding on small screens to give text more space, and on large screens to prevent overflow
+    final boxPadding = screenWidth < 600 ? 2.0 : screenWidth < 1200 ? 4.0 : screenWidth < 1600 ? 3.0 : 2.5;
+    final textGap = screenWidth < 600 ? 1.5 : screenWidth < 1200 ? 2.0 : 1.0;
+    final checkboxGap = screenWidth < 600 ? 2.0 : 3.0;
 
     final completionsAsync = ref.watch(
       taskCompletionsProvider((moduleId: module.id, weekNumber: weekNumber)),
@@ -2813,7 +2875,7 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                         SizedBox(height: textGap),
                         // Assessment type truncated with ellipsis at checkbox
                         Padding(
-                          padding: EdgeInsets.only(right: checkboxSize + 3),
+                          padding: EdgeInsets.only(right: checkboxSize + checkboxGap),
                           child: Text(
                             assessment.type
                                     .toString()
@@ -2945,9 +3007,10 @@ class _TimetableTaskBox extends ConsumerWidget {
     final checkboxBorderWidth = screenWidth < 600 ? 1.0 : screenWidth < 1200 ? 1.5 : 2.0;
     final moduleCodeFontSize = ResponsiveText.getCalendarModuleCodeFontSize(screenWidth);
     final eventTypeFontSize = ResponsiveText.getCalendarEventTypeFontSize(screenWidth);
-    // Reduce padding on large screens to prevent overflow
-    final boxPadding = screenWidth < 1200 ? 4.0 : screenWidth < 1600 ? 3.0 : 2.5;
-    final textGap = screenWidth < 1200 ? 2.0 : 1.0;
+    // Reduce padding on small screens to give text more space, and on large screens to prevent overflow
+    final boxPadding = screenWidth < 600 ? 2.0 : screenWidth < 1200 ? 4.0 : screenWidth < 1600 ? 3.0 : 2.5;
+    final textGap = screenWidth < 600 ? 1.5 : screenWidth < 1200 ? 2.0 : 1.0;
+    final checkboxGap = screenWidth < 600 ? 2.0 : 3.0;
 
     final completionsAsync = ref.watch(
       taskCompletionsProvider((moduleId: module.id, weekNumber: weekNumber)),
@@ -3093,7 +3156,7 @@ class _TimetableTaskBox extends ConsumerWidget {
                     // Task content - constrained width to leave space for checkbox
                     Padding(
                       padding: EdgeInsets.only(
-                        right: checkboxSize + 2,
+                        right: checkboxSize + checkboxGap,
                       ), // Leave space for checkbox dynamically
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'dart:io' show Platform;
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -260,6 +262,63 @@ class AuthService {
     } catch (e) {
       print('DEBUG AUTH: Link with Google error - $e');
       throw 'Failed to link account with Google: ${e.toString()}';
+    }
+  }
+
+  // Sign in with Apple
+  Future<UserCredential?> signInWithApple() async {
+    try {
+      print('DEBUG AUTH: Starting Apple Sign-In flow');
+
+      // Check if Apple Sign In is available
+      if (!kIsWeb && !Platform.isIOS && !Platform.isMacOS) {
+        throw 'Apple Sign-In is only available on iOS, macOS, and Web';
+      }
+
+      // Request credential for the currently signed in Apple account
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      print('DEBUG AUTH: Apple credential received');
+
+      // Create an `OAuthCredential` from the credential returned by Apple
+      final oauthCredential = OAuthProvider("apple.com").credential(
+        idToken: appleCredential.identityToken,
+        accessToken: appleCredential.authorizationCode,
+      );
+
+      // Sign in to Firebase with the Apple credential
+      final userCredential = await _auth.signInWithCredential(oauthCredential);
+      print('DEBUG AUTH: Firebase sign-in successful with Apple - UID: ${userCredential.user?.uid}');
+
+      // Update display name if available from Apple
+      if (userCredential.user != null &&
+          appleCredential.givenName != null &&
+          userCredential.user!.displayName == null) {
+        final displayName = '${appleCredential.givenName ?? ''} ${appleCredential.familyName ?? ''}'.trim();
+        if (displayName.isNotEmpty) {
+          await userCredential.user!.updateDisplayName(displayName);
+          print('DEBUG AUTH: Updated display name from Apple: $displayName');
+        }
+      }
+
+      return userCredential;
+    } on SignInWithAppleAuthorizationException catch (e) {
+      print('DEBUG AUTH: Apple Sign-In authorization error - ${e.code}: ${e.message}');
+      if (e.code == AuthorizationErrorCode.canceled) {
+        return null; // User cancelled
+      }
+      throw 'Apple Sign-In failed: ${e.message}';
+    } on FirebaseAuthException catch (e) {
+      print('DEBUG AUTH: Firebase error with Apple Sign-In - ${e.code}: ${e.message}');
+      throw _handleAuthException(e);
+    } catch (e) {
+      print('DEBUG AUTH: Apple Sign-In error - $e');
+      throw 'Failed to sign in with Apple: ${e.toString()}';
     }
   }
 

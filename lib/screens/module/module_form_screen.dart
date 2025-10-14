@@ -66,6 +66,14 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
   final List<_RecurringTaskInput> _recurringTasks = [];
   final List<_AssessmentInput> _assessments = [];
 
+  // Track initial state for unsaved changes detection
+  String _initialName = '';
+  String _initialCode = '';
+  String _initialCredits = '';
+  String? _initialSelectedSemesterId;
+  int _initialRecurringTasksCount = 0;
+  int _initialAssessmentsCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -76,6 +84,9 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
       _creditsController.text = widget.existingModule!.credits.toString();
       _selectedSemesterId = widget.existingModule!.semesterId;
       _loadExistingData();
+    } else {
+      // Store initial state for new module
+      _storeInitialState();
     }
   }
 
@@ -146,7 +157,19 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
       print('DEBUG: Loaded ${_recurringTasks.length} existing tasks and ${_assessments.length} assessments');
     } catch (e) {
       print('DEBUG: Error loading existing data: $e');
+    } finally {
+      // Store initial state after loading
+      _storeInitialState();
     }
+  }
+
+  void _storeInitialState() {
+    _initialName = _nameController.text;
+    _initialCode = _codeController.text;
+    _initialCredits = _creditsController.text;
+    _initialSelectedSemesterId = _selectedSemesterId;
+    _initialRecurringTasksCount = _recurringTasks.length;
+    _initialAssessmentsCount = _assessments.length;
   }
 
   @override
@@ -188,6 +211,80 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
 
   double get totalWeighting {
     return _assessments.fold(0, (sum, a) => sum + (a.weighting ?? 0));
+  }
+
+  // Check if there are unsaved changes
+  bool get _hasUnsavedChanges {
+    // Only check for unsaved changes in edit mode
+    // For new modules, we don't want to block them from leaving
+    if (widget.existingModule == null) return false;
+
+    return _nameController.text != _initialName ||
+        _codeController.text != _initialCode ||
+        _creditsController.text != _initialCredits ||
+        _selectedSemesterId != _initialSelectedSemesterId ||
+        _recurringTasks.length != _initialRecurringTasksCount ||
+        _assessments.length != _initialAssessmentsCount;
+  }
+
+  // Show unsaved changes dialog
+  Future<bool> _showUnsavedChangesDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Unsaved Changes',
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          'You have unsaved changes. What would you like to do?',
+          style: GoogleFonts.inter(
+            fontSize: 14,
+          ),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red,
+              side: const BorderSide(color: Colors.red),
+            ),
+            child: Text(
+              'Discard',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(context, false);
+              await _saveModule();
+            },
+            child: Text(
+              'Save',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   Future<Semester?> _showCreateSemesterDialog() async {
@@ -426,12 +523,24 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: GradientHeader(
-          title: widget.existingModule != null ? 'Edit Module' : 'Create Module',
+    return PopScope(
+      canPop: !_hasUnsavedChanges,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        if (_hasUnsavedChanges) {
+          final shouldPop = await _showUnsavedChangesDialog();
+          if (shouldPop && mounted) {
+            Navigator.pop(context);
+          }
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: GradientHeader(
+            title: widget.existingModule != null ? 'Edit Module' : 'Create Module',
+          ),
         ),
-      ),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -684,6 +793,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

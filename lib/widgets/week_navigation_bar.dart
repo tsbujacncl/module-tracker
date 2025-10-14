@@ -53,13 +53,16 @@ class WeekNavigationBar extends StatelessWidget {
 
         // Responsive height to accommodate larger text on big screens
         final navBarHeight = fullScreenWidth < 600 ? 44.0 : fullScreenWidth < 1200 ? 48.0 : fullScreenWidth < 1600 ? 52.0 : 56.0;
-        // Reduce gap on larger screens where text is bigger
-        final gapBetweenHeaders = fullScreenWidth < 1200 ? 2.0 : 1.0;
+        // Reduce gap between week and semester name
+        final gapBetweenHeaders = fullScreenWidth < 1200 ? 1.0 : 0.5;
+        // Reduce vertical padding on small devices for tighter spacing
+        final topPadding = fullScreenWidth < 600 ? 1.0 : 2.5;
+        final bottomPadding = fullScreenWidth < 600 ? 2.0 : 4.0;
 
         return Padding(
-          padding: const EdgeInsets.only(
-            top: 4,
-            bottom: 4,
+          padding: EdgeInsets.only(
+            top: topPadding,
+            bottom: bottomPadding,
           ),
           child: SizedBox(
             height: navBarHeight,
@@ -73,11 +76,13 @@ class WeekNavigationBar extends StatelessWidget {
                     children: [
                       // Text centered in the content area
                       Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Week $currentWeek (${dateFormat.format(weekStart)} - ${dateFormat.format(weekEnd)})',
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 1.5),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Week $currentWeek (${dateFormat.format(weekStart)} - ${dateFormat.format(weekEnd)})',
                               style: GoogleFonts.poppins(
                                 fontSize: ResponsiveText.getSubtitleFontSize(fullScreenWidth),
                                 fontWeight: FontWeight.w600,
@@ -99,8 +104,9 @@ class WeekNavigationBar extends StatelessWidget {
                               },
                               child: Text(
                                 semester.name,
-                                style: GoogleFonts.inter(
-                                  fontSize: ResponsiveText.getWeekNavigationSubtitleFontSize(fullScreenWidth),
+                                style: GoogleFonts.poppins(
+                                  fontSize: ResponsiveText.getSubtitleFontSize(fullScreenWidth) * 0.92,
+                                  fontWeight: FontWeight.w700,
                                   color: const Color(0xFF64748B),
                                 ),
                                 textAlign: TextAlign.center,
@@ -110,12 +116,12 @@ class WeekNavigationBar extends StatelessWidget {
                             ),
                           ],
                         ),
+                        ),
                       ),
-                      // Navigation controls overlaid
+                      // Navigation controls overlaid - aligned with week text line
                       Positioned(
                         left: 0,
-                        top: 0,
-                        bottom: 0,
+                        top: (navBarHeight - 48) / 2 - 7.5,
                         child: IconButton(
                           icon: const Icon(Icons.chevron_left),
                           onPressed: () => onWeekChanged(currentWeek - 1),
@@ -123,8 +129,7 @@ class WeekNavigationBar extends StatelessWidget {
                       ),
                       Positioned(
                         right: 0,
-                        top: 0,
-                        bottom: 0,
+                        top: (navBarHeight - 48) / 2 - 7.5,
                         child: IconButton(
                           icon: const Icon(Icons.chevron_right),
                           onPressed: () => onWeekChanged(currentWeek + 1),
