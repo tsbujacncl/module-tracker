@@ -151,6 +151,16 @@ class AuthWrapper extends ConsumerWidget {
         if (user != null) {
           print('DEBUG AUTH WRAPPER: User is logged in - ${user.email}');
 
+          // Wait for preferences to load before deciding which screen to show
+          if (userPreferences.isLoading) {
+            print('DEBUG AUTH WRAPPER: Preferences still loading - showing loading indicator');
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
           // Check if user has completed onboarding
           if (!userPreferences.hasCompletedOnboarding) {
             print('DEBUG AUTH WRAPPER: First-time user - showing onboarding screen');

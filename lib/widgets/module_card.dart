@@ -49,7 +49,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
   // Track tasks that are fading out after completion (using composite keys: taskId_week_weekNumber)
   final Map<String, DateTime> _completedTaskTimestamps = {};
   final Set<String> _fadingOutTaskIds = {};
-  final Map<String, double> _fadeOpacities = {};
+  final Map<String, double> _fadeOpacities = {}; // Text opacity (0.35 -> 0)
+  final Map<String, double> _checkboxOpacities = {}; // Checkbox opacity (1.0 -> 0)
 
   // Track temporary completions per week (using composite keys: taskId_week_weekNumber)
   final Map<String, TaskStatus> _temporaryCompletionsByWeek = {};
@@ -57,6 +58,13 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
   void onTouchDown(String taskId, TaskStatus currentStatus) {
     if (!_isDragging) {
       _firstTouchedTaskId = taskId;
+      _firstTouchedStatus = currentStatus;
+    }
+  }
+
+  void onTouchDownWithWeek(String taskId, int weekNumber, TaskStatus currentStatus) {
+    if (!_isDragging) {
+      _firstTouchedTaskId = '${taskId}_week_$weekNumber';
       _firstTouchedStatus = currentStatus;
     }
   }
@@ -73,7 +81,31 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
       _temporaryCompletions[taskId] = _isCompleting ? TaskStatus.complete : TaskStatus.notStarted;
     });
 
-    _completeTaskImmediately(taskId);
+    _completeTaskImmediately(taskId, null);
+  }
+
+  void selectTaskWithWeek(String taskId, int weekNumber, TaskStatus currentStatus) {
+    if (!_isDragging) return;
+    final compositeKey = '${taskId}_week_$weekNumber';
+    if (_selectedTaskIds.contains(compositeKey)) return;
+
+    setState(() {
+      if (_selectedTaskIds.isEmpty) {
+        _isCompleting = currentStatus != TaskStatus.complete;
+      }
+      _selectedTaskIds.add(compositeKey);
+      _temporaryCompletionsByWeek[compositeKey] = _isCompleting ? TaskStatus.complete : TaskStatus.notStarted;
+    });
+
+    // Trigger fade animation if completing
+    if (_isCompleting) {
+      handleTaskCompletedWithFade(taskId, weekNumber);
+    } else {
+      // Cancel fade if uncompleting
+      cancelFadeOut(taskId, weekNumber);
+    }
+
+    _completeTaskImmediately(taskId, weekNumber);
   }
 
   void updateTemporaryStatus(String taskId, TaskStatus newStatus) {
@@ -89,7 +121,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
     });
   }
 
-  Future<void> _completeTaskImmediately(String taskId) async {
+  Future<void> _completeTaskImmediately(String taskId, int? weekNumber) async {
     final user = ref.read(currentUserProvider);
     if (user == null) return;
 
@@ -101,7 +133,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
       id: '',
       moduleId: widget.module.id,
       taskId: taskId,
-      weekNumber: widget.weekNumber,
+      weekNumber: weekNumber ?? widget.weekNumber,
       status: targetStatus,
       completedAt: targetStatus == TaskStatus.complete ? now : null,
     );
@@ -159,11 +191,12 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
 
     setState(() {
       _completedTaskTimestamps[compositeKey] = animationTimestamp;
-      _fadeOpacities[compositeKey] = 0.8; // Start at 80% (20% faded) for visual feedback
+      _fadeOpacities[compositeKey] = 0.35; // Start at 35% (65% faded) for stronger visual feedback
+      _checkboxOpacities[compositeKey] = 1.0; // Checkbox stays at full opacity during hold period
     });
 
-    // After 3 seconds, start fade out (gives time to undo accidental clicks)
-    Future.delayed(const Duration(seconds: 3), () {
+    // After 5 seconds, start fade out (gives time to undo accidental clicks)
+    Future.delayed(const Duration(seconds: 5), () {
       if (!mounted) return;
       // Check if this animation was cancelled (timestamp removed or changed)
       if (_completedTaskTimestamps[compositeKey] != animationTimestamp) return;
@@ -172,7 +205,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
         _fadingOutTaskIds.add(compositeKey);
       });
 
-      // Animate opacity from 0.8 to 0 over 3000ms (3 seconds)
+      // Animate both text and checkbox opacity over 3000ms (3 seconds)
       _animateFadeOut(compositeKey, animationTimestamp);
 
       // After fade completes, remove from display
@@ -185,6 +218,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
           _completedTaskTimestamps.remove(compositeKey);
           _fadingOutTaskIds.remove(compositeKey);
           _fadeOpacities.remove(compositeKey);
+          _checkboxOpacities.remove(compositeKey);
         });
       });
     });
@@ -201,8 +235,10 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
         if (_completedTaskTimestamps[compositeKey] != animationTimestamp) return;
 
         setState(() {
-          // Fade from 0.8 to 0
-          _fadeOpacities[compositeKey] = 0.8 - (0.8 * (i + 1) / steps);
+          // Fade text from 0.35 to 0
+          _fadeOpacities[compositeKey] = 0.35 - (0.35 * (i + 1) / steps);
+          // Fade checkbox from 1.0 to 0
+          _checkboxOpacities[compositeKey] = 1.0 - (1.0 * (i + 1) / steps);
         });
       });
     }
@@ -217,14 +253,20 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
     final completedTime = _completedTaskTimestamps[compositeKey]!;
     final elapsed = DateTime.now().difference(completedTime);
 
-    // Hide after 6 seconds (3 seconds at 80% opacity + 3 second fade to 0%)
-    return elapsed.inMilliseconds < 6000;
+    // Hide after 8 seconds (5 seconds at 35% opacity + 3 second fade to 0%)
+    return elapsed.inMilliseconds < 8000;
   }
 
-  // Get opacity for fading task
+  // Get opacity for fading task text
   double getTaskOpacity(String taskId, int weekNumber) {
     final compositeKey = '${taskId}_week_$weekNumber';
     return _fadeOpacities[compositeKey] ?? 1.0;
+  }
+
+  // Get opacity for fading task checkbox
+  double getTaskCheckboxOpacity(String taskId, int weekNumber) {
+    final compositeKey = '${taskId}_week_$weekNumber';
+    return _checkboxOpacities[compositeKey] ?? 1.0;
   }
 
   // Cancel fade-out and restore task to full opacity (for undo)
@@ -234,6 +276,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
       _completedTaskTimestamps.remove(compositeKey);
       _fadingOutTaskIds.remove(compositeKey);
       _fadeOpacities.remove(compositeKey);
+      _checkboxOpacities.remove(compositeKey);
     });
   }
 
@@ -684,6 +727,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                         status: status,
                                         completedAt: completion?.completedAt,
                                         scaleFactor: scaleFactor,
+                                        textOpacity: 1.0,
+                                        checkboxOpacity: 1.0,
                                         onTouchDown: onTouchDown,
                                         onSelectTask: selectTask,
                                         getTemporaryStatus: getTemporaryStatus,
@@ -766,6 +811,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                               subCompletion?.completedAt,
                                           isSubtask: true,
                                           scaleFactor: scaleFactor,
+                                          textOpacity: 1.0,
+                                          checkboxOpacity: 1.0,
                                           onTouchDown: onTouchDown,
                                           onSelectTask: selectTask,
                                           getTemporaryStatus: getTemporaryStatus,
@@ -819,13 +866,13 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                         TaskStatus.notStarted;
 
                                     // Calculate the due date for this assessment in this week
-                                    String dueDateStr = '';
+                                    String? dueDateBadge;
                                     if (assessment.dueDate != null) {
                                       final dueDate = assessment.dueDate!;
                                       final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                                       final dayOfWeek = dayNames[dueDate.weekday - 1];
                                       final day = dueDate.day;
-                                      dueDateStr = ' ($dayOfWeek $day${getOrdinalSuffix(day)})';
+                                      dueDateBadge = '$dayOfWeek $day${getOrdinalSuffix(day)}';
                                     } else if (assessment.type == AssessmentType.weekly &&
                                                assessment.dayOfWeek != null) {
                                       // For weekly assessments, calculate based on week
@@ -842,16 +889,20 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                       final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                                       final dayOfWeek = dayNames[dueDate.weekday - 1];
                                       final day = dueDate.day;
-                                      dueDateStr = ' ($dayOfWeek $day${getOrdinalSuffix(day)})';
+                                      dueDateBadge = '$dayOfWeek $day${getOrdinalSuffix(day)}';
                                     }
 
                                     return _TaskItem(
-                                      taskName: '${assessment.name}$dueDateStr',
+                                      taskName: assessment.name,
                                       taskId: assessment.id,
                                       status: status,
                                       completedAt: completion?.completedAt,
                                       isAssessment: true,
                                       scaleFactor: scaleFactor,
+                                      textOpacity: 1.0,
+                                      checkboxOpacity: 1.0,
+                                      timeBadge: dueDateBadge,
+                                      badgeColor: const Color(0xFF7C3AED), // Purple for this week's assessments
                                       onTouchDown: onTouchDown,
                                       onSelectTask: selectTask,
                                       getTemporaryStatus: getTemporaryStatus,
@@ -1030,7 +1081,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                               return const SizedBox.shrink();
                             }
 
-                            // Filter out tasks that should be hidden (completed and faded out)
+                            // Filter tasks: keep those that should still be visible (including fading)
                             final visibleTasks = outstandingTasksData.where((taskData) {
                               final taskId = taskData['taskId'] as String;
                               final weekNumber = taskData['week'] as int;
@@ -1038,6 +1089,13 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                               return shouldShowTask(taskId, weekNumber, status);
                             }).toList();
 
+                            // Count only tasks that are NOT complete (for the badge text)
+                            final outstandingCount = visibleTasks.where((taskData) {
+                              final status = taskData['status'] as TaskStatus;
+                              return status != TaskStatus.complete;
+                            }).length;
+
+                            // Hide section only when no tasks are visible (including fading ones)
                             if (visibleTasks.isEmpty) {
                               return const SizedBox.shrink();
                             }
@@ -1064,7 +1122,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                     SizedBox(width: 6 * scaleFactor),
                                     Expanded(
                                       child: Text(
-                                        '${visibleTasks.length} outstanding from previous weeks',
+                                        '$outstandingCount outstanding from previous weeks',
                                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                           fontSize: (Theme.of(context).textTheme.bodyMedium?.fontSize ?? 13) * scaleFactor,
                                           fontWeight: FontWeight.w600,
@@ -1086,7 +1144,15 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                       });
                                       ref.read(isDraggingCheckboxProvider.notifier).state = true;
                                       if (_firstTouchedTaskId != null && _firstTouchedStatus != null) {
-                                        selectTask(_firstTouchedTaskId!, _firstTouchedStatus!);
+                                        // For outstanding tasks, the composite key contains week info
+                                        if (_firstTouchedTaskId!.contains('_week_')) {
+                                          final parts = _firstTouchedTaskId!.split('_week_');
+                                          final taskId = parts[0];
+                                          final weekNum = int.parse(parts[1]);
+                                          selectTaskWithWeek(taskId, weekNum, _firstTouchedStatus!);
+                                        } else {
+                                          selectTask(_firstTouchedTaskId!, _firstTouchedStatus!);
+                                        }
                                         _firstTouchedTaskId = null;
                                         _firstTouchedStatus = null;
                                       }
@@ -1120,50 +1186,50 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                       final completion = taskData['completion'] as TaskCompletion?;
                                       final status = taskData['status'] as TaskStatus;
 
-                                      return Opacity(
-                                        opacity: getTaskOpacity(taskId, weekNumber),
-                                        child: _TaskItem(
-                                          taskName: '$taskName - Week $weekNumber',
-                                          taskId: taskId,
-                                          status: status,
-                                          completedAt: completion?.completedAt,
-                                          isAssessment: isAssessment,
-                                          scaleFactor: scaleFactor,
-                                          onTouchDown: onTouchDown,
-                                          onSelectTask: selectTask,
-                                          getTemporaryStatus: (tid, dbStatus) => getTemporaryStatusWithWeek(tid, weekNumber, dbStatus),
-                                          onUpdateTemporaryStatus: (tid, newStatus) => updateTemporaryStatusWithWeek(tid, weekNumber, newStatus),
-                                          onStatusChanged: (newStatus) async {
-                                            final user = ref.read(currentUserProvider);
-                                            if (user == null) return;
+                                      return _TaskItem(
+                                        taskName: taskName,
+                                        taskId: taskId,
+                                        status: status,
+                                        completedAt: completion?.completedAt,
+                                        isAssessment: isAssessment,
+                                        scaleFactor: scaleFactor,
+                                        textOpacity: getTaskOpacity(taskId, weekNumber),
+                                        checkboxOpacity: getTaskCheckboxOpacity(taskId, weekNumber),
+                                        weekBadge: weekNumber,
+                                        onTouchDown: (tid, currentStatus) => onTouchDownWithWeek(tid, weekNumber, currentStatus),
+                                        onSelectTask: (tid, currentStatus) => selectTaskWithWeek(tid, weekNumber, currentStatus),
+                                        getTemporaryStatus: (tid, dbStatus) => getTemporaryStatusWithWeek(tid, weekNumber, dbStatus),
+                                        onUpdateTemporaryStatus: (tid, newStatus) => updateTemporaryStatusWithWeek(tid, weekNumber, newStatus),
+                                        onStatusChanged: (newStatus) async {
+                                          final user = ref.read(currentUserProvider);
+                                          if (user == null) return;
 
-                                            // Trigger fade-out animation if completing
-                                            if (newStatus == TaskStatus.complete) {
-                                              handleTaskCompletedWithFade(taskId, weekNumber);
-                                            } else {
-                                              // Cancel fade-out and restore full opacity if unchecking
-                                              cancelFadeOut(taskId, weekNumber);
-                                            }
+                                          // Trigger fade-out animation if completing
+                                          if (newStatus == TaskStatus.complete) {
+                                            handleTaskCompletedWithFade(taskId, weekNumber);
+                                          } else {
+                                            // Cancel fade-out and restore full opacity if unchecking
+                                            cancelFadeOut(taskId, weekNumber);
+                                          }
 
-                                            final repository = ref.read(firestoreRepositoryProvider);
-                                            final newCompletion = TaskCompletion(
-                                              id: completion?.id ?? '',
-                                              moduleId: widget.module.id,
-                                              taskId: taskId,
-                                              weekNumber: weekNumber,
-                                              status: newStatus,
-                                              completedAt: newStatus == TaskStatus.complete
-                                                  ? DateTime.now()
-                                                  : null,
-                                            );
+                                          final repository = ref.read(firestoreRepositoryProvider);
+                                          final newCompletion = TaskCompletion(
+                                            id: completion?.id ?? '',
+                                            moduleId: widget.module.id,
+                                            taskId: taskId,
+                                            weekNumber: weekNumber,
+                                            status: newStatus,
+                                            completedAt: newStatus == TaskStatus.complete
+                                                ? DateTime.now()
+                                                : null,
+                                          );
 
-                                            await repository.upsertTaskCompletion(
-                                              user.uid,
-                                              widget.module.id,
-                                              newCompletion,
-                                            );
-                                          },
-                                        ),
+                                          await repository.upsertTaskCompletion(
+                                            user.uid,
+                                            widget.module.id,
+                                            newCompletion,
+                                          );
+                                        },
                                       );
                                     }).toList(),
                                   ),
@@ -1185,14 +1251,16 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                     data: (allAssessments) {
                       final now = DateTime.now();
 
-                      // Filter: Only show assessments within 21 days (3 weeks), not completed this week, AND not due this week
+                      // Filter: Only show assessments in the next 3 weeks, not completed this week, AND not due this week
                       final upcomingAssessments = allAssessments
                           .where((a) {
                             if (a.dueDate == null) return false;
-                            final daysUntilDue = a.dueDate!.difference(now).inDays;
                             // Exclude assessments due in the current week
                             if (a.weekNumber == widget.weekNumber) return false;
-                            return a.dueDate!.isAfter(now) && daysUntilDue <= 21;
+                            // Show only assessments due in the next 3 weeks (current week + 3)
+                            return a.dueDate!.isAfter(now) &&
+                                   a.weekNumber != null &&
+                                   a.weekNumber! <= widget.weekNumber + 3;
                           })
                           .toList()
                         ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
@@ -1372,54 +1440,65 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                         break;
                                     }
 
-                                    return Opacity(
-                                      opacity: getTaskOpacity(assessment.id, widget.weekNumber),
-                                      child: _TaskItem(
-                                        taskName: '${assessment.name} ($typeName) ($timeText)',
-                                        taskId: assessment.id,
-                                        status: status,
-                                        completedAt: completion?.completedAt,
-                                        scaleFactor: scaleFactor,
-                                        onTouchDown: onTouchDown,
-                                        onSelectTask: selectTask,
-                                        getTemporaryStatus: getTemporaryStatus,
-                                        onUpdateTemporaryStatus: updateTemporaryStatus,
-                                        onStatusChanged: (newStatus) async {
-                                          final user = ref.read(currentUserProvider);
-                                          if (user == null) return;
+                                    // Determine badge color based on days until due
+                                    Color badgeColor;
+                                    if (daysUntilDue <= 3) {
+                                      badgeColor = const Color(0xFFEF4444); // Red
+                                    } else if (daysUntilDue <= 13) {
+                                      badgeColor = const Color(0xFFF97316); // Orange
+                                    } else {
+                                      badgeColor = const Color(0xFF10B981); // Green
+                                    }
 
-                                          // Trigger fade-out if completing
-                                          if (newStatus == TaskStatus.complete) {
-                                            handleTaskCompletedWithFade(assessment.id, widget.weekNumber);
-                                          } else {
-                                            // Cancel fade-out if unchecking
-                                            cancelFadeOut(assessment.id, widget.weekNumber);
-                                          }
+                                    return _TaskItem(
+                                      taskName: '${assessment.name} ($typeName)',
+                                      taskId: assessment.id,
+                                      status: status,
+                                      completedAt: completion?.completedAt,
+                                      scaleFactor: scaleFactor,
+                                      textOpacity: getTaskOpacity(assessment.id, widget.weekNumber),
+                                      checkboxOpacity: getTaskCheckboxOpacity(assessment.id, widget.weekNumber),
+                                      timeBadge: timeText,
+                                      badgeColor: badgeColor,
+                                      onTouchDown: onTouchDown,
+                                      onSelectTask: selectTask,
+                                      getTemporaryStatus: getTemporaryStatus,
+                                      onUpdateTemporaryStatus: updateTemporaryStatus,
+                                      onStatusChanged: (newStatus) async {
+                                        final user = ref.read(currentUserProvider);
+                                        if (user == null) return;
 
-                                          final repository = ref.read(firestoreRepositoryProvider);
-                                          final newCompletion = TaskCompletion(
-                                            id: completion?.id ?? '',
-                                            moduleId: widget.module.id,
-                                            taskId: assessment.id,
-                                            weekNumber: widget.weekNumber,
-                                            status: newStatus,
-                                            completedAt: newStatus == TaskStatus.complete
-                                                ? DateTime.now()
-                                                : null,
-                                          );
+                                        // Trigger fade-out if completing
+                                        if (newStatus == TaskStatus.complete) {
+                                          handleTaskCompletedWithFade(assessment.id, widget.weekNumber);
+                                        } else {
+                                          // Cancel fade-out if unchecking
+                                          cancelFadeOut(assessment.id, widget.weekNumber);
+                                        }
 
-                                          await repository.upsertTaskCompletion(
-                                            user.uid,
-                                            widget.module.id,
-                                            newCompletion,
-                                          );
+                                        final repository = ref.read(firestoreRepositoryProvider);
+                                        final newCompletion = TaskCompletion(
+                                          id: completion?.id ?? '',
+                                          moduleId: widget.module.id,
+                                          taskId: assessment.id,
+                                          weekNumber: widget.weekNumber,
+                                          status: newStatus,
+                                          completedAt: newStatus == TaskStatus.complete
+                                              ? DateTime.now()
+                                              : null,
+                                        );
 
-                                          // Check for weekly completion celebration
-                                          if (newStatus == TaskStatus.complete && context.mounted) {
-                                            await checkAndShowWeeklyCelebration(context, ref, widget.weekNumber);
-                                          }
-                                        },
-                                      ),
+                                        await repository.upsertTaskCompletion(
+                                          user.uid,
+                                          widget.module.id,
+                                          newCompletion,
+                                        );
+
+                                        // Check for weekly completion celebration
+                                        if (newStatus == TaskStatus.complete && context.mounted) {
+                                          await checkAndShowWeeklyCelebration(context, ref, widget.weekNumber);
+                                        }
+                                      },
                                     );
                                   }).toList(),
                                 ),
@@ -1539,10 +1618,15 @@ class _TaskItem extends ConsumerStatefulWidget {
   final bool isAssessment;
   final DateTime? completedAt;
   final double scaleFactor;
+  final double textOpacity;
+  final double checkboxOpacity;
   final Function(String, TaskStatus)? onTouchDown;
   final Function(String, TaskStatus)? onSelectTask;
   final TaskStatus? Function(String, TaskStatus)? getTemporaryStatus;
   final Function(String, TaskStatus)? onUpdateTemporaryStatus;
+  final int? weekBadge;
+  final String? timeBadge;
+  final Color? badgeColor;
 
   const _TaskItem({
     required this.taskName,
@@ -1553,10 +1637,15 @@ class _TaskItem extends ConsumerStatefulWidget {
     this.isAssessment = false,
     this.completedAt,
     this.scaleFactor = 1.0,
+    this.textOpacity = 1.0,
+    this.checkboxOpacity = 1.0,
     this.onTouchDown,
     this.onSelectTask,
     this.getTemporaryStatus,
     this.onUpdateTemporaryStatus,
+    this.weekBadge,
+    this.timeBadge,
+    this.badgeColor,
   });
 
   @override
@@ -1580,21 +1669,87 @@ class _TaskItemState extends ConsumerState<_TaskItem> {
       children: [
         Padding(
           padding: EdgeInsets.only(top: 3 * widget.scaleFactor),
-          child: _StatusIcon(status: currentStatus, scaleFactor: widget.scaleFactor),
+          child: _StatusIcon(
+            status: currentStatus,
+            scaleFactor: widget.scaleFactor,
+            opacity: widget.checkboxOpacity,
+          ),
         ),
         SizedBox(width: 6 * widget.scaleFactor),
         Expanded(
-          child: Text(
-            widget.taskName,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontSize:
-                  (Theme.of(context).textTheme.bodyLarge?.fontSize ?? 16) *
-                  widget.scaleFactor,
-              color: widget.isAssessment
-                  ? (currentStatus == TaskStatus.complete
-                      ? Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6)
-                      : const Color(0xFFB91C1C)) // Dark red for assessments
-                  : null,
+          child: Opacity(
+            opacity: widget.textOpacity,
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6 * widget.scaleFactor,
+              children: [
+                Text(
+                  widget.taskName,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontSize:
+                        (Theme.of(context).textTheme.bodyLarge?.fontSize ?? 17) *
+                        widget.scaleFactor,
+                    fontWeight: FontWeight.w500,
+                    color: widget.isAssessment
+                        ? (currentStatus == TaskStatus.complete
+                            ? Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6)
+                            : const Color(0xFFB91C1C)) // Dark red for assessments
+                        : null,
+                  ),
+                ),
+                // Week badge for outstanding tasks
+                if (widget.weekBadge != null)
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 6 * widget.scaleFactor,
+                      vertical: 2 * widget.scaleFactor,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F4F6), // Light gray
+                      borderRadius: BorderRadius.circular(4 * widget.scaleFactor),
+                      border: Border.all(
+                        color: const Color(0xFF9CA3AF), // Gray border
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      'Week ${widget.weekBadge}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize:
+                            (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) *
+                            widget.scaleFactor,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF6B7280), // Medium gray
+                      ),
+                    ),
+                  ),
+                // Time badge for upcoming assignments
+                if (widget.timeBadge != null && widget.badgeColor != null)
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 6 * widget.scaleFactor,
+                      vertical: 2 * widget.scaleFactor,
+                    ),
+                    decoration: BoxDecoration(
+                      color: widget.badgeColor!.withValues(alpha: 0.15), // Light version of badge color
+                      borderRadius: BorderRadius.circular(4 * widget.scaleFactor),
+                      border: Border.all(
+                        color: widget.badgeColor!, // Full color for border
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      widget.timeBadge!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize:
+                            (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) *
+                            widget.scaleFactor,
+                        fontWeight: FontWeight.w500,
+                        color: widget.badgeColor, // Use badge color for text
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
@@ -1628,8 +1783,8 @@ class _TaskItemState extends ConsumerState<_TaskItem> {
           child: Container(
             margin: EdgeInsets.only(
               left: widget.isSubtask ? 32.0 * widget.scaleFactor : 0.0,
-              top: 4 * widget.scaleFactor,
-              bottom: 4 * widget.scaleFactor,
+              top: 2 * widget.scaleFactor,
+              bottom: 2 * widget.scaleFactor,
             ),
             padding: EdgeInsets.symmetric(
               horizontal: 0,
@@ -1671,8 +1826,13 @@ class _TaskItemState extends ConsumerState<_TaskItem> {
 class _StatusIcon extends StatelessWidget {
   final TaskStatus status;
   final double scaleFactor;
+  final double opacity;
 
-  const _StatusIcon({required this.status, this.scaleFactor = 1.0});
+  const _StatusIcon({
+    required this.status,
+    this.scaleFactor = 1.0,
+    this.opacity = 1.0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1681,7 +1841,7 @@ class _StatusIcon extends StatelessWidget {
     // Use responsive checkbox size, scaled by module card's scaleFactor
     final iconSize = ResponsiveText.getTaskCheckboxSize(screenWidth) * scaleFactor;
 
-    return switch (status) {
+    final icon = switch (status) {
       TaskStatus.notStarted => Icon(
         Icons.radio_button_unchecked,
         color: Colors.grey[400],
@@ -1698,6 +1858,12 @@ class _StatusIcon extends StatelessWidget {
         size: iconSize,
       ),
     };
+
+    // Wrap icon with Opacity widget to allow fading
+    return Opacity(
+      opacity: opacity,
+      child: icon,
+    );
   }
 }
 

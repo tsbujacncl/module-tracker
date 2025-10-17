@@ -9,7 +9,6 @@ import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/module_provider.dart';
 import 'package:module_tracker/models/customization_preferences.dart';
 import 'package:module_tracker/screens/settings/notification_settings_screen.dart';
-import 'package:module_tracker/screens/settings/event_colors_screen.dart';
 import 'package:module_tracker/screens/import_module/import_module_screen.dart';
 import 'package:module_tracker/utils/date_picker_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -685,6 +684,272 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _showEventColorsDialog() async {
+    final availableColors = [
+      const Color(0xFFF44336), // Red
+      const Color(0xFFFF9800), // Orange
+      const Color(0xFFFFEB3B), // Yellow
+      const Color(0xFF4CAF50), // Green
+      const Color(0xFF03A9F4), // Light Blue
+      const Color(0xFF1565C0), // Dark Blue
+      const Color(0xFF9C27B0), // Purple
+      const Color(0xFFE91E63), // Pink
+      const Color(0xFF795548), // Brown
+      const Color(0xFF9E9E9E), // Grey
+    ];
+
+    // State for view management - declared outside builder to persist across rebuilds
+    String currentView = 'list'; // 'list' or 'picker'
+    String? selectedEventType;
+    Color? selectedColor;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          final userPreferences = ref.watch(userPreferencesProvider);
+
+          return AlertDialog(
+            title: Row(
+              children: [
+                if (currentView == 'picker')
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () {
+                      setState(() {
+                        currentView = 'list';
+                        selectedEventType = null;
+                        selectedColor = null;
+                      });
+                    },
+                  ),
+                Expanded(
+                  child: Text(
+                    currentView == 'list'
+                      ? 'Event Colors'
+                      : 'Choose Colour for $selectedEventType',
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            contentPadding: const EdgeInsets.only(top: 20),
+            content: Container(
+              width: 320,
+              height: 240,
+              constraints: const BoxConstraints(
+                minWidth: 320,
+                maxWidth: 320,
+                minHeight: 240,
+                maxHeight: 240,
+              ),
+              child: currentView == 'list'
+                ? SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        // Lecture Color
+                        ListTile(
+                          leading: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: userPreferences.customLectureColor ??
+                                  const Color(0xFF1565C0),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.grey.shade300,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          title: const Text('Lecture Colour'),
+                          subtitle: const Text('Colour for lecture events'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            setState(() {
+                              currentView = 'picker';
+                              selectedEventType = 'Lecture';
+                              selectedColor = userPreferences.customLectureColor;
+                            });
+                          },
+                        ),
+                        const Divider(height: 1),
+                        // Lab/Tutorial Color
+                        ListTile(
+                          leading: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: userPreferences.customLabTutorialColor ??
+                                  const Color(0xFF4CAF50),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.grey.shade300,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          title: const Text('Lab/Tutorial Colour'),
+                          subtitle: const Text('Colour for lab and tutorial events'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            setState(() {
+                              currentView = 'picker';
+                              selectedEventType = 'Lab/Tutorial';
+                              selectedColor = userPreferences.customLabTutorialColor;
+                            });
+                          },
+                        ),
+                        const Divider(height: 1),
+                        // Assignment Color
+                        ListTile(
+                          leading: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: userPreferences.customAssignmentColor ??
+                                  const Color(0xFFF44336),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.grey.shade300,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          title: const Text('Assignment Colour'),
+                          subtitle: const Text('Colour for assignment events'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            setState(() {
+                              currentView = 'picker';
+                              selectedEventType = 'Assignment';
+                              selectedColor = userPreferences.customAssignmentColor;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  )
+                : Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // First row (5 colors)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: availableColors.sublist(0, 5).map((color) {
+                            return InkWell(
+                              onTap: () {
+                                setState(() {
+                                  selectedColor = color;
+                                });
+                              },
+                              child: Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: selectedColor == color
+                                        ? Colors.black
+                                        : Colors.grey.shade300,
+                                    width: selectedColor == color ? 3 : 2,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 12),
+                        // Second row (5 colors)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: availableColors.sublist(5, 10).map((color) {
+                            return InkWell(
+                              onTap: () {
+                                setState(() {
+                                  selectedColor = color;
+                                });
+                              },
+                              child: Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: selectedColor == color
+                                        ? Colors.black
+                                        : Colors.grey.shade300,
+                                    width: selectedColor == color ? 3 : 2,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+            ),
+            actions: [
+              if (currentView == 'list')
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                )
+              else ...[
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      currentView = 'list';
+                      selectedEventType = null;
+                      selectedColor = null;
+                    });
+                  },
+                  child: Text('Cancel', style: GoogleFonts.inter()),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (selectedColor != null && selectedEventType != null) {
+                      if (selectedEventType == 'Lecture') {
+                        ref
+                            .read(userPreferencesProvider.notifier)
+                            .setLectureColor(selectedColor!);
+                      } else if (selectedEventType == 'Lab/Tutorial') {
+                        ref
+                            .read(userPreferencesProvider.notifier)
+                            .setLabTutorialColor(selectedColor!);
+                      } else if (selectedEventType == 'Assignment') {
+                        ref
+                            .read(userPreferencesProvider.notifier)
+                            .setAssignmentColor(selectedColor!);
+                      }
+                    }
+                    setState(() {
+                      currentView = 'list';
+                      selectedEventType = null;
+                      selectedColor = null;
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0EA5E9),
+                  ),
+                  child: Text('Save', style: GoogleFonts.inter(color: Colors.white)),
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -1514,8 +1779,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               Icons.chevron_right,
                               size: 24 * scaleFactor,
                             ),
-                            onTap: () {
-                              // Get current semester and modules
+                            onTap: () async {
+                              // Get current semester
                               final selectedSemester = ref.read(selectedSemesterProvider);
 
                               if (selectedSemester == null) {
@@ -1528,47 +1793,69 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 return;
                               }
 
-                              // Get modules for the current semester
-                              final modulesAsync = ref.read(modulesForSemesterProvider(selectedSemester.id));
-
-                              modulesAsync.when(
-                                data: (modules) {
-                                  if (modules.isEmpty) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('No modules found. Please add a module first.'),
-                                        backgroundColor: Color(0xFFEF4444),
+                              // Show loading dialog
+                              showDialog(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (context) => const Center(
+                                  child: Card(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(24),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          CircularProgressIndicator(),
+                                          SizedBox(height: 16),
+                                          Text('Loading modules...'),
+                                        ],
                                       ),
-                                    );
-                                    return;
-                                  }
-
-                                  // Show module selection dialog with NO pre-selection
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) => ModuleSelectionDialog(
-                                      preSelectedModule: null,
-                                      semesterId: selectedSemester.id,
                                     ),
-                                  );
-                                },
-                                loading: () {
+                                  ),
+                                ),
+                              );
+
+                              try {
+                                // Wait for modules to load
+                                final modulesAsync = await ref.read(
+                                  modulesForSemesterProvider(selectedSemester.id).future,
+                                );
+
+                                if (!mounted) return;
+
+                                // Dismiss loading dialog
+                                Navigator.pop(context);
+
+                                if (modulesAsync.isEmpty) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                      content: Text('Loading modules...'),
-                                      backgroundColor: Color(0xFF0EA5E9),
+                                      content: Text('No modules found. Please add a module first.'),
+                                      backgroundColor: Color(0xFFEF4444),
                                     ),
                                   );
-                                },
-                                error: (error, _) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Error loading modules: $error'),
-                                      backgroundColor: const Color(0xFFEF4444),
-                                    ),
-                                  );
-                                },
-                              );
+                                  return;
+                                }
+
+                                // Show module selection dialog
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => ModuleSelectionDialog(
+                                    preSelectedModule: null,
+                                    semesterId: selectedSemester.id,
+                                  ),
+                                );
+                              } catch (error) {
+                                if (!mounted) return;
+
+                                // Dismiss loading dialog
+                                Navigator.pop(context);
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Error loading modules: $error'),
+                                    backgroundColor: const Color(0xFFEF4444),
+                                  ),
+                                );
+                              }
                             },
                           ),
                         ],
@@ -1707,15 +1994,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               Icons.chevron_right,
                               size: 24 * scaleFactor,
                             ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const EventColorsScreen(),
-                                ),
-                              );
-                            },
+                            onTap: _showEventColorsDialog,
                           ),
                         ],
                       ),
@@ -1755,7 +2034,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               children: [
                                 Image.asset(
                                   'assets/images/buy_me_a_coffee_button.png',
-                                  height: 150,
+                                  height: 135,
                                   fit: BoxFit.contain,
                                 ),
                                 Positioned(
@@ -1781,7 +2060,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 44),
+                    const SizedBox(height: 20),
                     // Designer credit
                     Text(
                       'Designed by Tyr @ tyrbujac.com',
@@ -1793,7 +2072,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                   ],
                 ),
               ),

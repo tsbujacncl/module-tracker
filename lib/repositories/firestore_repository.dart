@@ -4,6 +4,7 @@ import 'package:module_tracker/models/semester.dart';
 import 'package:module_tracker/models/recurring_task.dart';
 import 'package:module_tracker/models/assessment.dart';
 import 'package:module_tracker/models/task_completion.dart';
+import 'package:module_tracker/models/cancelled_event.dart';
 
 class FirestoreRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -426,6 +427,79 @@ class FirestoreRepository {
     }
 
     await batch.commit();
+  }
+
+  // ========== CANCELLED EVENT OPERATIONS ==========
+
+  /// Get cancelled events for a module and week
+  Stream<List<CancelledEvent>> getCancelledEvents(
+      String userId, String moduleId, int weekNumber) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('modules')
+        .doc(moduleId)
+        .collection('cancelledEvents')
+        .where('weekNumber', isEqualTo: weekNumber)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => CancelledEvent.fromFirestore(doc, moduleId))
+            .toList());
+  }
+
+  /// Get all cancelled events for a module
+  Stream<List<CancelledEvent>> getAllCancelledEvents(
+      String userId, String moduleId) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('modules')
+        .doc(moduleId)
+        .collection('cancelledEvents')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => CancelledEvent.fromFirestore(doc, moduleId))
+            .toList());
+  }
+
+  /// Cancel an event for a specific week
+  Future<void> cancelEvent(
+      String userId, String moduleId, String eventId, int weekNumber, EventType eventType) async {
+    print('DEBUG REPO: Cancelling event - eventId: $eventId, moduleId: $moduleId, weekNumber: $weekNumber, type: $eventType');
+    final docId = '${eventId}_w$weekNumber';
+    final cancelledEvent = CancelledEvent(
+      id: docId,
+      moduleId: moduleId,
+      eventId: eventId,
+      weekNumber: weekNumber,
+      eventType: eventType,
+      cancelledAt: DateTime.now(),
+    );
+
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('modules')
+        .doc(moduleId)
+        .collection('cancelledEvents')
+        .doc(docId)
+        .set(cancelledEvent.toFirestore());
+
+    print('DEBUG REPO: Event cancelled successfully with docId: $docId');
+  }
+
+  /// Restore a cancelled event
+  Future<void> restoreCancelledEvent(
+      String userId, String moduleId, String eventId, int weekNumber) async {
+    final docId = '${eventId}_w${weekNumber}';
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('modules')
+        .doc(moduleId)
+        .collection('cancelledEvents')
+        .doc(docId)
+        .delete();
   }
 
   // ========== USER PREFERENCES OPERATIONS ==========

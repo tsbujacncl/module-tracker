@@ -15,6 +15,7 @@ class UserPreferences {
   final DateTime? birthday;
   final String? notificationTime; // 'morning', 'afternoon', 'evening', 'off'
   final bool hasCompletedOnboarding;
+  final bool isLoading; // Track if preferences are still being loaded
 
   const UserPreferences({
     this.enableThreeStateTaskToggle = false, // Default to 2-state (simpler)
@@ -26,6 +27,7 @@ class UserPreferences {
     this.birthday,
     this.notificationTime,
     this.hasCompletedOnboarding = false,
+    this.isLoading = true, // Start with loading state
   });
 
   UserPreferences copyWith({
@@ -38,6 +40,7 @@ class UserPreferences {
     ValueGetter<DateTime?>? birthday,
     String? notificationTime,
     bool? hasCompletedOnboarding,
+    bool? isLoading,
   }) {
     return UserPreferences(
       enableThreeStateTaskToggle: enableThreeStateTaskToggle ?? this.enableThreeStateTaskToggle,
@@ -49,6 +52,7 @@ class UserPreferences {
       birthday: birthday != null ? birthday() : this.birthday,
       notificationTime: notificationTime ?? this.notificationTime,
       hasCompletedOnboarding: hasCompletedOnboarding ?? this.hasCompletedOnboarding,
+      isLoading: isLoading ?? this.isLoading,
     );
   }
 }
@@ -109,23 +113,26 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
       print('DEBUG LOAD: ========== LOADING PREFERENCES START ==========');
       print('DEBUG LOAD: User ID: $_userId');
 
-      // First, try loading from Firestore if user is logged in
-      if (_userId != null && _userId!.isNotEmpty) {
-        print('DEBUG LOAD: Attempting to load from Firestore...');
-        final firestorePrefs = await _repository.getUserPreferencesOnce(_userId!);
+      // If no user ID, keep loading state and don't load anything
+      // This prevents loading preferences for null user before auth completes
+      if (_userId == null || _userId!.isEmpty) {
+        print('DEBUG LOAD: No user ID - keeping loading state');
+        return; // Keep isLoading: true
+      }
 
-        if (firestorePrefs != null && firestorePrefs.isNotEmpty) {
-          print('DEBUG LOAD: Found preferences in Firestore: $firestorePrefs');
-          _applyPreferencesFromMap(firestorePrefs);
-          // Also cache in Hive for offline access
-          await _cachePreferencesToHive(firestorePrefs);
-          print('DEBUG LOAD: Loaded from Firestore - userName: ${state.userName}, birthday: ${state.birthday}');
-          return;
-        } else {
-          print('DEBUG LOAD: No preferences in Firestore (or empty), checking Hive...');
-        }
+      // Try loading from Firestore (we know userId is not null here)
+      print('DEBUG LOAD: Attempting to load from Firestore...');
+      final firestorePrefs = await _repository.getUserPreferencesOnce(_userId!);
+
+      if (firestorePrefs != null && firestorePrefs.isNotEmpty) {
+        print('DEBUG LOAD: Found preferences in Firestore: $firestorePrefs');
+        _applyPreferencesFromMap(firestorePrefs);
+        // Also cache in Hive for offline access
+        await _cachePreferencesToHive(firestorePrefs);
+        print('DEBUG LOAD: Loaded from Firestore - userName: ${state.userName}, birthday: ${state.birthday}');
+        return;
       } else {
-        print('DEBUG LOAD: No user ID, skipping Firestore, loading from Hive...');
+        print('DEBUG LOAD: No preferences in Firestore (or empty), checking Hive...');
       }
 
       // Fall back to Hive if Firestore has no data (first time or offline)
@@ -166,11 +173,14 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
         birthday: birthdayString != null ? DateTime.tryParse(birthdayString) : null,
         notificationTime: notificationTime,
         hasCompletedOnboarding: hasCompletedOnboarding,
+        isLoading: false, // Loading complete
       );
       print('DEBUG LOAD: ========== LOADING PREFERENCES COMPLETE ==========');
     } catch (e, stackTrace) {
       print('ERROR LOAD: Error loading user preferences: $e');
       print('ERROR LOAD: Stack trace: $stackTrace');
+      // Even on error, set loading to false so UI doesn't hang
+      state = state.copyWith(isLoading: false);
     }
   }
 
@@ -186,6 +196,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
       birthday: map[_birthdayKey] != null ? DateTime.tryParse(map[_birthdayKey] as String) : null,
       notificationTime: map[_notificationTimeKey] as String?,
       hasCompletedOnboarding: map[_hasCompletedOnboardingKey] as bool? ?? false,
+      isLoading: false, // Loading complete from Firestore
     );
   }
 

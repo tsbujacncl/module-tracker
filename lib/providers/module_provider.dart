@@ -3,6 +3,7 @@ import 'package:module_tracker/models/module.dart';
 import 'package:module_tracker/models/recurring_task.dart';
 import 'package:module_tracker/models/assessment.dart';
 import 'package:module_tracker/models/task_completion.dart';
+import 'package:module_tracker/models/cancelled_event.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
@@ -132,6 +133,39 @@ final allTaskCompletionsProvider =
       }
 
       return repository.getAllTaskCompletions(user.uid, moduleId);
+    });
+
+// Get cancelled events for a module and week
+final cancelledEventsProvider =
+    StreamProvider.family<
+      List<CancelledEvent>,
+      ({String moduleId, int weekNumber})
+    >((ref, params) {
+      final user = ref.watch(currentUserProvider);
+      final repository = ref.watch(firestoreRepositoryProvider);
+
+      if (user == null) {
+        return Stream.value([]);
+      }
+
+      return repository.getCancelledEvents(
+        user.uid,
+        params.moduleId,
+        params.weekNumber,
+      );
+    });
+
+// Get all cancelled events for a module
+final allCancelledEventsProvider =
+    StreamProvider.family<List<CancelledEvent>, String>((ref, moduleId) {
+      final user = ref.watch(currentUserProvider);
+      final repository = ref.watch(firestoreRepositoryProvider);
+
+      if (user == null) {
+        return Stream.value([]);
+      }
+
+      return repository.getAllCancelledEvents(user.uid, moduleId);
     });
 
 // Get all recurring tasks for all modules in current semester (for calendar view)

@@ -9,6 +9,7 @@ import 'package:module_tracker/models/recurring_task.dart';
 import 'package:module_tracker/models/semester.dart';
 import 'package:module_tracker/models/task_completion.dart';
 import 'package:module_tracker/models/assessment.dart';
+import 'package:module_tracker/models/cancelled_event.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/module_provider.dart';
@@ -56,6 +57,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
   String?
   _firstTouchedEventId; // Track first box touched, waiting for drag confirmation
   TaskStatus? _firstTouchedStatus;
+  bool _justFinishedDrag = false; // Prevent taps immediately after drag ends
 
   // Time tracker bar state
   Timer? _timeTrackerTimer;
@@ -252,9 +254,41 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
     }
   }
 
+  // Get all cancelled event IDs for the current week
+  Set<String> getCancelledEventIds() {
+    final cancelledIds = <String>{};
+
+    for (final moduleId in widget.modules.map((m) => m.id)) {
+      final cancelledEvents = ref.watch(cancelledEventsProvider(
+        (moduleId: moduleId, weekNumber: widget.currentWeek),
+      ));
+
+      // Properly extract data from AsyncValue
+      cancelledEvents.when(
+        data: (events) {
+          print('DEBUG CALENDAR: Found ${events.length} cancelled events for module $moduleId, week ${widget.currentWeek}');
+          for (final event in events) {
+            print('DEBUG CALENDAR: Filtering out event: ${event.eventId}');
+            cancelledIds.add(event.eventId);
+          }
+        },
+        loading: () {
+          print('DEBUG CALENDAR: Still loading cancelled events for module $moduleId');
+        },
+        error: (e, st) {
+          print('DEBUG CALENDAR: Error loading cancelled events for module $moduleId: $e');
+        },
+      );
+    }
+
+    print('DEBUG CALENDAR: Total cancelled event IDs: ${cancelledIds.length} - $cancelledIds');
+    return cancelledIds;
+  }
+
   // Get all tasks for a specific day
   List<TaskWithModule> getTasksForDay(int dayOfWeek) {
     final tasks = <TaskWithModule>[];
+    final cancelledIds = getCancelledEventIds();
 
     for (final entry in widget.tasksByModule.entries) {
       final moduleId = entry.key;
@@ -263,6 +297,9 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
 
       if (module != null) {
         for (final task in moduleTasks) {
+          // Skip cancelled tasks
+          if (cancelledIds.contains(task.id)) continue;
+
           if (task.dayOfWeek == dayOfWeek && task.time != null) {
             tasks.add(TaskWithModule(task: task, module: module));
           }
@@ -286,6 +323,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
     final weekStart = weekStartDate ?? getWeekStartDate();
     final currentDate = weekStart.add(Duration(days: dayOfWeek - 1));
     final assessments = <AssessmentWithModule>[];
+    final cancelledIds = getCancelledEventIds();
 
     // If no semester, no assessments to show
     if (widget.semester == null) return assessments;
@@ -299,6 +337,9 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
         for (final assessment in moduleAssessments) {
           // Only show assessments that have a confirmed time
           if (assessment.time == null) continue;
+
+          // Skip cancelled assessments
+          if (cancelledIds.contains(assessment.id)) continue;
 
           bool matchesDate = false;
 
@@ -902,6 +943,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                 onSelectEvent: selectEvent,
                 isEventSelected: isEventSelected,
                 getTemporaryStatus: getTemporaryStatus,
+                justFinishedDrag: _justFinishedDrag,
               ),
             ),
           );
@@ -922,6 +964,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                 onSelectEvent: selectEvent,
                 isEventSelected: isEventSelected,
                 getTemporaryStatus: getTemporaryStatus,
+                justFinishedDrag: _justFinishedDrag,
               ),
             ),
           );
@@ -1146,15 +1189,31 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
           },
           onPanEnd: (details) async {
             // Events are already completed immediately as dragged over
+            final hadSelections = _selectedEventIds.isNotEmpty;
             setState(() {
               _isDragging = false;
               _selectedEventIds.clear();
               // DON'T clear _temporaryCompletions - let automatic cleanup handle it when provider updates
               _firstTouchedEventId = null;
               _firstTouchedStatus = null;
+              // Prevent taps immediately after drag to avoid double-toggle bug
+              if (hadSelections) {
+                _justFinishedDrag = true;
+              }
             });
             // Re-enable parent scroll
             ref.read(isDraggingCheckboxProvider.notifier).state = false;
+
+            // Clear the flag after a short delay
+            if (hadSelections) {
+              Future.delayed(const Duration(milliseconds: 100), () {
+                if (mounted) {
+                  setState(() {
+                    _justFinishedDrag = false;
+                  });
+                }
+              });
+            }
           },
           onPanCancel: () {
             setState(() {
@@ -1737,6 +1796,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                                   isEventSelected,
                                                               getTemporaryStatus:
                                                                   getTemporaryStatus,
+                                                              justFinishedDrag:
+                                                                  _justFinishedDrag,
                                                             ),
                                                           ),
                                                         );
@@ -1769,6 +1830,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                                   isEventSelected,
                                                               getTemporaryStatus:
                                                                   getTemporaryStatus,
+                                                              justFinishedDrag:
+                                                                  _justFinishedDrag,
                                                             ),
                                                           ),
                                                         );
@@ -2223,6 +2286,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                         isEventSelected,
                                                     getTemporaryStatus:
                                                         getTemporaryStatus,
+                                                    justFinishedDrag:
+                                                        _justFinishedDrag,
                                                   ),
                                                 ),
                                               );
@@ -2250,6 +2315,8 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                         isEventSelected,
                                                     getTemporaryStatus:
                                                         getTemporaryStatus,
+                                                    justFinishedDrag:
+                                                        _justFinishedDrag,
                                                   ),
                                                 ),
                                               );
@@ -2729,6 +2796,7 @@ class _TimetableAssessmentBox extends ConsumerWidget {
   final Function(String, TaskStatus) onSelectEvent;
   final bool Function(String) isEventSelected;
   final TaskStatus? Function(String, TaskStatus) getTemporaryStatus;
+  final bool justFinishedDrag;
 
   const _TimetableAssessmentBox({
     required this.assessment,
@@ -2741,6 +2809,7 @@ class _TimetableAssessmentBox extends ConsumerWidget {
     required this.onSelectEvent,
     required this.isEventSelected,
     required this.getTemporaryStatus,
+    required this.justFinishedDrag,
   });
 
   @override
@@ -2784,6 +2853,9 @@ class _TimetableAssessmentBox extends ConsumerWidget {
             onEnter: (_) => onSelectEvent(eventId, currentStatus),
             child: GestureDetector(
               onTap: () async {
+                // Prevent tap if we just finished a drag operation
+                if (justFinishedDrag) return;
+
                 final user = ref.read(currentUserProvider);
                 if (user == null) return;
 
@@ -2983,6 +3055,7 @@ class _TimetableTaskBox extends ConsumerWidget {
   final Function(String, TaskStatus) onSelectEvent;
   final bool Function(String) isEventSelected;
   final TaskStatus? Function(String, TaskStatus) getTemporaryStatus;
+  final bool justFinishedDrag;
 
   const _TimetableTaskBox({
     required this.task,
@@ -2997,6 +3070,7 @@ class _TimetableTaskBox extends ConsumerWidget {
     required this.onSelectEvent,
     required this.isEventSelected,
     required this.getTemporaryStatus,
+    required this.justFinishedDrag,
   });
 
   @override
@@ -3040,6 +3114,9 @@ class _TimetableTaskBox extends ConsumerWidget {
             onEnter: (_) => onSelectEvent(eventId, currentStatus),
             child: GestureDetector(
               onTap: () async {
+                // Prevent tap if we just finished a drag operation
+                if (justFinishedDrag) return;
+
                 final user = ref.read(currentUserProvider);
                 if (user == null) return;
 
@@ -3545,12 +3622,22 @@ class _AssessmentDetailsDialogState
               });
             },
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
               decoration: BoxDecoration(
                 color: currentStatus == TaskStatus.complete
-                    ? const Color(0xFF34D399).withOpacity(0.1)
-                    : const Color(0xFF0EA5E9).withOpacity(0.1),
+                    ? const Color(0xFFD1FAE5) // Light green
+                    : currentStatus == TaskStatus.inProgress
+                    ? const Color(0xFFF59E0B) // Solid orange
+                    : const Color(0xFFF3F4F6), // Light gray
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: currentStatus == TaskStatus.complete
+                      ? const Color(0xFF10B981) // Green border
+                      : currentStatus == TaskStatus.inProgress
+                      ? const Color(0xFFD97706) // Darker orange border
+                      : const Color(0xFF9CA3AF), // Gray border
+                  width: 1.5,
+                ),
               ),
               child: Row(
                 children: [
@@ -3561,8 +3648,10 @@ class _AssessmentDetailsDialogState
                         ? Icons.timelapse
                         : Icons.radio_button_unchecked,
                     color: currentStatus == TaskStatus.complete
-                        ? const Color(0xFF34D399)
-                        : const Color(0xFF0EA5E9),
+                        ? const Color(0xFF10B981) // Green icon
+                        : currentStatus == TaskStatus.inProgress
+                        ? Colors.white
+                        : const Color(0xFF6B7280), // Gray icon
                     size: 20,
                   ),
                   const SizedBox(width: 8),
@@ -3572,7 +3661,15 @@ class _AssessmentDetailsDialogState
                         : currentStatus == TaskStatus.inProgress
                         ? 'In Progress'
                         : 'Not Started',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      color: currentStatus == TaskStatus.complete
+                          ? const Color(0xFF047857) // Dark green text
+                          : currentStatus == TaskStatus.inProgress
+                          ? Colors.white
+                          : const Color(0xFF374151), // Dark gray text
+                      fontSize: 15,
+                    ),
                   ),
                 ],
               ),
@@ -3581,110 +3678,242 @@ class _AssessmentDetailsDialogState
         ],
       ),
       actions: [
-        Row(
-          children: [
-            Flexible(
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.blue,
-                  side: const BorderSide(color: Colors.blue),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
+        Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 88,
+                height: 38,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.blue,
+                    side: const BorderSide(color: Colors.blue, width: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   ),
+                  icon: const Icon(Icons.close, size: 16),
+                  label: const Text('Close', style: TextStyle(fontSize: 13)),
                 ),
-                icon: const Icon(Icons.close, size: 18),
-                label: const Text('Close'),
               ),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: FilledButton.tonalIcon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          ModuleFormScreen(existingModule: widget.module),
-                    ),
-                  );
-                },
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 88,
+                height: 38,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            ModuleFormScreen(existingModule: widget.module),
+                      ),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF3F4F6),
+                    foregroundColor: const Color(0xFF374151),
+                    side: const BorderSide(color: Color(0xFF9CA3AF), width: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   ),
+                  icon: const Icon(Icons.edit, size: 16),
+                  label: const Text('Edit', style: TextStyle(fontSize: 13)),
                 ),
-                icon: const Icon(Icons.edit, size: 18),
-                label: const Text('Edit'),
               ),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: FilledButton.icon(
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 88,
+                height: 38,
+                child: OutlinedButton.icon(
                 onPressed: () async {
                   Navigator.pop(context);
                   final result = await showDialog<String>(
                     context: context,
-                    builder: (context) => AlertDialog(
-                      title: Text(
-                        'Delete Assessment',
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-                      ),
-                      content: Text(
-                        'What would you like to delete?',
-                        style: GoogleFonts.inter(),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Cancel'),
+                    builder: (context) {
+                      // Format date and time for display
+                      final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                      final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      final dayOfWeek = dayNames[widget.date.weekday - 1];
+                      final month = monthNames[widget.date.month - 1];
+                      final dateStr = '$dayOfWeek ${widget.date.day} $month ${widget.date.year}';
+
+                      return AlertDialog(
+                        title: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.delete_outline, size: 24),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Delete Assessment',
+                                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              dateStr,
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.normal,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
                         ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, 'this'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Cancel for Week X only option
+                            InkWell(
+                              onTap: () => Navigator.pop(context, 'this'),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7), // Light orange
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFFF59E0B), // Orange border
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Text('🚫', style: TextStyle(fontSize: 20)),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Cancel this event only',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Hides this event for this week only. Other weeks remain unchanged.',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 13,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // Delete permanently option
+                            InkWell(
+                              onTap: () => Navigator.pop(context, 'following'),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEE2E2), // Light red
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFFEF4444), // Red border
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Text('🗑️', style: TextStyle(fontSize: 20)),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Delete permanently',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '⚠️  Removes from all future weeks. This action cannot be undone.',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 13,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            children: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: Text(
+                                  'Cancel',
+                                  style: GoogleFonts.inter(fontSize: 15),
+                                ),
+                              ),
+                            ],
                           ),
-                          child: const Text('Just this event'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, 'following'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
-                          ),
-                          child: const Text('This and following'),
-                        ),
-                      ],
-                    ),
+                        ],
+                      );
+                    },
                   );
 
                   if (result != null) {
+                    print('DEBUG DIALOG: Delete dialog result: $result');
                     final user = ref.read(currentUserProvider);
                     if (user == null) return;
 
                     final repository = ref.read(firestoreRepositoryProvider);
-                    await repository.deleteAssessment(
-                      user.uid,
-                      widget.module.id,
-                      widget.assessment.id,
-                    );
+
+                    if (result == 'this') {
+                      print('DEBUG DIALOG: Cancelling assessment for week ${widget.weekNumber}');
+                      // Cancel this event for this week only
+                      await repository.cancelEvent(
+                        user.uid,
+                        widget.module.id,
+                        widget.assessment.id,
+                        widget.weekNumber,
+                        EventType.assessment,
+                      );
+                    } else if (result == 'following') {
+                      print('DEBUG DIALOG: Deleting assessment permanently');
+                      // Delete permanently
+                      await repository.deleteAssessment(
+                        user.uid,
+                        widget.module.id,
+                        widget.assessment.id,
+                      );
+                    }
                   }
                 },
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFEE2E2),
+                    foregroundColor: const Color(0xFFDC2626),
+                    side: const BorderSide(color: Color(0xFFEF4444), width: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   ),
+                  icon: const Icon(Icons.delete, size: 16),
+                  label: const Text('Delete', style: TextStyle(fontSize: 13)),
                 ),
-                icon: const Icon(Icons.delete, size: 18),
-                label: const Text('Delete'),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
@@ -4050,12 +4279,22 @@ class _TaskDetailsDialogState extends ConsumerState<_TaskDetailsDialog> {
               });
             },
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
               decoration: BoxDecoration(
                 color: currentStatus == TaskStatus.complete
-                    ? const Color(0xFF34D399).withOpacity(0.1)
-                    : const Color(0xFF0EA5E9).withOpacity(0.1),
+                    ? const Color(0xFFD1FAE5) // Light green
+                    : currentStatus == TaskStatus.inProgress
+                    ? const Color(0xFFF59E0B) // Solid orange
+                    : const Color(0xFFF3F4F6), // Light gray
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: currentStatus == TaskStatus.complete
+                      ? const Color(0xFF10B981) // Green border
+                      : currentStatus == TaskStatus.inProgress
+                      ? const Color(0xFFD97706) // Darker orange border
+                      : const Color(0xFF9CA3AF), // Gray border
+                  width: 1.5,
+                ),
               ),
               child: Row(
                 children: [
@@ -4066,8 +4305,10 @@ class _TaskDetailsDialogState extends ConsumerState<_TaskDetailsDialog> {
                         ? Icons.timelapse
                         : Icons.radio_button_unchecked,
                     color: currentStatus == TaskStatus.complete
-                        ? const Color(0xFF34D399)
-                        : const Color(0xFF0EA5E9),
+                        ? const Color(0xFF10B981) // Green icon
+                        : currentStatus == TaskStatus.inProgress
+                        ? Colors.white
+                        : const Color(0xFF6B7280), // Gray icon
                     size: 20,
                   ),
                   const SizedBox(width: 8),
@@ -4077,7 +4318,15 @@ class _TaskDetailsDialogState extends ConsumerState<_TaskDetailsDialog> {
                         : currentStatus == TaskStatus.inProgress
                         ? 'In Progress'
                         : 'Not Started',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      color: currentStatus == TaskStatus.complete
+                          ? const Color(0xFF047857) // Dark green text
+                          : currentStatus == TaskStatus.inProgress
+                          ? Colors.white
+                          : const Color(0xFF374151), // Dark gray text
+                      fontSize: 15,
+                    ),
                   ),
                 ],
               ),
@@ -4086,110 +4335,245 @@ class _TaskDetailsDialogState extends ConsumerState<_TaskDetailsDialog> {
         ],
       ),
       actions: [
-        Row(
-          children: [
-            Flexible(
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.blue,
-                  side: const BorderSide(color: Colors.blue),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
+        Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 88,
+                height: 38,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.blue,
+                    side: const BorderSide(color: Colors.blue, width: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   ),
+                  icon: const Icon(Icons.close, size: 16),
+                  label: const Text('Close', style: TextStyle(fontSize: 13)),
                 ),
-                icon: const Icon(Icons.close, size: 18),
-                label: const Text('Close'),
               ),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: FilledButton.tonalIcon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          ModuleFormScreen(existingModule: widget.module),
-                    ),
-                  );
-                },
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 88,
+                height: 38,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            ModuleFormScreen(existingModule: widget.module),
+                      ),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF3F4F6),
+                    foregroundColor: const Color(0xFF374151),
+                    side: const BorderSide(color: Color(0xFF9CA3AF), width: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   ),
+                  icon: const Icon(Icons.edit, size: 16),
+                  label: const Text('Edit', style: TextStyle(fontSize: 13)),
                 ),
-                icon: const Icon(Icons.edit, size: 18),
-                label: const Text('Edit'),
               ),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: FilledButton.icon(
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 88,
+                height: 38,
+                child: OutlinedButton.icon(
                 onPressed: () async {
                   Navigator.pop(context);
                   final result = await showDialog<String>(
                     context: context,
-                    builder: (context) => AlertDialog(
-                      title: Text(
-                        'Delete ${widget.getTaskTypeName(widget.task.type)}',
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-                      ),
-                      content: Text(
-                        'What would you like to delete?',
-                        style: GoogleFonts.inter(),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Cancel'),
+                    builder: (context) {
+                      // Format date and time for display
+                      final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                      final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      final dayOfWeek = dayNames[widget.date.weekday - 1];
+                      final month = monthNames[widget.date.month - 1];
+                      final dateStr = '$dayOfWeek ${widget.date.day} $month ${widget.date.year}';
+                      final timeStr = widget.task.time != null ? ', ${widget.task.time}' : '';
+
+                      return AlertDialog(
+                        title: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.delete_outline, size: 24),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Delete ${widget.getTaskTypeName(widget.task.type)}',
+                                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 18),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$dateStr$timeStr',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.normal,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
                         ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, 'this'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Cancel for Week X only option
+                            InkWell(
+                              onTap: () => Navigator.pop(context, 'this'),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7), // Light orange
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFFF59E0B), // Orange border
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Text('🚫', style: TextStyle(fontSize: 20)),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Cancel this event only',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Hides this event for this week only. Other weeks remain unchanged.',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 13,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // Delete permanently option
+                            InkWell(
+                              onTap: () => Navigator.pop(context, 'following'),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEE2E2), // Light red
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFFEF4444), // Red border
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Text('🗑️', style: TextStyle(fontSize: 20)),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Delete permanently',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '⚠️  Removes from all future weeks. This action cannot be undone.',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 13,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            children: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: Text(
+                                  'Cancel',
+                                  style: GoogleFonts.inter(fontSize: 15),
+                                ),
+                              ),
+                            ],
                           ),
-                          child: const Text('Just this event'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, 'following'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
-                          ),
-                          child: const Text('This and following'),
-                        ),
-                      ],
-                    ),
+                        ],
+                      );
+                    },
                   );
 
                   if (result != null) {
+                    print('DEBUG DIALOG: Delete dialog result: $result');
                     final user = ref.read(currentUserProvider);
                     if (user == null) return;
 
                     final repository = ref.read(firestoreRepositoryProvider);
-                    await repository.deleteRecurringTask(
-                      user.uid,
-                      widget.module.id,
-                      widget.task.id,
-                    );
+
+                    if (result == 'this') {
+                      print('DEBUG DIALOG: Cancelling task for week ${widget.weekNumber}');
+                      // Cancel this event for this week only
+                      await repository.cancelEvent(
+                        user.uid,
+                        widget.module.id,
+                        widget.task.id,
+                        widget.weekNumber,
+                        EventType.recurringTask,
+                      );
+                    } else if (result == 'following') {
+                      print('DEBUG DIALOG: Deleting task permanently');
+                      // Delete permanently
+                      await repository.deleteRecurringTask(
+                        user.uid,
+                        widget.module.id,
+                        widget.task.id,
+                      );
+                    }
                   }
                 },
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFEE2E2),
+                    foregroundColor: const Color(0xFFDC2626),
+                    side: const BorderSide(color: Color(0xFFEF4444), width: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   ),
+                  icon: const Icon(Icons.delete, size: 16),
+                  label: const Text('Delete', style: TextStyle(fontSize: 13)),
                 ),
-                icon: const Icon(Icons.delete, size: 18),
-                label: const Text('Delete'),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );

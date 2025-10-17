@@ -7,6 +7,60 @@ class DateUtils {
     return (difference / 7).floor() + 1;
   }
 
+  /// Check if a date falls within any of the given breaks
+  static bool isDateInBreak(DateTime date, List<dynamic> breaks) {
+    if (breaks.isEmpty) return false;
+
+    final dateOnly = DateTime(date.year, date.month, date.day);
+
+    for (final breakItem in breaks) {
+      // Handle both SemesterBreak objects and maps
+      final DateTime breakStart;
+      final DateTime breakEnd;
+
+      if (breakItem is Map) {
+        breakStart = breakItem['startDate'] is DateTime
+            ? breakItem['startDate']
+            : DateTime.parse(breakItem['startDate']);
+        breakEnd = breakItem['endDate'] is DateTime
+            ? breakItem['endDate']
+            : DateTime.parse(breakItem['endDate']);
+      } else {
+        // Assume it's a SemesterBreak object with startDate and endDate properties
+        breakStart = (breakItem as dynamic).startDate;
+        breakEnd = (breakItem as dynamic).endDate;
+      }
+
+      final startOnly = DateTime(breakStart.year, breakStart.month, breakStart.day);
+      final endOnly = DateTime(breakEnd.year, breakEnd.month, breakEnd.day);
+
+      if ((dateOnly.isAtSameMomentAs(startOnly) || dateOnly.isAfter(startOnly)) &&
+          (dateOnly.isAtSameMomentAs(endOnly) || dateOnly.isBefore(endOnly))) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// Check if a given week number falls within any break
+  static bool isWeekInBreak(int weekNumber, DateTime semesterStart, List<dynamic> breaks) {
+    if (breaks.isEmpty) return false;
+
+    final weekStart = getDateForWeek(weekNumber, semesterStart);
+    final weekEnd = weekStart.add(const Duration(days: 6));
+
+    // Check if any day of the week falls within a break
+    for (int i = 0; i < 7; i++) {
+      final day = weekStart.add(Duration(days: i));
+      if (isDateInBreak(day, breaks)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   /// Get the Monday of the current week for a given date
   static DateTime _getStartOfWeek(DateTime date) {
     final dayOfWeek = date.weekday; // Monday = 1, Sunday = 7

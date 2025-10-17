@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:module_tracker/models/semester.dart';
+import 'package:module_tracker/models/semester_break.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/customization_provider.dart';
@@ -25,29 +27,24 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
   final _creditsController = TextEditingController();
   DateTime? _startDate;
   DateTime? _endDate;
-  DateTime? _examPeriodStart;
-  DateTime? _examPeriodEnd;
-  DateTime? _readingWeekStart;
-  DateTime? _readingWeekEnd;
+  _ExamPeriodInput? _examPeriod;
   bool _isLoading = false;
-  bool _examPeriodExpanded = false;
-  bool _readingWeekExpanded = false;
+  List<_BreakInput> _breaks = [];
 
   // Track initial state for unsaved changes detection
   String _initialName = '';
   String _initialCredits = '';
   DateTime? _initialStartDate;
   DateTime? _initialEndDate;
-  DateTime? _initialExamPeriodStart;
-  DateTime? _initialExamPeriodEnd;
-  DateTime? _initialReadingWeekStart;
-  DateTime? _initialReadingWeekEnd;
+  bool _initialHasExamPeriod = false;
+  int _initialBreaks = 0;
 
   bool get _isEditMode => widget.semesterToEdit != null;
 
   // Check if form is valid for submission
   bool get _canSave =>
       _nameController.text.trim().isNotEmpty &&
+      _creditsController.text.trim().isNotEmpty &&
       _startDate != null &&
       _endDate != null;
 
@@ -62,14 +59,15 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
       }
       _startDate = widget.semesterToEdit!.startDate;
       _endDate = widget.semesterToEdit!.endDate;
-      _examPeriodStart = widget.semesterToEdit!.examPeriodStart;
-      _examPeriodEnd = widget.semesterToEdit!.examPeriodEnd;
-      _readingWeekStart = widget.semesterToEdit!.readingWeekStart;
-      _readingWeekEnd = widget.semesterToEdit!.readingWeekEnd;
 
-      // Expand optional sections if they have values
-      _examPeriodExpanded = _examPeriodStart != null || _examPeriodEnd != null;
-      _readingWeekExpanded = _readingWeekStart != null || _readingWeekEnd != null;
+      // Convert exam period dates to _ExamPeriodInput
+      if (widget.semesterToEdit!.examPeriodStart != null && widget.semesterToEdit!.examPeriodEnd != null) {
+        _examPeriod = _ExamPeriodInput()
+          ..startDate = widget.semesterToEdit!.examPeriodStart
+          ..endDate = widget.semesterToEdit!.examPeriodEnd;
+      }
+
+      _breaks = widget.semesterToEdit!.breaks.map((b) => _BreakInput.fromSemesterBreak(b)).toList();
     }
 
     // Store initial state for unsaved changes detection
@@ -77,10 +75,8 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
     _initialCredits = _creditsController.text;
     _initialStartDate = _startDate;
     _initialEndDate = _endDate;
-    _initialExamPeriodStart = _examPeriodStart;
-    _initialExamPeriodEnd = _examPeriodEnd;
-    _initialReadingWeekStart = _readingWeekStart;
-    _initialReadingWeekEnd = _readingWeekEnd;
+    _initialHasExamPeriod = _examPeriod != null;
+    _initialBreaks = _breaks.length;
   }
 
   @override
@@ -130,78 +126,28 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
     }
   }
 
-  Future<void> _selectExamPeriodStart() async {
-    final firstDayOfWeek = ref.read(customizationProvider).weekStartDay.weekdayNumber;
-    final picked = await showCustomDatePicker(
-      context: context,
-      initialDate: _examPeriodStart ?? _startDate ?? DateTime.now(),
-      firstDate: _startDate ?? DateTime(2020),
-      lastDate: _endDate ?? DateTime(2030),
-      firstDayOfWeek: firstDayOfWeek,
-    );
-
-    if (picked != null) {
-      setState(() {
-        _examPeriodStart = picked;
-      });
-    }
+  void _addExamPeriod() {
+    setState(() {
+      _examPeriod = _ExamPeriodInput();
+    });
   }
 
-  Future<void> _selectExamPeriodEnd() async {
-    final firstDayOfWeek = ref.read(customizationProvider).weekStartDay.weekdayNumber;
-    final picked = await showCustomDatePicker(
-      context: context,
-      initialDate: _examPeriodEnd ?? _examPeriodStart ?? _startDate ?? DateTime.now(),
-      firstDate: _examPeriodStart ?? _startDate ?? DateTime(2020),
-      lastDate: _endDate ?? DateTime(2030),
-      firstDayOfWeek: firstDayOfWeek,
-    );
-
-    if (picked != null) {
-      setState(() {
-        _examPeriodEnd = picked;
-      });
-    }
+  void _removeExamPeriod() {
+    setState(() {
+      _examPeriod = null;
+    });
   }
 
-  Future<void> _selectReadingWeekStart() async {
-    final firstDayOfWeek = ref.read(customizationProvider).weekStartDay.weekdayNumber;
-    final picked = await showCustomDatePicker(
-      context: context,
-      initialDate: _readingWeekStart ?? _startDate ?? DateTime.now(),
-      firstDate: _startDate ?? DateTime(2020),
-      lastDate: _endDate ?? DateTime(2030),
-      firstDayOfWeek: firstDayOfWeek,
-    );
-
-    if (picked != null) {
-      setState(() {
-        // Ensure it's the start of the week
-        _readingWeekStart = firstDayOfWeek == 1
-            ? utils.DateUtils.getMonday(picked)
-            : utils.DateUtils.getSunday(picked);
-      });
-    }
+  void _addBreak() {
+    setState(() {
+      _breaks.insert(0, _BreakInput());
+    });
   }
 
-  Future<void> _selectReadingWeekEnd() async {
-    final firstDayOfWeek = ref.read(customizationProvider).weekStartDay.weekdayNumber;
-    final picked = await showCustomDatePicker(
-      context: context,
-      initialDate: _readingWeekEnd ?? _readingWeekStart?.add(const Duration(days: 6)) ?? DateTime.now(),
-      firstDate: _readingWeekStart ?? _startDate ?? DateTime(2020),
-      lastDate: _endDate ?? DateTime(2030),
-      firstDayOfWeek: firstDayOfWeek,
-    );
-
-    if (picked != null) {
-      setState(() {
-        // Ensure it's the end of the week
-        _readingWeekEnd = firstDayOfWeek == 1
-            ? utils.DateUtils.getSunday(picked)
-            : utils.DateUtils.getSaturday(picked);
-      });
-    }
+  void _removeBreak(int index) {
+    setState(() {
+      _breaks.removeAt(index);
+    });
   }
 
   int get numberOfWeeks {
@@ -215,10 +161,8 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
         _creditsController.text != _initialCredits ||
         _startDate != _initialStartDate ||
         _endDate != _initialEndDate ||
-        _examPeriodStart != _initialExamPeriodStart ||
-        _examPeriodEnd != _initialExamPeriodEnd ||
-        _readingWeekStart != _initialReadingWeekStart ||
-        _readingWeekEnd != _initialReadingWeekEnd;
+        (_examPeriod != null) != _initialHasExamPeriod ||
+        _breaks.length != _initialBreaks;
   }
 
   // Show unsaved changes dialog
@@ -311,10 +255,9 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
           startDate: _startDate!,
           endDate: _endDate!,
           numberOfWeeks: numberOfWeeks,
-          examPeriodStart: _examPeriodStart,
-          examPeriodEnd: _examPeriodEnd,
-          readingWeekStart: _readingWeekStart,
-          readingWeekEnd: _readingWeekEnd,
+          examPeriodStart: _examPeriod?.startDate,
+          examPeriodEnd: _examPeriod?.endDate,
+          breaks: _breaks.map((b) => b.toSemesterBreak()).toList(),
         );
 
         await repository.updateSemester(
@@ -350,11 +293,10 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
           startDate: _startDate!,
           endDate: _endDate!,
           numberOfWeeks: numberOfWeeks,
-          examPeriodStart: _examPeriodStart,
-          examPeriodEnd: _examPeriodEnd,
-          readingWeekStart: _readingWeekStart,
-          readingWeekEnd: _readingWeekEnd,
+          examPeriodStart: _examPeriod?.startDate,
+          examPeriodEnd: _examPeriod?.endDate,
           createdAt: DateTime.now(),
+          breaks: _breaks.map((b) => b.toSemesterBreak()).toList(),
         );
 
         await repository.createSemester(user.uid, semester).timeout(
@@ -430,315 +372,577 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-            // Header Section
-            Row(
-              children: [
-                Icon(
-                  Icons.school_rounded,
-                  size: 32,
-                  color: Theme.of(context).colorScheme.primary,
+            // Semester Information Card
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: Colors.grey[300]!,
+                  width: 2,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Semester Information',
-                        style: GoogleFonts.poppins(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      Text(
-                        'Add semester details',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: Colors.grey[600],
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-
-            // Semester Name Field
-            TextFormField(
-              controller: _nameController,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                labelText: 'Semester Name',
-                hintText: 'e.g., 25/26 Semester 1',
-                border: const OutlineInputBorder(),
-                filled: true,
-                fillColor: isDarkMode ? Colors.grey[850] : Colors.grey[50],
               ),
-              onChanged: (value) {
-                // Trigger rebuild to update button state
-                setState(() {});
-              },
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter a semester name';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Total Credits Field
-            TextFormField(
-              controller: _creditsController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Total Credits (Optional)',
-                hintText: 'e.g., 120',
-                border: const OutlineInputBorder(),
-                filled: true,
-                fillColor: isDarkMode ? Colors.grey[850] : Colors.grey[50],
-                helperText: 'Number of credits for this semester',
-              ),
-              validator: (value) {
-                if (value != null && value.isNotEmpty) {
-                  final credits = int.tryParse(value);
-                  if (credits == null) {
-                    return 'Please enter a valid number';
-                  }
-                  if (credits <= 0) {
-                    return 'Credits must be greater than 0';
-                  }
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 32),
-
-            // Dates Section Header
-            _buildSectionHeader(
-              context,
-              icon: Icons.calendar_month,
-              title: 'Semester Duration',
-              subtitle: '',
-              color: const Color(0xFF0EA5E9),
-            ),
-            const SizedBox(height: 12),
-
-            // Start & End Dates
-            Row(
-              children: [
-                Expanded(
-                  child: _buildDateCard(
-                    context: context,
-                    title: 'Start Date',
-                    subtitle: weekStartLabel,
-                    date: _startDate,
-                    onTap: _selectStartDate,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildDateCard(
-                    context: context,
-                    title: 'End Date',
-                    subtitle: weekEndLabel,
-                    date: _endDate,
-                    onTap: _selectEndDate,
-                  ),
-                ),
-              ],
-            ),
-
-            // Total Weeks Display
-            if (_startDate != null && _endDate != null) ...[
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Row(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.event_note,
-                      size: 16,
-                      color: Colors.grey[600],
+                    // Header
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.school_rounded,
+                          size: 24,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Semester Information',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        // Weeks badge (only show when both dates selected)
+                        if (_startDate != null && _endDate != null) ...[
+                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0EA5E9).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.event_note,
+                                  size: 14,
+                                  color: Color(0xFF0EA5E9),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '$numberOfWeeks weeks',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF0EA5E9),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Total: $numberOfWeeks weeks',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[700],
-                      ),
+                    const SizedBox(height: 20),
+
+                    // Semester Name + Credits
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isMobile = constraints.maxWidth < 500;
+
+                        if (isMobile) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: double.infinity,
+                                child: TextFormField(
+                                  controller: _nameController,
+                                  textCapitalization: TextCapitalization.sentences,
+                                  decoration: InputDecoration(
+                                    labelText: 'Semester Name',
+                                    hintText: 'e.g., 25/26 Semester 1',
+                                    border: const OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                                  ),
+                                  onChanged: (value) {
+                                    setState(() {});
+                                  },
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter a semester name';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: 120,
+                                child: TextFormField(
+                                  controller: _creditsController,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  decoration: InputDecoration(
+                                    labelText: 'Credits',
+                                    hintText: '120',
+                                    border: const OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                                  ),
+                                  onChanged: (value) {
+                                    setState(() {});
+                                  },
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Required';
+                                    }
+                                    final credits = int.tryParse(value);
+                                    if (credits == null) {
+                                      return 'Invalid';
+                                    }
+                                    if (credits <= 0) {
+                                      return 'Must be > 0';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: constraints.maxWidth * 0.7,
+                              child: TextFormField(
+                                controller: _nameController,
+                                textCapitalization: TextCapitalization.sentences,
+                                decoration: InputDecoration(
+                                  labelText: 'Semester Name',
+                                  hintText: 'e.g., 25/26 Semester 1',
+                                  border: const OutlineInputBorder(),
+                                  filled: true,
+                                  fillColor: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                                ),
+                                onChanged: (value) {
+                                  setState(() {});
+                                },
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter a semester name';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            SizedBox(
+                              width: 120,
+                              child: TextFormField(
+                                controller: _creditsController,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                decoration: InputDecoration(
+                                  labelText: 'Credits',
+                                  hintText: '120',
+                                  border: const OutlineInputBorder(),
+                                  filled: true,
+                                  fillColor: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                                ),
+                                onChanged: (value) {
+                                  setState(() {});
+                                },
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Required';
+                                  }
+                                  final credits = int.tryParse(value);
+                                  if (credits == null) {
+                                    return 'Invalid';
+                                  }
+                                  if (credits <= 0) {
+                                    return 'Must be > 0';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Start & End Dates Row
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isMobile = constraints.maxWidth < 500;
+
+                        if (isMobile) {
+                          return Column(
+                            children: [
+                              // Start Date
+                              InkWell(
+                                onTap: _selectStartDate,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.grey[300]!),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Start Date',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _startDate != null
+                                                  ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
+                                                  : 'Tap to select $weekStartLabel',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: _startDate != null
+                                                    ? (isDarkMode ? Colors.grey[200] : Colors.grey[900])
+                                                    : Colors.grey[500],
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              // End Date
+                              InkWell(
+                                onTap: _selectEndDate,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.grey[300]!),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'End Date',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _endDate != null
+                                                  ? '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}'
+                                                  : 'Tap to select $weekEndLabel',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: _endDate != null
+                                                    ? (isDarkMode ? Colors.grey[200] : Colors.grey[900])
+                                                    : Colors.grey[500],
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: _selectStartDate,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.grey[300]!),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Start Date',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _startDate != null
+                                                  ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
+                                                  : 'Tap to select $weekStartLabel',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: _startDate != null
+                                                    ? (isDarkMode ? Colors.grey[200] : Colors.grey[900])
+                                                    : Colors.grey[500],
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: InkWell(
+                                onTap: _selectEndDate,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.grey[300]!),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'End Date',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _endDate != null
+                                                  ? '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}'
+                                                  : 'Tap to select $weekEndLabel',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: _endDate != null
+                                                    ? (isDarkMode ? Colors.grey[200] : Colors.grey[900])
+                                                    : Colors.grey[500],
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
 
             const SizedBox(height: 32),
 
-            // Exam Period Section Header
-            _buildSectionHeader(
-              context,
-              icon: Icons.assignment,
-              title: 'Exam Period (Optional)',
-              subtitle: '',
-              color: const Color(0xFFF87171),
-              isOptional: true,
-              isExpanded: _examPeriodExpanded,
-              onToggle: () => setState(() => _examPeriodExpanded = !_examPeriodExpanded),
-            ),
-
-            // Exam Period Dates (Collapsible)
-            if (_examPeriodExpanded) ...[
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildDateCard(
-                      context: context,
-                      title: 'Exam Start',
-                      subtitle: 'first exam',
-                      date: _examPeriodStart,
-                      onTap: _selectExamPeriodStart,
-                      onClear: _examPeriodStart != null
-                          ? () => setState(() => _examPeriodStart = null)
-                          : null,
+            // Exam Period Section
+            _examPeriod != null
+                ? _ExamPeriodCard(
+                    key: ObjectKey(_examPeriod),
+                    examPeriodInput: _examPeriod!,
+                    onRemove: _removeExamPeriod,
+                    onChanged: () => setState(() {}),
+                    semesterStartDate: _startDate,
+                    semesterEndDate: _endDate,
+                  )
+                : Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: Colors.grey[300]!,
+                        width: 2,
+                      ),
+                    ),
+                    child: InkWell(
+                      onTap: _addExamPeriod,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Icon(Icons.assignment, color: const Color(0xFFF87171), size: 22),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Exam Period (Optional)',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            const Spacer(),
+                            Icon(
+                              Icons.add_circle,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildDateCard(
-                      context: context,
-                      title: 'Exam End',
-                      subtitle: 'last exam',
-                      date: _examPeriodEnd,
-                      onTap: _selectExamPeriodEnd,
-                      onClear: _examPeriodEnd != null
-                          ? () => setState(() => _examPeriodEnd = null)
-                          : null,
-                    ),
-                  ),
-                ],
-              ),
-            ],
 
             const SizedBox(height: 32),
 
-            // Reading Week Section Header
-            _buildSectionHeader(
-              context,
-              icon: Icons.book_outlined,
-              title: 'Reading Week (Optional)',
-              subtitle: '',
-              color: const Color(0xFFA78BFA),
-              isOptional: true,
-              isExpanded: _readingWeekExpanded,
-              onToggle: () => setState(() => _readingWeekExpanded = !_readingWeekExpanded),
-            ),
+            // Breaks Section
+            if (_breaks.isEmpty)
+              // Empty state - clickable card to add break
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(
+                    color: Colors.grey[300]!,
+                    width: 2,
+                  ),
+                ),
+                child: InkWell(
+                  onTap: _addBreak,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.event_busy, color: const Color(0xFF10B981), size: 22),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Breaks (Optional)',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            const Spacer(),
+                            Icon(
+                              Icons.add_circle,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Add Reading Weeks, Easter Breaks etc.',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else
+              // Show breaks with header in first card
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _breaks.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final breakItem = entry.value;
+                  final isFirst = index == 0;
 
-            // Reading Week Dates (Collapsible)
-            if (_readingWeekExpanded) ...[
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildDateCard(
-                      context: context,
-                      title: 'Reading Week Start',
-                      subtitle: weekStartLabel,
-                      date: _readingWeekStart,
-                      onTap: _selectReadingWeekStart,
-                      onClear: _readingWeekStart != null
-                          ? () => setState(() {
-                              _readingWeekStart = null;
-                              _readingWeekEnd = null;
-                            })
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildDateCard(
-                      context: context,
-                      title: 'Reading Week End',
-                      subtitle: weekEndLabel,
-                      date: _readingWeekEnd,
-                      onTap: _readingWeekStart != null ? _selectReadingWeekEnd : null,
-                      onClear: _readingWeekEnd != null
-                          ? () => setState(() => _readingWeekEnd = null)
-                          : null,
-                      isDisabled: _readingWeekStart == null,
-                    ),
-                  ),
-                ],
+                  return _BreakCard(
+                    key: ObjectKey(breakItem),
+                    breakInput: breakItem,
+                    onRemove: () => _removeBreak(index),
+                    onChanged: () => setState(() {}),
+                    onAddAnother: isFirst ? _addBreak : null,
+                    semesterStartDate: _startDate,
+                    semesterEndDate: _endDate,
+                    showHeader: isFirst,
+                  );
+                }).toList(),
               ),
-            ],
 
             const SizedBox(height: 40),
 
-            // Action Buttons
+            // Action Button
             Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 400),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: (_isLoading || !_canSave) ? null : _saveSemester,
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                _isEditMode ? 'Update Semester' : 'Create Semester',
-                                style: GoogleFonts.inter(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () async {
-                              if (_hasUnsavedChanges) {
-                                final shouldPop = await _showUnsavedChangesDialog();
-                                if (shouldPop && mounted) {
-                                  Navigator.pop(context);
-                                }
-                              } else {
-                                Navigator.pop(context);
-                              }
-                            },
-                      child: Text(
-                        'Cancel',
-                        style: GoogleFonts.inter(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
+              child: FilledButton(
+                onPressed: (_isLoading || !_canSave) ? null : _saveSemester,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  minimumSize: const Size(200, 56),
                 ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        _isEditMode ? 'Update Semester' : 'Create Semester',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
               ),
             ),
             const SizedBox(height: 24),
@@ -752,143 +956,867 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
       ),
     );
   }
+}
 
-  Widget _buildSectionHeader(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    bool isOptional = false,
-    bool isExpanded = false,
-    VoidCallback? onToggle,
-  }) {
-    return InkWell(
-      onTap: isOptional ? onToggle : null,
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  if (subtitle.isNotEmpty)
-                    Text(
-                      subtitle,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
+// Exam Period Input class
+class _ExamPeriodInput {
+  static int _counter = 0;
+  final String id;
+  DateTime? startDate;
+  DateTime? endDate;
+
+  _ExamPeriodInput() : id = 'exam_${DateTime.now().microsecondsSinceEpoch}_${_counter++}';
+}
+
+// Exam Period Card widget
+class _ExamPeriodCard extends StatefulWidget {
+  final _ExamPeriodInput examPeriodInput;
+  final VoidCallback onRemove;
+  final VoidCallback onChanged;
+  final DateTime? semesterStartDate;
+  final DateTime? semesterEndDate;
+
+  const _ExamPeriodCard({
+    super.key,
+    required this.examPeriodInput,
+    required this.onRemove,
+    required this.onChanged,
+    this.semesterStartDate,
+    this.semesterEndDate,
+  });
+
+  @override
+  State<_ExamPeriodCard> createState() => _ExamPeriodCardState();
+}
+
+class _ExamPeriodCardState extends State<_ExamPeriodCard> {
+  Future<void> _selectStartDate() async {
+    final picked = await showCustomDatePicker(
+      context: context,
+      initialDate: widget.examPeriodInput.startDate ?? widget.semesterStartDate ?? DateTime.now(),
+      firstDate: widget.semesterStartDate ?? DateTime(2020),
+      lastDate: DateTime(2030),
+      firstDayOfWeek: 1,
+    );
+
+    if (picked != null) {
+      setState(() {
+        widget.examPeriodInput.startDate = picked;
+        // Reset end date if it's before the new start date
+        if (widget.examPeriodInput.endDate != null && widget.examPeriodInput.endDate!.isBefore(picked)) {
+          widget.examPeriodInput.endDate = null;
+        }
+      });
+      widget.onChanged();
+    }
+  }
+
+  Future<void> _selectEndDate() async {
+    final picked = await showCustomDatePicker(
+      context: context,
+      initialDate: widget.examPeriodInput.endDate ?? widget.examPeriodInput.startDate?.add(const Duration(days: 6)) ?? DateTime.now(),
+      firstDate: widget.examPeriodInput.startDate ?? widget.semesterStartDate ?? DateTime(2020),
+      lastDate: DateTime(2030),
+      firstDayOfWeek: 1,
+    );
+
+    if (picked != null) {
+      setState(() {
+        widget.examPeriodInput.endDate = picked;
+      });
+      widget.onChanged();
+    }
+  }
+
+  String? get durationString {
+    if (widget.examPeriodInput.startDate == null || widget.examPeriodInput.endDate == null) {
+      return null;
+    }
+    final days = widget.examPeriodInput.endDate!.difference(widget.examPeriodInput.startDate!).inDays + 1;
+    if (days < 7) {
+      return '$days ${days == 1 ? 'day' : 'days'}';
+    } else {
+      final weeks = (days / 7).round();
+      return '$weeks ${weeks == 1 ? 'week' : 'weeks'}';
+    }
+  }
+
+  bool get isOutsideSemester {
+    if (widget.examPeriodInput.startDate == null || widget.semesterEndDate == null) {
+      return false;
+    }
+    return widget.examPeriodInput.startDate!.isAfter(widget.semesterEndDate!);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Colors.grey[300]!,
+          width: 2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with badges
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDarkMode ? Colors.grey[850] : Colors.grey[100],
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(10),
+                topRight: Radius.circular(10),
               ),
             ),
-            if (isOptional) ...[
-              const SizedBox(width: 8),
-              Icon(
-                isExpanded ? Icons.expand_less : Icons.expand_more,
-                color: Colors.grey[600],
-                size: 24,
-              ),
-            ],
-          ],
-        ),
+            child: Row(
+              children: [
+                Icon(Icons.assignment, color: const Color(0xFFF87171), size: 22),
+                const SizedBox(width: 12),
+                Text(
+                  'Exam Period',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Duration badge
+                if (durationString != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF87171).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.event_note,
+                          size: 14,
+                          color: Color(0xFFF87171),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          durationString!,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFFF87171),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (durationString != null && isOutsideSemester) const SizedBox(width: 8),
+                // Outside semester badge
+                if (isOutsideSemester)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0EA5E9).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.info_outline,
+                          size: 14,
+                          color: Color(0xFF0EA5E9),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'After semester',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF0EA5E9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                  onPressed: widget.onRemove,
+                  tooltip: 'Remove exam period',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+
+          // Content: Date selection
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Date selection
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: _selectStartDate,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Start Date',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  widget.examPeriodInput.startDate != null
+                                      ? '${widget.examPeriodInput.startDate!.day}/${widget.examPeriodInput.startDate!.month}/${widget.examPeriodInput.startDate!.year}'
+                                      : 'Tap to select',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: widget.examPeriodInput.startDate != null
+                                        ? (isDarkMode ? Colors.grey[200] : Colors.grey[900])
+                                        : Colors.grey[500],
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: widget.examPeriodInput.startDate != null ? _selectEndDate : null,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: widget.examPeriodInput.startDate != null ? Colors.grey[300]! : Colors.grey[200]!,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'End Date',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: widget.examPeriodInput.startDate != null ? Colors.grey[600] : Colors.grey[400],
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.calendar_today,
+                                size: 16,
+                                color: widget.examPeriodInput.startDate != null ? Colors.grey[600] : Colors.grey[400],
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  widget.examPeriodInput.endDate != null
+                                      ? '${widget.examPeriodInput.endDate!.day}/${widget.examPeriodInput.endDate!.month}/${widget.examPeriodInput.endDate!.year}'
+                                      : (widget.examPeriodInput.startDate != null ? 'Tap to select' : 'Select start first'),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: widget.examPeriodInput.endDate != null
+                                        ? (isDarkMode ? Colors.grey[200] : Colors.grey[900])
+                                        : Colors.grey[500],
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildDateCard({
-    required BuildContext context,
-    required String title,
-    required String subtitle,
-    required DateTime? date,
-    required VoidCallback? onTap,
-    VoidCallback? onClear,
-    bool isDisabled = false,
-  }) {
+// Break Input class
+class _BreakInput {
+  static int _counter = 0;
+  final String id;
+  String name = '';
+  DateTime? startDate;
+  DateTime? endDate;
+
+  _BreakInput() : id = 'break_${DateTime.now().microsecondsSinceEpoch}_${_counter++}';
+
+  factory _BreakInput.fromSemesterBreak(SemesterBreak breakItem) {
+    return _BreakInput()
+      ..name = breakItem.name
+      ..startDate = breakItem.startDate
+      ..endDate = breakItem.endDate;
+  }
+
+  SemesterBreak toSemesterBreak() {
+    return SemesterBreak(
+      id: id,
+      name: name,
+      startDate: startDate!,
+      endDate: endDate!,
+    );
+  }
+}
+
+// Break Card widget
+class _BreakCard extends StatefulWidget {
+  final _BreakInput breakInput;
+  final VoidCallback onRemove;
+  final VoidCallback onChanged;
+  final VoidCallback? onAddAnother;
+  final DateTime? semesterStartDate;
+  final DateTime? semesterEndDate;
+  final bool showHeader;
+
+  const _BreakCard({
+    super.key,
+    required this.breakInput,
+    required this.onRemove,
+    required this.onChanged,
+    this.onAddAnother,
+    this.semesterStartDate,
+    this.semesterEndDate,
+    this.showHeader = false,
+  });
+
+  @override
+  State<_BreakCard> createState() => _BreakCardState();
+}
+
+class _BreakCardState extends State<_BreakCard> {
+  late TextEditingController _nameController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.breakInput.name);
+  }
+
+  @override
+  void didUpdateWidget(_BreakCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.breakInput.name != oldWidget.breakInput.name) {
+      _nameController.text = widget.breakInput.name;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _selectStartDate() async {
+    final picked = await showCustomDatePicker(
+      context: context,
+      initialDate: widget.breakInput.startDate ?? widget.semesterStartDate ?? DateTime.now(),
+      firstDate: widget.semesterStartDate ?? DateTime(2020),
+      lastDate: widget.semesterEndDate ?? DateTime(2030),
+      firstDayOfWeek: 1,
+    );
+
+    if (picked != null) {
+      setState(() {
+        widget.breakInput.startDate = picked;
+        // Reset end date if it's before the new start date
+        if (widget.breakInput.endDate != null && widget.breakInput.endDate!.isBefore(picked)) {
+          widget.breakInput.endDate = null;
+        }
+      });
+      widget.onChanged();
+    }
+  }
+
+  Future<void> _selectEndDate() async {
+    final picked = await showCustomDatePicker(
+      context: context,
+      initialDate: widget.breakInput.endDate ?? widget.breakInput.startDate?.add(const Duration(days: 6)) ?? DateTime.now(),
+      firstDate: widget.breakInput.startDate ?? widget.semesterStartDate ?? DateTime(2020),
+      lastDate: widget.semesterEndDate ?? DateTime(2030),
+      firstDayOfWeek: 1,
+    );
+
+    if (picked != null) {
+      setState(() {
+        widget.breakInput.endDate = picked;
+      });
+      widget.onChanged();
+    }
+  }
+
+  String? get durationString {
+    if (widget.breakInput.startDate == null || widget.breakInput.endDate == null) {
+      return null;
+    }
+    final days = widget.breakInput.endDate!.difference(widget.breakInput.startDate!).inDays + 1;
+    if (days < 7) {
+      return '$days ${days == 1 ? 'day' : 'days'}';
+    } else {
+      final weeks = (days / 7).round();
+      return '$weeks ${weeks == 1 ? 'week' : 'weeks'}';
+    }
+  }
+
+  String? get weekNumberInfo {
+    if (widget.breakInput.startDate == null || widget.semesterStartDate == null) {
+      return null;
+    }
+
+    final startWeek = utils.DateUtils.getWeekNumber(
+      widget.breakInput.startDate!,
+      widget.semesterStartDate!,
+    );
+
+    if (widget.breakInput.endDate != null) {
+      final endWeek = utils.DateUtils.getWeekNumber(
+        widget.breakInput.endDate!,
+        widget.semesterStartDate!,
+      );
+
+      if (startWeek == endWeek) {
+        return 'Week $startWeek';
+      } else {
+        return 'Weeks $startWeek-$endWeek';
+      }
+    }
+
+    return 'Week $startWeek';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[850] : Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isDisabled
-              ? Colors.grey[300]!
-              : (date != null ? Colors.grey[400]! : Colors.grey[300]!),
-          width: 1,
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Colors.grey[300]!,
+          width: 2,
         ),
       ),
-      child: InkWell(
-        onTap: isDisabled ? null : onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isMobile = constraints.maxWidth < 500;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header (only for first card)
+                if (widget.showHeader) ...[
+                  Row(
+                    children: [
+                      Icon(Icons.event_busy, color: const Color(0xFF10B981), size: 22),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Breaks (Optional)',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (widget.onAddAnother != null)
+                        IconButton(
+                          icon: const Icon(Icons.add_circle),
+                          onPressed: widget.onAddAnother,
+                          tooltip: 'Add another break',
+                          color: Theme.of(context).colorScheme.primary,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add Reading Weeks, Easter Breaks etc.',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // Break Name Field + Delete Button
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: isDisabled
-                            ? Colors.grey[400]
-                            : Colors.grey[600],
+                    SizedBox(
+                      width: isMobile ? constraints.maxWidth - 56 : constraints.maxWidth * 0.6,
+                      child: TextFormField(
+                        controller: _nameController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: InputDecoration(
+                          labelText: 'Break Name',
+                          hintText: 'e.g., Reading Week, Easter Break',
+                          border: const OutlineInputBorder(),
+                          filled: true,
+                          fillColor: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                        ),
+                        onChanged: (value) {
+                          widget.breakInput.name = value;
+                          widget.onChanged();
+                        },
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      date != null
-                          ? '${date.day}/${date.month}/${date.year}'
-                          : 'Tap to select $subtitle',
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: isDisabled
-                            ? Colors.grey[400]
-                            : (date != null
-                                ? (isDarkMode ? Colors.grey[200] : Colors.grey[900])
-                                : Colors.grey[500]),
+                    const SizedBox(width: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                        onPressed: widget.onRemove,
+                        tooltip: 'Remove break',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              if (onClear != null && date != null)
-                IconButton(
-                  icon: const Icon(Icons.clear, size: 20),
-                  onPressed: onClear,
-                  padding: const EdgeInsets.all(4),
-                  constraints: const BoxConstraints(),
-                  color: Colors.grey[600],
-                )
-              else
-                Icon(
-                  Icons.calendar_today,
-                  size: 18,
-                  color: isDisabled ? Colors.grey[400] : Colors.grey[600],
-                ),
-            ],
-          ),
+                const SizedBox(height: 16),
+
+                // Date selection
+                if (isMobile)
+                  Column(
+                    children: [
+                      InkWell(
+                        onTap: _selectStartDate,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Start Date',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      widget.breakInput.startDate != null
+                                          ? '${widget.breakInput.startDate!.day}/${widget.breakInput.startDate!.month}/${widget.breakInput.startDate!.year}'
+                                          : 'Tap to select',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: widget.breakInput.startDate != null
+                                            ? (isDarkMode ? Colors.grey[200] : Colors.grey[900])
+                                            : Colors.grey[500],
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      InkWell(
+                        onTap: widget.breakInput.startDate != null ? _selectEndDate : null,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: widget.breakInput.startDate != null ? Colors.grey[300]! : Colors.grey[200]!,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'End Date',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: widget.breakInput.startDate != null ? Colors.grey[600] : Colors.grey[400],
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.calendar_today,
+                                    size: 16,
+                                    color: widget.breakInput.startDate != null ? Colors.grey[600] : Colors.grey[400],
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      widget.breakInput.endDate != null
+                                          ? '${widget.breakInput.endDate!.day}/${widget.breakInput.endDate!.month}/${widget.breakInput.endDate!.year}'
+                                          : (widget.breakInput.startDate != null ? 'Tap to select' : 'Select start first'),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: widget.breakInput.endDate != null
+                                            ? (isDarkMode ? Colors.grey[200] : Colors.grey[900])
+                                            : Colors.grey[500],
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: _selectStartDate,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey[300]!),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Start Date',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        widget.breakInput.startDate != null
+                                            ? '${widget.breakInput.startDate!.day}/${widget.breakInput.startDate!.month}/${widget.breakInput.startDate!.year}'
+                                            : 'Tap to select',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: widget.breakInput.startDate != null
+                                              ? (isDarkMode ? Colors.grey[200] : Colors.grey[900])
+                                              : Colors.grey[500],
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: InkWell(
+                          onTap: widget.breakInput.startDate != null ? _selectEndDate : null,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isDarkMode ? Colors.grey[850] : Colors.grey[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: widget.breakInput.startDate != null ? Colors.grey[300]! : Colors.grey[200]!,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'End Date',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: widget.breakInput.startDate != null ? Colors.grey[600] : Colors.grey[400],
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today,
+                                      size: 16,
+                                      color: widget.breakInput.startDate != null ? Colors.grey[600] : Colors.grey[400],
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        widget.breakInput.endDate != null
+                                            ? '${widget.breakInput.endDate!.day}/${widget.breakInput.endDate!.month}/${widget.breakInput.endDate!.year}'
+                                            : (widget.breakInput.startDate != null ? 'Tap to select' : 'Select start first'),
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: widget.breakInput.endDate != null
+                                              ? (isDarkMode ? Colors.grey[200] : Colors.grey[900])
+                                              : Colors.grey[500],
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                // Badges at bottom (only if dates selected)
+                if (durationString != null || weekNumberInfo != null) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      // Duration badge
+                      if (durationString != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.event_note,
+                                size: 14,
+                                color: Color(0xFF10B981),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                durationString!,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF10B981),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      // Week number badge
+                      if (weekNumberInfo != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0EA5E9).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.calendar_today,
+                                size: 14,
+                                color: Color(0xFF0EA5E9),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                weekNumberInfo!,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF0EA5E9),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            );
+          },
         ),
       ),
     );

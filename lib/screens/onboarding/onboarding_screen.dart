@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
-import 'package:module_tracker/screens/home/home_screen.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -61,11 +60,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     await prefsNotifier.setTargetGrade(_targetGrade);
     await prefsNotifier.completeOnboarding();
 
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
-    }
+    // No need to manually navigate - AuthWrapper will automatically
+    // switch to HomeScreen when hasCompletedOnboarding becomes true
   }
 
   @override

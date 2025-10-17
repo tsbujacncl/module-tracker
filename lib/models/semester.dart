@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:module_tracker/models/semester_break.dart';
 
 class Semester {
   final String id;
@@ -13,6 +14,7 @@ class Semester {
   final DateTime? readingWeekEnd;
   final DateTime createdAt;
   final bool isArchived;
+  final List<SemesterBreak> breaks;
 
   Semester({
     required this.id,
@@ -27,10 +29,21 @@ class Semester {
     this.readingWeekEnd,
     required this.createdAt,
     this.isArchived = false,
+    this.breaks = const [],
   });
 
   factory Semester.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
+    // Parse breaks array
+    final breaksList = <SemesterBreak>[];
+    if (data['breaks'] != null && data['breaks'] is List) {
+      for (var i = 0; i < (data['breaks'] as List).length; i++) {
+        final breakData = data['breaks'][i] as Map<String, dynamic>;
+        breaksList.add(SemesterBreak.fromFirestore(breakData, 'break_$i'));
+      }
+    }
+
     return Semester(
       id: doc.id,
       name: data['name'] ?? '',
@@ -44,6 +57,7 @@ class Semester {
       readingWeekEnd: data['readingWeekEnd'] != null ? (data['readingWeekEnd'] as Timestamp).toDate() : null,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       isArchived: data['isArchived'] ?? false,
+      breaks: breaksList,
     );
   }
 
@@ -60,11 +74,20 @@ class Semester {
       'readingWeekEnd': readingWeekEnd != null ? Timestamp.fromDate(readingWeekEnd!) : null,
       'createdAt': Timestamp.fromDate(createdAt),
       'isArchived': isArchived,
+      'breaks': breaks.map((b) => b.toFirestore()).toList(),
     };
   }
 
   // For local storage
   factory Semester.fromMap(Map<String, dynamic> map) {
+    // Parse breaks array
+    final breaksList = <SemesterBreak>[];
+    if (map['breaks'] != null && map['breaks'] is List) {
+      for (final breakData in map['breaks']) {
+        breaksList.add(SemesterBreak.fromMap(breakData as Map<String, dynamic>));
+      }
+    }
+
     return Semester(
       id: map['id'] ?? '',
       name: map['name'] ?? '',
@@ -78,6 +101,7 @@ class Semester {
       readingWeekEnd: map['readingWeekEnd'] != null ? DateTime.parse(map['readingWeekEnd']) : null,
       createdAt: DateTime.parse(map['createdAt']),
       isArchived: map['isArchived'] ?? false,
+      breaks: breaksList,
     );
   }
 
@@ -95,6 +119,7 @@ class Semester {
       'readingWeekEnd': readingWeekEnd?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'isArchived': isArchived,
+      'breaks': breaks.map((b) => b.toMap()).toList(),
     };
   }
 
@@ -111,6 +136,7 @@ class Semester {
     DateTime? readingWeekEnd,
     DateTime? createdAt,
     bool? isArchived,
+    List<SemesterBreak>? breaks,
   }) {
     return Semester(
       id: id ?? this.id,
@@ -125,6 +151,7 @@ class Semester {
       readingWeekEnd: readingWeekEnd ?? this.readingWeekEnd,
       createdAt: createdAt ?? this.createdAt,
       isArchived: isArchived ?? this.isArchived,
+      breaks: breaks ?? this.breaks,
     );
   }
 }

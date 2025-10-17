@@ -65,7 +65,7 @@ class WeekNavigationBar extends StatelessWidget {
             bottom: bottomPadding,
           ),
           child: SizedBox(
-            height: navBarHeight,
+            height: navBarHeight + 4, // Add extra space to prevent overflow
             child: Row(
               children: [
                 // Time column spacer (flush left) - matches calendar
@@ -81,37 +81,41 @@ class WeekNavigationBar extends StatelessWidget {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                'Week $currentWeek (${dateFormat.format(weekStart)} - ${dateFormat.format(weekEnd)})',
-                              style: GoogleFonts.poppins(
-                                fontSize: ResponsiveText.getSubtitleFontSize(fullScreenWidth),
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF0F172A),
-                              ),
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            SizedBox(height: gapBetweenHeaders),
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const AssignmentsScreen(),
-                                  ),
-                                );
-                              },
-                              child: Text(
-                                semester.name,
+                              Flexible(
+                                child: Text(
+                                  'Week $currentWeek (${dateFormat.format(weekStart)} - ${dateFormat.format(weekEnd)})',
                                 style: GoogleFonts.poppins(
-                                  fontSize: ResponsiveText.getSubtitleFontSize(fullScreenWidth) * 0.92,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF64748B),
+                                  fontSize: ResponsiveText.getSubtitleFontSize(fullScreenWidth),
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF0F172A),
                                 ),
                                 textAlign: TextAlign.center,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
+                              ),
+                              ),
+                            SizedBox(height: gapBetweenHeaders),
+                            Flexible(
+                              child: GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const AssignmentsScreen(),
+                                    ),
+                                  );
+                                },
+                                child: Text(
+                                  semester.name,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: ResponsiveText.getSubtitleFontSize(fullScreenWidth) * 0.92,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF64748B),
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ),
                           ],

@@ -1417,6 +1417,8 @@ PODS:
   - PromisesObjC (2.4.0)
   - share_plus (0.0.1):
     - FlutterMacOS
+  - sign_in_with_apple (0.0.1):
+    - FlutterMacOS
   - url_launcher_macos (0.0.1):
     - FlutterMacOS
 
@@ -1430,6 +1432,7 @@ DEPENDENCIES:
   - google_sign_in_ios (from `Flutter/ephemeral/.symlinks/plugins/google_sign_in_ios/darwin`)
   - path_provider_foundation (from `Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin`)
   - share_plus (from `Flutter/ephemeral/.symlinks/plugins/share_plus/macos`)
+  - sign_in_with_apple (from `Flutter/ephemeral/.symlinks/plugins/sign_in_with_apple/macos`)
   - url_launcher_macos (from `Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos`)
 
 SPEC REPOS:
@@ -1477,6 +1480,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin
   share_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/share_plus/macos
+  sign_in_with_apple:
+    :path: Flutter/ephemeral/.symlinks/plugins/sign_in_with_apple/macos
   url_launcher_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos
 
@@ -1513,6 +1518,7 @@ SPEC CHECKSUMS:
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   share_plus: 510bf0af1a42cd602274b4629920c9649c52f4cc
+  sign_in_with_apple: 6673c03c9e3643f6c8d33601943fbfa9ae99f94e
   url_launcher_macos: 0fba8ddabfc33ce0a9afe7c5fef5aab3d8d2d673
 
 PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
