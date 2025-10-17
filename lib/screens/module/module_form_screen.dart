@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:module_tracker/models/module.dart';
@@ -87,6 +88,9 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
     } else {
       // Store initial state for new module
       _storeInitialState();
+      // Add default schedule and assessment for new modules
+      _recurringTasks.add(_RecurringTaskInput());
+      _assessments.add(_AssessmentInput());
     }
   }
 
@@ -287,23 +291,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
     return result ?? false;
   }
 
-  Future<Semester?> _showCreateSemesterDialog() async {
-    try {
-      final result = await showDialog<Semester?>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const _CreateSemesterDialog(),
-      );
-
-      print('DEBUG: Dialog returned result: ${result?.id ?? "null"}');
-      return result;
-    } catch (e) {
-      print('DEBUG: Error in dialog: $e');
-      return null;
-    }
-  }
-
-  Future<void> _saveModule() async {
+Future<void> _saveModule() async {
     if (!_formKey.currentState!.validate()) return;
 
     // Validate semester selection
@@ -552,106 +540,220 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-            // Basic Info
+            // Module Information Header
             Text(
               'Module Information',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _nameController,
-              focusNode: _nameFocusNode,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Module Name',
-                hintText: 'e.g., Computer Science',
-                border: OutlineInputBorder(),
+            // Single Unified Card
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) {
-                FocusScope.of(context).requestFocus(_codeFocusNode);
-              },
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter a module name';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _codeController,
-              focusNode: _codeFocusNode,
-              textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(
-                labelText: 'Module Code (Optional)',
-                hintText: 'e.g., CS101',
-                border: OutlineInputBorder(),
-              ),
-              textInputAction: TextInputAction.next,
-              onFieldSubmitted: (_) {
-                FocusScope.of(context).requestFocus(_creditsFocusNode);
-              },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _creditsController,
-              focusNode: _creditsFocusNode,
-              decoration: const InputDecoration(
-                labelText: 'Credits',
-                hintText: 'e.g., 15',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) {
-                FocusScope.of(context).unfocus();
-              },
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter the number of credits';
-                }
-                if (int.tryParse(value) == null) {
-                  return 'Please enter a valid number';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 24),
-            // Semester Selection
-            _SemesterSelectionField(
-              selectedSemesterId: _selectedSemesterId,
-              onSemesterSelected: (semesterId) {
-                setState(() {
-                  _selectedSemesterId = semesterId;
-                  _cachedSemester = null; // Clear cache when selecting existing semester
-                });
-              },
-              onCreateSemester: () async {
-                try {
-                  final newSemester = await _showCreateSemesterDialog();
-                  if (newSemester != null && mounted) {
-                    print('DEBUG FORM: New semester received from dialog: ${newSemester.id}');
-                    setState(() {
-                      _selectedSemesterId = newSemester.id;
-                      _cachedSemester = newSemester; // Cache the newly created semester
-                    });
-                    print('DEBUG FORM: Cached semester set: ${_cachedSemester?.id}');
-                  } else {
-                    print('DEBUG FORM: Dialog returned null or widget unmounted');
-                  }
-                } catch (e) {
-                  print('DEBUG FORM: Error creating semester: $e');
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to create semester: $e'),
-                        backgroundColor: Colors.red,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Module Overview Section
+                    Text(
+                      'Module Overview',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
                       ),
-                    );
-                  }
-                }
-              },
+                    ),
+                    const SizedBox(height: 16),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        // Use single row layout for wider screens (>600px)
+                        if (constraints.maxWidth > 600) {
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Flexible(
+                                flex: 5, // 50%
+                                child: TextFormField(
+                                  controller: _nameController,
+                                  focusNode: _nameFocusNode,
+                                  textCapitalization: TextCapitalization.words,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Module Name',
+                                    hintText: 'e.g., Computer Science',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  textInputAction: TextInputAction.next,
+                                  onFieldSubmitted: (_) {
+                                    FocusScope.of(context).requestFocus(_codeFocusNode);
+                                  },
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter a module name';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Flexible(
+                                flex: 3, // 30%
+                                child: TextFormField(
+                                  controller: _codeController,
+                                  focusNode: _codeFocusNode,
+                                  textCapitalization: TextCapitalization.characters,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Module Code',
+                                    hintText: 'e.g., CS101',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  textInputAction: TextInputAction.next,
+                                  onFieldSubmitted: (_) {
+                                    FocusScope.of(context).requestFocus(_creditsFocusNode);
+                                  },
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter a module code';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Flexible(
+                                flex: 2, // 20%
+                                child: TextFormField(
+                                  controller: _creditsController,
+                                  focusNode: _creditsFocusNode,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Credits',
+                                    hintText: 'e.g., 15',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  textInputAction: TextInputAction.done,
+                                  onFieldSubmitted: (_) {
+                                    FocusScope.of(context).unfocus();
+                                  },
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter the number of credits';
+                                    }
+                                    if (int.tryParse(value) == null) {
+                                      return 'Please enter a valid number';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+                            ],
+                          );
+                        } else {
+                          // Use vertical stack for mobile
+                          return Column(
+                            children: [
+                              TextFormField(
+                                controller: _nameController,
+                                focusNode: _nameFocusNode,
+                                textCapitalization: TextCapitalization.words,
+                                decoration: const InputDecoration(
+                                  labelText: 'Module Name',
+                                  hintText: 'e.g., Computer Science',
+                                  border: OutlineInputBorder(),
+                                ),
+                                textInputAction: TextInputAction.next,
+                                onFieldSubmitted: (_) {
+                                  FocusScope.of(context).requestFocus(_codeFocusNode);
+                                },
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter a module name';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                controller: _codeController,
+                                focusNode: _codeFocusNode,
+                                textCapitalization: TextCapitalization.characters,
+                                decoration: const InputDecoration(
+                                  labelText: 'Module Code',
+                                  hintText: 'e.g., CS101',
+                                  border: OutlineInputBorder(),
+                                ),
+                                textInputAction: TextInputAction.next,
+                                onFieldSubmitted: (_) {
+                                  FocusScope.of(context).requestFocus(_creditsFocusNode);
+                                },
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter a module code';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                controller: _creditsController,
+                                focusNode: _creditsFocusNode,
+                                decoration: const InputDecoration(
+                                  labelText: 'Credits',
+                                  hintText: 'e.g., 15',
+                                  border: OutlineInputBorder(),
+                                ),
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                textInputAction: TextInputAction.done,
+                                onFieldSubmitted: (_) {
+                                  FocusScope.of(context).unfocus();
+                                },
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter the number of credits';
+                                  }
+                                  if (int.tryParse(value) == null) {
+                                    return 'Please enter a valid number';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ],
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    // Semester Section
+                    _SemesterSelectionField(
+                      selectedSemesterId: _selectedSemesterId,
+                      onSemesterSelected: (semesterId) {
+                        setState(() {
+                          _selectedSemesterId = semesterId;
+                          _cachedSemester = null; // Clear cache when selecting existing semester
+                        });
+                      },
+                      onCreateSemester: () async {
+                        // Navigate to SemesterSetupScreen
+                        final semesterId = await Navigator.push<String>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SemesterSetupScreen(),
+                          ),
+                        );
+                        // Auto-select the newly created semester
+                        if (mounted && semesterId != null) {
+                          setState(() {
+                            _selectedSemesterId = semesterId;
+                            _cachedSemester = null; // Clear cache to force reload with new semester
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 32),
             // Recurring Tasks
@@ -772,20 +874,32 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
                 );
               }),
             const SizedBox(height: 32),
-            FilledButton(
-              onPressed: _isLoading ? null : _saveModule,
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(widget.existingModule != null
-                      ? 'Update Module'
-                      : 'Create Module'),
+            Center(
+              child: SizedBox(
+                width: 300,
+                child: FilledButton(
+                  onPressed: _isLoading ? null : _saveModule,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(widget.existingModule != null
+                          ? 'Update Module'
+                          : 'Create Module'),
+                ),
+              ),
             ),
                   ],
                 ),
@@ -1025,12 +1139,14 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
                       if (picked != null) {
                         setState(() {
                           widget.task.time = _formatTimeOfDay(picked);
-                          // Automatically set end time to 1 hour later
-                          final endTime = TimeOfDay(
-                            hour: (picked.hour + 1) % 24,
-                            minute: picked.minute,
-                          );
-                          widget.task.endTime = _formatTimeOfDay(endTime);
+                          // Only automatically set end time to 1 hour later if it's not already set
+                          if (widget.task.endTime == null || widget.task.endTime!.isEmpty) {
+                            final endTime = TimeOfDay(
+                              hour: (picked.hour + 1) % 24,
+                              minute: picked.minute,
+                            );
+                            widget.task.endTime = _formatTimeOfDay(endTime);
+                          }
                           widget.onChanged();
                         });
                       }
@@ -1421,6 +1537,9 @@ class _AssessmentCardState extends State<_AssessmentCard> {
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                    ],
                     onChanged: (value) {
                       widget.assessment.weighting = double.tryParse(value);
                       widget.onChanged();
@@ -1678,7 +1797,9 @@ class _SemesterSelectionField extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     'Semester',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 TextButton.icon(
@@ -1690,122 +1811,145 @@ class _SemesterSelectionField extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             if (semesters.isEmpty)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.blue[700]),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text('No semesters yet. Create one to continue.'),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.grey[600], size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'No Semesters yet. Tap on \'+ Create New\' to make one',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               )
             else
-              ...sortedSemesters.map((semester) {
+              ...sortedSemesters.asMap().entries.map((entry) {
+                final index = entry.key;
+                final semester = entry.value;
                 final isSelected = selectedSemesterId == semester.id;
-                return Card(
-                  color: isSelected ? Theme.of(context).colorScheme.primaryContainer : null,
-                  child: InkWell(
-                    onTap: () => onSemesterSelected(semester.id),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Radio<String>(
-                            value: semester.id,
-                            groupValue: selectedSemesterId,
-                            onChanged: (value) {
-                              if (value != null) onSemesterSelected(value);
-                            },
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  semester.name,
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${_formatDate(semester.startDate)} - ${_formatDate(semester.endDate)}',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                                if (semester.readingWeekStart != null)
-                                  Text(
-                                    'Reading Week: ${_formatDate(semester.readingWeekStart!)} - ${_formatDate(semester.readingWeekEnd!)}',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Colors.orange[700],
-                                    ),
-                                  ),
-                                if (semester.examPeriodStart != null)
-                                  Text(
-                                    'Exams: ${_formatDate(semester.examPeriodStart!)} - ${_formatDate(semester.examPeriodEnd!)}',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Colors.red[700],
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert, size: 20),
-                            tooltip: 'Semester options',
-                            onSelected: (value) {
-                              if (value == 'edit') {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => SemesterSetupScreen(
-                                      semesterToEdit: semester,
-                                    ),
-                                  ),
-                                );
-                              } else if (value == 'assignments') {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const AssignmentsScreen(),
-                                  ),
-                                );
-                              }
-                            },
-                            itemBuilder: (context) => const [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
+                return Column(
+                  children: [
+                    if (index > 0) const SizedBox(height: 12),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey[300]!,
+                          width: 1,
+                        ),
+                      ),
+                      child: InkWell(
+                        onTap: () => onSemesterSelected(semester.id),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              Radio<String>(
+                                value: semester.id,
+                                groupValue: selectedSemesterId,
+                                onChanged: (value) {
+                                  if (value != null) onSemesterSelected(value);
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Icon(Icons.edit_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Edit Semester'),
+                                    Text(
+                                      semester.name,
+                                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${_formatDate(semester.startDate)} - ${_formatDate(semester.endDate)}',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                    if (semester.readingWeekStart != null)
+                                      Text(
+                                        'Reading Week: ${_formatDate(semester.readingWeekStart!)} - ${_formatDate(semester.readingWeekEnd!)}',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: Colors.orange[700],
+                                        ),
+                                      ),
+                                    if (semester.examPeriodStart != null)
+                                      Text(
+                                        'Exams: ${_formatDate(semester.examPeriodStart!)} - ${_formatDate(semester.examPeriodEnd!)}',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: Colors.red[700],
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
-                              PopupMenuItem(
-                                value: 'assignments',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.assessment_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('View Assignments'),
-                                  ],
-                                ),
+                              PopupMenuButton<String>(
+                                icon: const Icon(Icons.more_vert, size: 20),
+                                tooltip: 'Semester options',
+                                onSelected: (value) {
+                                  if (value == 'edit') {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => SemesterSetupScreen(
+                                          semesterToEdit: semester,
+                                        ),
+                                      ),
+                                    );
+                                  } else if (value == 'assignments') {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const AssignmentsScreen(),
+                                      ),
+                                    );
+                                  }
+                                },
+                                itemBuilder: (context) => const [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.edit_outlined, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Edit Semester'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'assignments',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.assessment_outlined, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('View Assignments'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 );
               }),
           ],
@@ -1818,388 +1962,6 @@ class _SemesterSelectionField extends ConsumerWidget {
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
-  }
-}
-
-// Create Semester Dialog
-class _CreateSemesterDialog extends ConsumerStatefulWidget {
-  const _CreateSemesterDialog();
-
-  @override
-  ConsumerState<_CreateSemesterDialog> createState() => _CreateSemesterDialogState();
-}
-
-class _CreateSemesterDialogState extends ConsumerState<_CreateSemesterDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  DateTime? _startDate;
-  DateTime? _endDate;
-  DateTime? _examPeriodStart;
-  DateTime? _examPeriodEnd;
-  DateTime? _readingWeekStart;
-  DateTime? _readingWeekEnd;
-  bool _hasReadingWeek = false;
-  bool _hasExamPeriod = false;
-  bool _isLoading = false;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  int get numberOfWeeks {
-    if (_startDate == null || _endDate == null) return 0;
-    return utils.DateUtils.calculateWeeksBetween(_startDate!, _endDate!);
-  }
-
-  Future<void> _createSemester() async {
-    print('DEBUG: Create semester button pressed');
-
-    if (!_formKey.currentState!.validate()) {
-      print('DEBUG: Form validation failed');
-      return;
-    }
-
-    if (_startDate == null || _endDate == null) {
-      print('DEBUG: Start or end date is null');
-      return;
-    }
-
-    if (_hasReadingWeek && (_readingWeekStart == null || _readingWeekEnd == null)) {
-      print('DEBUG: Reading week dates missing');
-      return;
-    }
-
-    if (_hasExamPeriod && (_examPeriodStart == null || _examPeriodEnd == null)) {
-      print('DEBUG: Exam period dates missing');
-      return;
-    }
-
-    print('DEBUG: Setting loading state to true');
-    setState(() => _isLoading = true);
-
-    try {
-      final user = ref.read(currentUserProvider);
-      if (user == null) {
-        print('DEBUG: User is null');
-        throw Exception('User not logged in');
-      }
-
-      print('DEBUG: User ID: ${user.uid}');
-      final repository = ref.read(firestoreRepositoryProvider);
-
-      final semester = Semester(
-        id: '',
-        name: _nameController.text.trim(),
-        startDate: _startDate!,
-        endDate: _endDate!,
-        numberOfWeeks: numberOfWeeks,
-        examPeriodStart: _hasExamPeriod ? _examPeriodStart : null,
-        examPeriodEnd: _hasExamPeriod ? _examPeriodEnd : null,
-        readingWeekStart: _hasReadingWeek ? _readingWeekStart : null,
-        readingWeekEnd: _hasReadingWeek ? _readingWeekEnd : null,
-        createdAt: DateTime.now(),
-      );
-
-      print('DEBUG: Creating semester: ${semester.name}');
-      final semesterId = await repository.createSemester(user.uid, semester);
-      print('DEBUG: Semester created with ID: $semesterId');
-
-      // Wait a bit longer to ensure Firestore has synced the write
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      final createdSemester = semester.copyWith(id: semesterId);
-      print('DEBUG: Semester object created with ID: ${createdSemester.id}, closing dialog');
-
-      if (mounted) {
-        print('DEBUG: About to close dialog with semester: ${createdSemester.id}');
-        Navigator.of(context).pop(createdSemester);
-        print('DEBUG: Dialog closed successfully');
-      }
-    } catch (e, stackTrace) {
-      print('DEBUG: Error creating semester: $e');
-      print('DEBUG: Stack trace: $stackTrace');
-
-      if (mounted) {
-        // Return error message as a string by popping with a special error object
-        Navigator.of(context).pop(); // Just close the dialog, error is logged
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: BorderRadius.circular(28),
-        ),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(28),
-                    topRight: Radius.circular(28),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_today,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Create Semester',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () {
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        }
-                      },
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-              // Body
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(24),
-                  children: [
-                    TextFormField(
-                      controller: _nameController,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        labelText: 'Semester Name',
-                        hintText: 'e.g., Semester 1 2024/25',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter a semester name';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Semester Duration',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    _DateTile(
-                      title: 'Start Date (Monday)',
-                      date: _startDate,
-                      onTap: () async {
-                        final picked = await showMondayFirstDatePicker(
-                          context: context,
-                          initialDate: _startDate ?? DateTime.now(),
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setState(() => _startDate = utils.DateUtils.getMonday(picked));
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    _DateTile(
-                      title: 'End Date (Sunday)',
-                      date: _endDate,
-                      onTap: () async {
-                        final picked = await showMondayFirstDatePicker(
-                          context: context,
-                          initialDate: _endDate ?? _startDate?.add(const Duration(days: 84)) ?? DateTime.now(),
-                          firstDate: _startDate ?? DateTime.now(),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setState(() => _endDate = utils.DateUtils.getSunday(picked));
-                        }
-                      },
-                    ),
-                    if (_startDate != null && _endDate != null) ...[
-                      const SizedBox(height: 12),
-                      Card(
-                        color: Theme.of(context).colorScheme.secondaryContainer,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(
-                            'Total Weeks: $numberOfWeeks',
-                            style: Theme.of(context).textTheme.titleSmall,
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-                    SwitchListTile(
-                      title: const Text('Has Reading Week'),
-                      value: _hasReadingWeek,
-                      onChanged: (value) {
-                        setState(() => _hasReadingWeek = value);
-                      },
-                    ),
-                    if (_hasReadingWeek) ...[
-                      const SizedBox(height: 12),
-                      _DateTile(
-                        title: 'Reading Week Start',
-                        date: _readingWeekStart,
-                        onTap: () async {
-                          final picked = await showMondayFirstDatePicker(
-                            context: context,
-                            initialDate: _readingWeekStart ?? _startDate ?? DateTime.now(),
-                            firstDate: _startDate ?? DateTime(2020),
-                            lastDate: _endDate ?? DateTime(2030),
-                          );
-                          if (picked != null) {
-                            setState(() => _readingWeekStart = utils.DateUtils.getMonday(picked));
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      _DateTile(
-                        title: 'Reading Week End',
-                        date: _readingWeekEnd,
-                        onTap: () async {
-                          final picked = await showMondayFirstDatePicker(
-                            context: context,
-                            initialDate: _readingWeekEnd ?? _readingWeekStart ?? _startDate ?? DateTime.now(),
-                            firstDate: _readingWeekStart ?? _startDate ?? DateTime(2020),
-                            lastDate: _endDate ?? DateTime(2030),
-                          );
-                          if (picked != null) {
-                            setState(() => _readingWeekEnd = utils.DateUtils.getSunday(picked));
-                          }
-                        },
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-                    SwitchListTile(
-                      title: const Text('Has Exam Period'),
-                      value: _hasExamPeriod,
-                      onChanged: (value) {
-                        setState(() => _hasExamPeriod = value);
-                      },
-                    ),
-                    if (_hasExamPeriod) ...[
-                      const SizedBox(height: 12),
-                      _DateTile(
-                        title: 'Exam Period Start',
-                        date: _examPeriodStart,
-                        onTap: () async {
-                          final picked = await showMondayFirstDatePicker(
-                            context: context,
-                            initialDate: _examPeriodStart ?? _endDate ?? DateTime.now(),
-                            firstDate: _startDate ?? DateTime(2020),
-                            lastDate: DateTime(2030),
-                          );
-                          if (picked != null) {
-                            setState(() => _examPeriodStart = picked);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      _DateTile(
-                        title: 'Exam Period End',
-                        date: _examPeriodEnd,
-                        onTap: () async {
-                          final picked = await showMondayFirstDatePicker(
-                            context: context,
-                            initialDate: _examPeriodEnd ?? _examPeriodStart ?? _endDate ?? DateTime.now(),
-                            firstDate: _examPeriodStart ?? _startDate ?? DateTime(2020),
-                            lastDate: DateTime(2030),
-                          );
-                          if (picked != null) {
-                            setState(() => _examPeriodEnd = picked);
-                          }
-                        },
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              // Footer
-              Container(
-                padding: const EdgeInsets.all(24),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () {
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        }
-                      },
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 12),
-                    FilledButton(
-                      onPressed: _isLoading ? null : _createSemester,
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Create Semester'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Date Tile Widget
-class _DateTile extends StatelessWidget {
-  final String title;
-  final DateTime? date;
-  final VoidCallback onTap;
-
-  const _DateTile({
-    required this.title,
-    required this.date,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      title: Text(title),
-      subtitle: Text(
-        date != null ? '${date!.day}/${date!.month}/${date!.year}' : 'Not selected',
-      ),
-      trailing: const Icon(Icons.calendar_today),
-      onTap: onTap,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: Colors.grey[300]!),
-      ),
-    );
   }
 }
 

@@ -6,7 +6,6 @@ import 'package:module_tracker/models/semester.dart';
 import 'package:module_tracker/models/semester_break.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
-import 'package:module_tracker/providers/customization_provider.dart';
 import 'package:module_tracker/utils/date_utils.dart' as utils;
 import 'package:module_tracker/utils/date_picker_utils.dart';
 import 'package:module_tracker/widgets/gradient_header.dart';
@@ -87,41 +86,39 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
   }
 
   Future<void> _selectStartDate() async {
-    final firstDayOfWeek = ref.read(customizationProvider).weekStartDay.weekdayNumber;
     final picked = await showCustomDatePicker(
       context: context,
       initialDate: _startDate ?? DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
-      firstDayOfWeek: firstDayOfWeek,
+      firstDayOfWeek: 1, // Monday
     );
 
     if (picked != null) {
       setState(() {
-        // Ensure it's the start of the week based on user preference
-        _startDate = firstDayOfWeek == 1
-            ? utils.DateUtils.getMonday(picked)
-            : utils.DateUtils.getSunday(picked);
+        // Ensure it's Monday
+        _startDate = utils.DateUtils.getMonday(picked);
+        // Auto-populate end date to next day if not already set
+        if (_endDate == null) {
+          _endDate = _startDate!.add(const Duration(days: 1));
+        }
       });
     }
   }
 
   Future<void> _selectEndDate() async {
-    final firstDayOfWeek = ref.read(customizationProvider).weekStartDay.weekdayNumber;
     final picked = await showCustomDatePicker(
       context: context,
       initialDate: _endDate ?? _startDate?.add(const Duration(days: 84)) ?? DateTime.now(),
       firstDate: _startDate ?? DateTime.now(),
       lastDate: DateTime(2030),
-      firstDayOfWeek: firstDayOfWeek,
+      firstDayOfWeek: 1, // Monday
     );
 
     if (picked != null) {
       setState(() {
-        // Ensure it's the end of the week based on user preference
-        _endDate = firstDayOfWeek == 1
-            ? utils.DateUtils.getSunday(picked)
-            : utils.DateUtils.getSaturday(picked);
+        // Ensure it's Sunday (end of week when Monday is start)
+        _endDate = utils.DateUtils.getSunday(picked);
       });
     }
   }
@@ -299,7 +296,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
           breaks: _breaks.map((b) => b.toSemesterBreak()).toList(),
         );
 
-        await repository.createSemester(user.uid, semester).timeout(
+        final semesterId = await repository.createSemester(user.uid, semester).timeout(
           const Duration(seconds: 10),
           onTimeout: () {
             throw Exception('Semester creation timed out. Please check your internet connection and Firestore security rules.');
@@ -309,7 +306,8 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
         print('DEBUG SEMESTER: Semester created successfully!');
 
         if (mounted) {
-          Navigator.pop(context);
+          // Return the created semester ID so it can be auto-selected
+          Navigator.pop(context, semesterId);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Semester created successfully!'),
@@ -339,9 +337,6 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final firstDayOfWeek = ref.watch(customizationProvider).weekStartDay.weekdayNumber;
-    final weekStartLabel = firstDayOfWeek == 1 ? 'Monday' : 'Sunday';
-    final weekEndLabel = firstDayOfWeek == 1 ? 'Sunday' : 'Saturday';
 
     return PopScope(
       canPop: !_hasUnsavedChanges,
@@ -472,7 +467,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                               ),
                               const SizedBox(height: 12),
                               SizedBox(
-                                width: 120,
+                                width: double.infinity,
                                 child: TextFormField(
                                   controller: _creditsController,
                                   keyboardType: TextInputType.number,
@@ -510,7 +505,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             SizedBox(
-                              width: constraints.maxWidth * 0.7,
+                              width: constraints.maxWidth * 0.55,
                               child: TextFormField(
                                 controller: _nameController,
                                 textCapitalization: TextCapitalization.sentences,
@@ -533,8 +528,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                               ),
                             ),
                             const SizedBox(width: 16),
-                            SizedBox(
-                              width: 120,
+                            Expanded(
                               child: TextFormField(
                                 controller: _creditsController,
                                 keyboardType: TextInputType.number,
@@ -609,7 +603,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                                             child: Text(
                                               _startDate != null
                                                   ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
-                                                  : 'Tap to select $weekStartLabel',
+                                                  : 'Tap to select',
                                               style: GoogleFonts.poppins(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w600,
@@ -658,7 +652,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                                             child: Text(
                                               _endDate != null
                                                   ? '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}'
-                                                  : 'Tap to select $weekEndLabel',
+                                                  : 'Tap to select',
                                               style: GoogleFonts.poppins(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w600,
@@ -712,7 +706,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                                             child: Text(
                                               _startDate != null
                                                   ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
-                                                  : 'Tap to select $weekStartLabel',
+                                                  : 'Tap to select',
                                               style: GoogleFonts.poppins(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w600,
@@ -762,7 +756,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
                                             child: Text(
                                               _endDate != null
                                                   ? '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}'
-                                                  : 'Tap to select $weekEndLabel',
+                                                  : 'Tap to select',
                                               style: GoogleFonts.poppins(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w600,
@@ -1002,9 +996,13 @@ class _ExamPeriodCardState extends State<_ExamPeriodCard> {
     if (picked != null) {
       setState(() {
         widget.examPeriodInput.startDate = picked;
+        // Auto-populate end date to next day if not already set
+        if (widget.examPeriodInput.endDate == null) {
+          widget.examPeriodInput.endDate = picked.add(const Duration(days: 1));
+        }
         // Reset end date if it's before the new start date
-        if (widget.examPeriodInput.endDate != null && widget.examPeriodInput.endDate!.isBefore(picked)) {
-          widget.examPeriodInput.endDate = null;
+        else if (widget.examPeriodInput.endDate!.isBefore(picked)) {
+          widget.examPeriodInput.endDate = picked.add(const Duration(days: 1));
         }
       });
       widget.onChanged();
@@ -1368,9 +1366,13 @@ class _BreakCardState extends State<_BreakCard> {
     if (picked != null) {
       setState(() {
         widget.breakInput.startDate = picked;
+        // Auto-populate end date to next day if not already set
+        if (widget.breakInput.endDate == null) {
+          widget.breakInput.endDate = picked.add(const Duration(days: 1));
+        }
         // Reset end date if it's before the new start date
-        if (widget.breakInput.endDate != null && widget.breakInput.endDate!.isBefore(picked)) {
-          widget.breakInput.endDate = null;
+        else if (widget.breakInput.endDate!.isBefore(picked)) {
+          widget.breakInput.endDate = picked.add(const Duration(days: 1));
         }
       });
       widget.onChanged();

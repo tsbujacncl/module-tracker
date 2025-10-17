@@ -70,44 +70,44 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final canProceed = _nameController.text.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+      backgroundColor: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFDCEEFE),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 550),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  // App title with gradient
-                  ShaderMask(
-                    shaderCallback: (bounds) => const LinearGradient(
-                      colors: [Color(0xFF3B82F6), Color(0xFF10B981)],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ).createShader(bounds),
-                    child: Text(
-                      'Module Tracker',
-                      style: GoogleFonts.poppins(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    // App title with gradient
+                    ShaderMask(
+                      shaderCallback: (bounds) => const LinearGradient(
+                        colors: [Color(0xFF3B82F6), Color(0xFF10B981)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ).createShader(bounds),
+                      child: Text(
+                        'Module Tracker',
+                        style: GoogleFonts.poppins(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Let\'s get you set up',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Let\'s get you set up',
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                  // Card container
-                  Expanded(
-                    child: Container(
+                    // Card container
+                    Container(
                       decoration: BoxDecoration(
                         color: isDarkMode ? const Color(0xFF1E293B) : Colors.white,
                         borderRadius: BorderRadius.circular(20),
@@ -119,7 +119,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           ),
                         ],
                       ),
-                      child: SingleChildScrollView(
+                      child: Padding(
                         padding: const EdgeInsets.all(28),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,18 +127,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             // Name
                             _buildSectionLabel('Your Name', required: true),
                             const SizedBox(height: 8),
-                            TextField(
-                              controller: _nameController,
-                              style: GoogleFonts.inter(fontSize: 16),
-                              decoration: InputDecoration(
-                                hintText: 'First or preferred name',
-                                filled: true,
-                                fillColor: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide.none,
+                            SizedBox(
+                              width: double.infinity,
+                              child: TextField(
+                                controller: _nameController,
+                                style: GoogleFonts.inter(fontSize: 16),
+                                decoration: InputDecoration(
+                                  hintText: 'First or preferred name',
+                                  filled: true,
+                                  fillColor: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                 ),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                               ),
                             ),
 
@@ -330,14 +333,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             const SizedBox(height: 28),
 
                             // Get Started Button inside card
-                            SizedBox(
-                              width: double.infinity,
+                            Center(
                               child: FilledButton(
                                 onPressed: canProceed ? _completeOnboarding : null,
                                 style: FilledButton.styleFrom(
                                   backgroundColor: const Color(0xFF3B82F6),
                                   disabledBackgroundColor: const Color(0xFF94A3B8),
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 48),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -355,8 +357,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -372,7 +374,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         Text(
           label,
           style: GoogleFonts.poppins(
-            fontSize: 14,
+            fontSize: 18,
             fontWeight: FontWeight.w600,
             color: isDarkMode ? Colors.white : const Color(0xFF0F172A),
           ),
@@ -380,7 +382,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         if (required)
           const Text(
             ' *',
-            style: TextStyle(color: Colors.red, fontSize: 14),
+            style: TextStyle(color: Colors.red, fontSize: 18),
           ),
         if (optional)
           Text(
@@ -392,7 +394,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
         if (emoji != null) ...[
           const SizedBox(width: 8),
-          Text(emoji, style: const TextStyle(fontSize: 16)),
+          Text(emoji, style: const TextStyle(fontSize: 20)),
         ],
       ],
     );

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
-import 'package:module_tracker/screens/auth/register_screen.dart';
 import 'package:module_tracker/widgets/shared/gradient_button.dart';
 import 'package:module_tracker/utils/responsive_helper.dart';
 
@@ -19,17 +18,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   final _emailFocusNode = FocusNode();
   final _passwordFocusNode = FocusNode();
+  final _confirmPasswordFocusNode = FocusNode();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+  bool _isCreatingAccount = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _emailFocusNode.dispose();
     _passwordFocusNode.dispose();
+    _confirmPasswordFocusNode.dispose();
     super.dispose();
   }
 
@@ -41,6 +46,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       final authService = ref.read(authServiceProvider);
       await authService.signInWithEmailAndPassword(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _register() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final authService = ref.read(authServiceProvider);
+      await authService.registerWithEmailAndPassword(
         _emailController.text.trim(),
         _passwordController.text,
       );
@@ -278,7 +310,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'Welcome Back!',
+                          _isCreatingAccount ? 'Create Your Account' : 'Welcome Back!',
                           style: GoogleFonts.poppins(
                             fontSize: welcomeTitleSize,
                             fontWeight: FontWeight.w600,
@@ -316,10 +348,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           controller: _passwordController,
                           focusNode: _passwordFocusNode,
                           obscureText: _obscurePassword,
-                          textInputAction: TextInputAction.done,
+                          textInputAction: _isCreatingAccount ? TextInputAction.next : TextInputAction.done,
                           style: TextStyle(fontSize: textFieldFontSize),
                           onFieldSubmitted: (_) {
-                            if (!_isLoading) {
+                            if (_isCreatingAccount) {
+                              _confirmPasswordFocusNode.requestFocus();
+                            } else if (!_isLoading) {
                               _signIn();
                             }
                           },
@@ -348,37 +382,102 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             return null;
                           },
                         ),
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          child: _isCreatingAccount
+                              ? Column(
+                                  children: [
+                                    SizedBox(height: fieldGap),
+                                    TextFormField(
+                                      controller: _confirmPasswordController,
+                                      focusNode: _confirmPasswordFocusNode,
+                                      obscureText: _obscureConfirmPassword,
+                                      textInputAction: TextInputAction.done,
+                                      style: TextStyle(fontSize: textFieldFontSize),
+                                      onFieldSubmitted: (_) {
+                                        if (!_isLoading) {
+                                          _register();
+                                        }
+                                      },
+                                      decoration: InputDecoration(
+                                        labelText: 'Confirm Password',
+                                        prefixIcon: const Icon(Icons.lock_outline),
+                                        contentPadding: textFieldPadding,
+                                        suffixIcon: IconButton(
+                                          icon: Icon(
+                                            _obscureConfirmPassword
+                                                ? Icons.visibility_outlined
+                                                : Icons.visibility_off_outlined,
+                                          ),
+                                          onPressed: () {
+                                            setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+                                          },
+                                        ),
+                                      ),
+                                      validator: (value) {
+                                        if (!_isCreatingAccount) return null;
+                                        if (value == null || value.isEmpty) {
+                                          return 'Please confirm your password';
+                                        }
+                                        if (value != _passwordController.text) {
+                                          return 'Passwords do not match';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                  ],
+                                )
+                              : const SizedBox.shrink(),
+                        ),
                         SizedBox(height: fieldToButtonSpacing),
                         GradientButton(
-                          text: 'Sign In',
-                          onPressed: _signIn,
+                          text: _isCreatingAccount ? 'Create Account' : 'Sign In',
+                          onPressed: _isCreatingAccount ? _register : _signIn,
                           isLoading: _isLoading,
                         ),
                         SizedBox(height: buttonGap),
-                        OutlinedButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => const RegisterScreen(),
-                                    ),
-                                  );
-                                },
-                          style: OutlinedButton.styleFrom(
-                            padding: EdgeInsets.symmetric(vertical: buttonVerticalPadding),
-                            side: const BorderSide(color: Color(0xFF0EA5E9)),
-                          ),
-                          child: Text(
-                            'Create Account',
-                            style: GoogleFonts.poppins(
-                              fontSize: buttonFontSize,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF0EA5E9),
+                        if (_isCreatingAccount)
+                          TextButton(
+                            onPressed: _isLoading
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _isCreatingAccount = false;
+                                      _confirmPasswordController.clear();
+                                    });
+                                  },
+                            child: Text(
+                              'Already have an account? Sign In',
+                              style: GoogleFonts.poppins(
+                                fontSize: buttonFontSize,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF0EA5E9),
+                              ),
+                            ),
+                          )
+                        else
+                          OutlinedButton(
+                            onPressed: _isLoading
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _isCreatingAccount = true;
+                                    });
+                                  },
+                            style: OutlinedButton.styleFrom(
+                              padding: EdgeInsets.symmetric(vertical: buttonVerticalPadding),
+                              side: const BorderSide(color: Color(0xFF0EA5E9)),
+                            ),
+                            child: Text(
+                              'Create Account',
+                              style: GoogleFonts.poppins(
+                                fontSize: buttonFontSize,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF0EA5E9),
+                              ),
                             ),
                           ),
-                        ),
                         SizedBox(height: dividerSpacing),
                         Row(
                           children: [
