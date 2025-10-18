@@ -47,6 +47,109 @@ class WeeklyCalendar extends ConsumerStatefulWidget {
   ConsumerState<WeeklyCalendar> createState() => _WeeklyCalendarState();
 }
 
+// Helper function to parse time string (HH:mm) to minutes
+int parseTimeToMinutes(String time) {
+  try {
+    final parts = time.split(':');
+    if (parts.length != 2) return 0;
+    final hour = int.parse(parts[0]);
+    final minute = int.parse(parts[1]);
+    return hour * 60 + minute;
+  } catch (e) {
+    return 0;
+  }
+}
+
+// Calculate duration between start and end time in minutes
+int calculateDuration(String? startTime, String? endTime) {
+  if (startTime == null || endTime == null) return 60; // Default 1 hour
+
+  final startMinutes = parseTimeToMinutes(startTime);
+  final endMinutes = parseTimeToMinutes(endTime);
+  return endMinutes - startMinutes;
+}
+
+// Get scale factor for font size based on event duration (in hours)
+// Longer events get smaller text to prevent overflow
+double getDurationScaleFactor(double durationHours) {
+  if (durationHours <= 2.0) return 1.0; // No scaling for short events
+  if (durationHours >= 10.0) return 0.75; // Maximum reduction for very long events
+
+  // Reduce by ~3% per hour beyond 2 hours
+  // Linear interpolation: 2hrs=100%, 10hrs=75%
+  return 1.0 - ((durationHours - 2.0) * 0.03125);
+}
+
+// Calculate optimal text gap based on available space in event box
+// Returns a dynamic gap that fits the available vertical space
+double calculateDynamicTextGap({
+  required double boxHeight,
+  required double moduleCodeFontSize,
+  required double eventTypeFontSize,
+  required double boxPadding,
+  required double screenWidth,
+}) {
+  const lineHeight = 1.0; // Current line height for text
+
+  // Calculate required space for text content
+  final moduleCodeHeight = moduleCodeFontSize * lineHeight;
+  final eventTypeHeight = eventTypeFontSize * lineHeight;
+  final totalPadding = boxPadding * 2; // top and bottom
+
+  final requiredSpace = moduleCodeHeight + eventTypeHeight + totalPadding;
+
+  // Calculate available space for gap
+  final availableSpace = boxHeight - requiredSpace;
+
+  // Define min/max gap based on screen size
+  const minGap = 0.0;
+  final maxGap = screenWidth < 600 ? 1.5 : screenWidth < 1200 ? 2.0 : 2.5;
+
+  // Clamp available space to reasonable bounds
+  return availableSpace.clamp(minGap, maxGap);
+}
+
+// Calculate the actual height an event should take in the calendar,
+// accounting for hour multipliers that may vary across the event's duration
+double calculateEventHeight({
+  required int startMinutes,
+  required int endMinutes,
+  required double pixelsPerHour,
+  required Map<int, int> hourMultipliers,
+}) {
+  double totalHeight = 0.0;
+
+  final startHour = startMinutes ~/ 60;
+  final endHour = endMinutes ~/ 60;
+
+  // If event is within a single hour
+  if (startHour == endHour) {
+    final duration = endMinutes - startMinutes;
+    return (duration / 60.0) * pixelsPerHour * (hourMultipliers[startHour] ?? 1.0);
+  }
+
+  // Event spans multiple hours - calculate each segment separately
+
+  // First partial hour
+  final minutesInFirstHour = 60 - (startMinutes % 60);
+  if (minutesInFirstHour > 0) {
+    totalHeight += (minutesInFirstHour / 60.0) * pixelsPerHour * (hourMultipliers[startHour] ?? 1.0);
+  }
+
+  // Full hours in between
+  for (int hour = startHour + 1; hour < endHour; hour++) {
+    totalHeight += pixelsPerHour * (hourMultipliers[hour] ?? 1.0);
+  }
+
+  // Last partial hour
+  final minutesInLastHour = endMinutes % 60;
+  if (minutesInLastHour > 0) {
+    totalHeight += (minutesInLastHour / 60.0) * pixelsPerHour * (hourMultipliers[endHour] ?? 1.0);
+  }
+
+  return totalHeight;
+}
+
 class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
   // Track selected events during drag
   final Set<String> _selectedEventIds = {};
@@ -385,27 +488,6 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
     });
 
     return assessments;
-  }
-
-  // Parse time string to minutes from midnight
-  int parseTimeToMinutes(String time) {
-    try {
-      final parts = time.split(':');
-      final hour = int.parse(parts[0]);
-      final minute = int.parse(parts[1]);
-      return hour * 60 + minute;
-    } catch (e) {
-      return 0;
-    }
-  }
-
-  // Calculate duration between start and end time in minutes
-  int calculateDuration(String? startTime, String? endTime) {
-    if (startTime == null || endTime == null) return 60; // Default 1 hour
-
-    final startMinutes = parseTimeToMinutes(startTime);
-    final endMinutes = parseTimeToMinutes(endTime);
-    return endMinutes - startMinutes;
   }
 
   // Get the earliest and latest times from tasks and assessments FOR THE CURRENT WEEK ONLY
@@ -903,9 +985,12 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
             pixelsPerHour *
             (hourMultipliers[eventHour] ?? 1);
 
-        final duration = event.endMinutes - event.startMinutes;
-        final height =
-            (duration / 60) * pixelsPerHour * (hourMultipliers[eventHour] ?? 1);
+        final height = calculateEventHeight(
+          startMinutes: event.startMinutes,
+          endMinutes: event.endMinutes,
+          pixelsPerHour: pixelsPerHour,
+          hourMultipliers: hourMultipliers,
+        );
 
         // Find which position in stack (0 = first, 1 = second, etc.)
         final overlappingEvents = events
@@ -1721,14 +1806,12 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                           (hourMultipliers[eventHour] ??
                                                               1);
 
-                                                      final duration =
-                                                          event.endMinutes -
-                                                          event.startMinutes;
-                                                      final height =
-                                                          (duration / 60) *
-                                                          pixelsPerHour *
-                                                          (hourMultipliers[eventHour] ??
-                                                              1);
+                                                      final height = calculateEventHeight(
+                                                        startMinutes: event.startMinutes,
+                                                        endMinutes: event.endMinutes,
+                                                        pixelsPerHour: pixelsPerHour,
+                                                        hourMultipliers: hourMultipliers,
+                                                      );
 
                                                       // Find which position in stack (0 = first, 1 = second, etc.)
                                                       final overlappingEvents = events
@@ -2223,14 +2306,12 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                 (hourMultipliers[eventHour] ??
                                                     1);
 
-                                            final duration =
-                                                event.endMinutes -
-                                                event.startMinutes;
-                                            final height =
-                                                (duration / 60) *
-                                                pixelsPerHour *
-                                                (hourMultipliers[eventHour] ??
-                                                    1);
+                                            final height = calculateEventHeight(
+                                              startMinutes: event.startMinutes,
+                                              endMinutes: event.endMinutes,
+                                              pixelsPerHour: pixelsPerHour,
+                                              hourMultipliers: hourMultipliers,
+                                            );
 
                                             // Find which position in stack (0 = first, 1 = second, etc.)
                                             final overlappingEvents = events
@@ -2818,11 +2899,27 @@ class _TimetableAssessmentBox extends ConsumerWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final checkboxSize = ResponsiveText.getCalendarCheckboxSize(screenWidth);
     final checkboxBorderWidth = screenWidth < 600 ? 1.0 : screenWidth < 1200 ? 1.5 : 2.0;
-    final moduleCodeFontSize = ResponsiveText.getCalendarModuleCodeFontSize(screenWidth);
-    final eventTypeFontSize = ResponsiveText.getCalendarEventTypeFontSize(screenWidth);
-    // Reduce padding on small screens to give text more space, and on large screens to prevent overflow
-    final boxPadding = screenWidth < 600 ? 2.0 : screenWidth < 1200 ? 4.0 : screenWidth < 1600 ? 3.0 : 2.5;
-    final textGap = screenWidth < 600 ? 1.5 : screenWidth < 1200 ? 2.0 : 1.0;
+
+    // Calculate event duration and apply scaling for long events
+    // Assessments default to 1 hour duration
+    final durationMinutes = 60; // Assessments are typically 1 hour
+    final durationHours = durationMinutes / 60.0;
+    final durationScale = getDurationScaleFactor(durationHours);
+
+    final moduleCodeFontSize = ResponsiveText.getCalendarModuleCodeFontSize(screenWidth) * durationScale;
+    final eventTypeFontSize = ResponsiveText.getCalendarEventTypeFontSize(screenWidth) * durationScale;
+    // Aggressive padding reduction to prevent overflow
+    final boxPadding = screenWidth < 600 ? 1.0 : screenWidth < 1200 ? 1.5 : screenWidth < 1600 ? 1.25 : 1.0;
+
+    // Calculate optimal textGap based on available space
+    final textGap = calculateDynamicTextGap(
+      boxHeight: height,
+      moduleCodeFontSize: moduleCodeFontSize,
+      eventTypeFontSize: eventTypeFontSize,
+      boxPadding: boxPadding,
+      screenWidth: screenWidth,
+    );
+
     final checkboxGap = screenWidth < 600 ? 2.0 : 3.0;
 
     final completionsAsync = ref.watch(
@@ -2914,7 +3011,7 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: const Color(
                     0xFFF87171,
-                  ).withOpacity(isCompleted ? 0.5 : 0.3), // Red color
+                  ).withOpacity(isCompleted ? 0.75 : 0.45), // Red color
                   borderRadius: BorderRadius.circular(6),
                   border: const Border(
                     left: BorderSide(
@@ -2939,7 +3036,7 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                             color: isDarkMode
                                 ? const Color(0xFFF1F5F9)
                                 : const Color(0xFF0F172A),
-                            height: 1.2,
+                            height: 1.0,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.visible,
@@ -2965,7 +3062,7 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                               color: isDarkMode
                                   ? const Color(0xFF94A3B8)
                                   : const Color(0xFF64748B),
-                              height: 1.2,
+                              height: 1.0,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -3079,11 +3176,26 @@ class _TimetableTaskBox extends ConsumerWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final checkboxSize = ResponsiveText.getCalendarCheckboxSize(screenWidth);
     final checkboxBorderWidth = screenWidth < 600 ? 1.0 : screenWidth < 1200 ? 1.5 : 2.0;
-    final moduleCodeFontSize = ResponsiveText.getCalendarModuleCodeFontSize(screenWidth);
-    final eventTypeFontSize = ResponsiveText.getCalendarEventTypeFontSize(screenWidth);
-    // Reduce padding on small screens to give text more space, and on large screens to prevent overflow
-    final boxPadding = screenWidth < 600 ? 2.0 : screenWidth < 1200 ? 4.0 : screenWidth < 1600 ? 3.0 : 2.5;
-    final textGap = screenWidth < 600 ? 1.5 : screenWidth < 1200 ? 2.0 : 1.0;
+
+    // Calculate event duration and apply scaling for long events
+    final durationMinutes = calculateDuration(task.time, task.endTime);
+    final durationHours = durationMinutes / 60.0;
+    final durationScale = getDurationScaleFactor(durationHours);
+
+    final moduleCodeFontSize = ResponsiveText.getCalendarModuleCodeFontSize(screenWidth) * durationScale;
+    final eventTypeFontSize = ResponsiveText.getCalendarEventTypeFontSize(screenWidth) * durationScale;
+    // Aggressive padding reduction to prevent overflow
+    final boxPadding = screenWidth < 600 ? 1.0 : screenWidth < 1200 ? 1.5 : screenWidth < 1600 ? 1.25 : 1.0;
+
+    // Calculate optimal textGap based on available space
+    final textGap = calculateDynamicTextGap(
+      boxHeight: height,
+      moduleCodeFontSize: moduleCodeFontSize,
+      eventTypeFontSize: eventTypeFontSize,
+      boxPadding: boxPadding,
+      screenWidth: screenWidth,
+    );
+
     final checkboxGap = screenWidth < 600 ? 2.0 : 3.0;
 
     final completionsAsync = ref.watch(
@@ -3222,7 +3334,7 @@ class _TimetableTaskBox extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: getTaskColor(
                     task.type,
-                  ).withOpacity(isCompleted ? 0.5 : 0.3),
+                  ).withOpacity(isCompleted ? 0.75 : 0.45),
                   borderRadius: BorderRadius.circular(6),
                   border: Border(
                     left: BorderSide(color: getTaskColor(task.type), width: 3),
@@ -3247,7 +3359,7 @@ class _TimetableTaskBox extends ConsumerWidget {
                               color: isDarkMode
                                   ? const Color(0xFFF1F5F9)
                                   : const Color(0xFF0F172A),
-                              height: 1.2,
+                              height: 1.0,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -3261,7 +3373,7 @@ class _TimetableTaskBox extends ConsumerWidget {
                               color: isDarkMode
                                   ? const Color(0xFF94A3B8)
                                   : const Color(0xFF64748B),
-                              height: 1.2,
+                              height: 1.0,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -3708,7 +3820,10 @@ class _AssessmentDetailsDialogState
                       context,
                       MaterialPageRoute(
                         builder: (context) =>
-                            ModuleFormScreen(existingModule: widget.module),
+                            ModuleFormScreen(
+                              existingModule: widget.module,
+                              scrollToAssessmentId: widget.assessment.id,
+                            ),
                       ),
                     );
                   },
@@ -4365,7 +4480,10 @@ class _TaskDetailsDialogState extends ConsumerState<_TaskDetailsDialog> {
                       context,
                       MaterialPageRoute(
                         builder: (context) =>
-                            ModuleFormScreen(existingModule: widget.module),
+                            ModuleFormScreen(
+                              existingModule: widget.module,
+                              scrollToTaskId: widget.task.id,
+                            ),
                       ),
                     );
                   },

@@ -13,6 +13,7 @@ import 'package:module_tracker/screens/module/module_form_screen.dart';
 import 'package:module_tracker/widgets/hover_scale_widget.dart';
 import 'package:module_tracker/widgets/module_selection_dialog.dart';
 import 'package:module_tracker/widgets/gradient_header.dart';
+import 'package:module_tracker/widgets/module_card.dart';
 
 class AssignmentsScreen extends ConsumerStatefulWidget {
   const AssignmentsScreen({super.key});
@@ -714,116 +715,58 @@ class _ModuleBox extends ConsumerWidget {
                       ),
                     // Three dots menu with hover animation
                     Builder(
-                      builder: (context) => UniversalInteractiveWidget(
-                        style: InteractiveStyle.elastic,
-                        onTap: () {
-                          final RenderBox button =
-                              context.findRenderObject() as RenderBox;
-                          final RenderBox overlay =
-                              Navigator.of(
-                                    context,
-                                  ).overlay!.context.findRenderObject()
-                                  as RenderBox;
-                          final buttonPosition = button.localToGlobal(
-                            Offset.zero,
-                            ancestor: overlay,
-                          );
+                      builder: (context) {
+                        // Fetch semester for this module
+                        final semestersAsync = ref.watch(semestersProvider);
+                        final moduleSemester = semestersAsync.maybeWhen(
+                          data: (semesters) => semesters.where((s) => s.id == module.semesterId).firstOrNull,
+                          orElse: () => null,
+                        );
 
-                          showMenu<String>(
-                            context: context,
-                            position: RelativeRect.fromLTRB(
-                              buttonPosition.dx - 80, // Move left 80px
-                              buttonPosition.dy + 30, // Move down 30px
-                              overlay.size.width -
-                                  buttonPosition.dx -
-                                  button.size.width +
-                                  80,
-                              overlay.size.height -
-                                  buttonPosition.dy -
-                                  button.size.height -
-                                  30,
-                            ),
-                            items: const [
-                              PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Edit Module'),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'share',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.share_rounded,
-                                      size: 18,
-                                      color: Color(0xFF0EA5E9),
+                        return UniversalInteractiveWidget(
+                          style: InteractiveStyle.elastic,
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => ModuleActionsDialog(
+                                module: module,
+                                semester: moduleSemester,
+                                onEdit: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ModuleFormScreen(
+                                      existingModule: module,
+                                      semesterId: module.semesterId,
                                     ),
-                                    SizedBox(width: 8),
-                                    Text('Share Module'),
-                                  ],
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.delete_outline,
-                                      size: 18,
-                                      color: Color(0xFFEF4444),
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Delete Module',
-                                      style: TextStyle(
-                                        color: Color(0xFFEF4444),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ).then((value) {
-                            if (!context.mounted) return;
-
-                            if (value == 'share') {
-                              // Show module selection dialog
-                              showDialog(
-                                context: context,
-                                builder: (context) => ModuleSelectionDialog(
-                                  preSelectedModule: module,
-                                  semesterId: module.semesterId,
-                                ),
-                              );
-                            } else if (value == 'edit') {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => ModuleFormScreen(
-                                    existingModule: module,
+                                  ),
+                                );
+                              },
+                              onShare: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => ModuleSelectionDialog(
+                                    preSelectedModule: module,
                                     semesterId: module.semesterId,
                                   ),
-                                ),
-                              );
-                            } else if (value == 'delete') {
-                              _showDeleteDialog(context, ref, module);
-                            }
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          child: const Icon(
-                            Icons.more_vert,
-                            size: 20,
-                            color: Color(0xFF64748B),
+                                );
+                              },
+                              onDelete: () {
+                                _showDeleteDialog(context, ref, module);
+                              },
+                            ),
+                          );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            child: const Icon(
+                              Icons.more_vert,
+                              size: 20,
+                              color: Color(0xFF64748B),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                   ],
                 ),

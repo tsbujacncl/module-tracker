@@ -41,11 +41,15 @@ final customTaskNamesProvider = FutureProvider<List<String>>((ref) async {
 class ModuleFormScreen extends ConsumerStatefulWidget {
   final String? semesterId;
   final Module? existingModule;
+  final String? scrollToTaskId;
+  final String? scrollToAssessmentId;
 
   const ModuleFormScreen({
     super.key,
     this.semesterId,
     this.existingModule,
+    this.scrollToTaskId,
+    this.scrollToAssessmentId,
   });
 
   @override
@@ -60,12 +64,20 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
   final _nameFocusNode = FocusNode();
   final _codeFocusNode = FocusNode();
   final _creditsFocusNode = FocusNode();
+  final _scrollController = ScrollController();
   bool _isLoading = false;
   String? _selectedSemesterId;
   Semester? _cachedSemester; // Cache the semester to avoid Firestore race conditions
 
   final List<_RecurringTaskInput> _recurringTasks = [];
   final List<_AssessmentInput> _assessments = [];
+
+  // Track which event to scroll to and highlight
+  String? _highlightedEventId;
+  bool _isHighlighted = false;
+
+  // Track schedule overlaps
+  List<_ScheduleOverlap> _scheduleOverlaps = [];
 
   // Track initial state for unsaved changes detection
   String _initialName = '';
@@ -91,6 +103,13 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
       // Add default schedule and assessment for new modules
       _recurringTasks.add(_RecurringTaskInput());
       _assessments.add(_AssessmentInput());
+    }
+
+    // Schedule scroll and highlight after frame is built
+    if (widget.scrollToTaskId != null || widget.scrollToAssessmentId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToAndHighlightEvent();
+      });
     }
   }
 
@@ -122,6 +141,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
         _recurringTasks.clear();
         for (final task in scheduledTasks) {
           final input = _RecurringTaskInput()
+            ..originalId = task.id  // Store original Firestore ID
             ..name = task.name
             ..type = task.type
             ..dayOfWeek = task.dayOfWeek
@@ -145,6 +165,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
         _assessments.clear();
         for (final assessment in assessments) {
           _assessments.add(_AssessmentInput()
+            ..originalId = assessment.id  // Store original Firestore ID
             ..name = assessment.name
             ..type = assessment.type
             ..dueDate = assessment.dueDate
@@ -184,6 +205,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
     _nameFocusNode.dispose();
     _codeFocusNode.dispose();
     _creditsFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -217,6 +239,83 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
     return _assessments.fold(0, (sum, a) => sum + (a.weighting ?? 0));
   }
 
+  // Scroll to and highlight the event specified by widget parameters
+  void _scrollToAndHighlightEvent() {
+    // Find the target event
+    int? targetIndex;
+    bool isTask = false;
+
+    if (widget.scrollToTaskId != null) {
+      targetIndex = _recurringTasks.indexWhere((t) => t.originalId == widget.scrollToTaskId);
+      isTask = true;
+    } else if (widget.scrollToAssessmentId != null) {
+      targetIndex = _assessments.indexWhere((a) => a.originalId == widget.scrollToAssessmentId);
+      isTask = false;
+    }
+
+    // If event not found, return
+    if (targetIndex == null || targetIndex == -1) {
+      print('DEBUG: Event not found for scrolling');
+      return;
+    }
+
+    // Calculate approximate scroll position
+    // Module info section + Schedule header ~= 800px
+    // Each card ~= 250px average
+    final double moduleInfoHeight = 800.0;
+    final double scheduleHeaderHeight = 100.0;
+    final double cardHeight = 250.0;
+
+    double scrollOffset = moduleInfoHeight;
+
+    if (isTask) {
+      // Scroll to task in Schedule section
+      scrollOffset += scheduleHeaderHeight + (targetIndex * cardHeight);
+    } else {
+      // Scroll to assessment in Assignments section
+      // Add all tasks + assignments header
+      scrollOffset += scheduleHeaderHeight;
+      scrollOffset += (_recurringTasks.length * cardHeight);
+      scrollOffset += 100.0; // Assignments header
+      scrollOffset += (targetIndex * cardHeight);
+    }
+
+    // Perform the scroll animation
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        scrollOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      ).then((_) {
+        // After scrolling, set highlight state
+        setState(() {
+          _highlightedEventId = isTask
+              ? _recurringTasks[targetIndex!].id
+              : _assessments[targetIndex!].id;
+          _isHighlighted = true;
+        });
+
+        // Remove highlight after 2 seconds
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            setState(() {
+              _isHighlighted = false;
+            });
+          }
+        });
+
+        // Clear highlighted ID after animation completes
+        Future.delayed(const Duration(milliseconds: 2500), () {
+          if (mounted) {
+            setState(() {
+              _highlightedEventId = null;
+            });
+          }
+        });
+      });
+    }
+  }
+
   // Check if there are unsaved changes
   bool get _hasUnsavedChanges {
     // Only check for unsaved changes in edit mode
@@ -229,6 +328,109 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
         _selectedSemesterId != _initialSelectedSemesterId ||
         _recurringTasks.length != _initialRecurringTasksCount ||
         _assessments.length != _initialAssessmentsCount;
+  }
+
+  // Helper to parse time string to minutes
+  int _parseTimeToMinutes(String? time) {
+    if (time == null || time.isEmpty) return 0;
+    try {
+      final parts = time.split(':');
+      if (parts.length != 2) return 0;
+      final hour = int.parse(parts[0]);
+      final minute = int.parse(parts[1]);
+      return hour * 60 + minute;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  // Check for schedule overlaps
+  Future<void> _checkScheduleOverlaps() async {
+    if (_selectedSemesterId == null) {
+      setState(() => _scheduleOverlaps = []);
+      return;
+    }
+
+    final user = ref.read(currentUserProvider);
+    if (user == null) {
+      setState(() => _scheduleOverlaps = []);
+      return;
+    }
+
+    final repository = ref.read(firestoreRepositoryProvider);
+    final overlaps = <_ScheduleOverlap>[];
+
+    // Get all modules in the semester (excluding current module if editing)
+    final allModules = await repository.getModulesBySemester(
+      user.uid,
+      _selectedSemesterId!,
+      activeOnly: true,
+    ).first;
+
+    // Get all tasks from other modules
+    final otherModuleTasks = <RecurringTask>[];
+    for (final module in allModules) {
+      // Skip current module if editing
+      if (widget.existingModule != null && module.id == widget.existingModule!.id) {
+        continue;
+      }
+      final tasks = await repository.getRecurringTasks(user.uid, module.id).first;
+      otherModuleTasks.addAll(tasks.where((t) => t.time != null && t.parentTaskId == null));
+    }
+
+    // Check each current task against all other tasks
+    for (final currentTask in _recurringTasks) {
+      if (currentTask.time == null || currentTask.time!.isEmpty || currentTask.dayOfWeek == null) {
+        continue;
+      }
+
+      final currentStart = _parseTimeToMinutes(currentTask.time);
+      final currentEnd = _parseTimeToMinutes(currentTask.endTime ?? currentTask.time);
+
+      // Ensure end time is after start time
+      if (currentEnd <= currentStart) continue;
+
+      // Check against other tasks
+      for (final otherTask in otherModuleTasks) {
+        if (otherTask.dayOfWeek != currentTask.dayOfWeek) continue;
+
+        final otherStart = _parseTimeToMinutes(otherTask.time);
+        final otherEnd = _parseTimeToMinutes(otherTask.endTime ?? otherTask.time);
+
+        // Check if times overlap: (A.start < B.end) AND (A.end > B.start)
+        if (currentStart < otherEnd && currentEnd > otherStart) {
+          final otherModule = allModules.firstWhere((m) => m.id == otherTask.moduleId);
+          overlaps.add(_ScheduleOverlap(
+            taskInput: currentTask,
+            conflictingTask: otherTask,
+            conflictingModule: otherModule,
+          ));
+        }
+      }
+
+      // Also check against other tasks in the current form
+      for (int i = 0; i < _recurringTasks.length; i++) {
+        final otherTask = _recurringTasks[i];
+        if (otherTask.id == currentTask.id) continue;
+        if (otherTask.time == null || otherTask.time!.isEmpty || otherTask.dayOfWeek == null) {
+          continue;
+        }
+        if (otherTask.dayOfWeek != currentTask.dayOfWeek) continue;
+
+        final otherStart = _parseTimeToMinutes(otherTask.time);
+        final otherEnd = _parseTimeToMinutes(otherTask.endTime ?? otherTask.time);
+
+        if (currentStart < otherEnd && currentEnd > otherStart) {
+          overlaps.add(_ScheduleOverlap(
+            taskInput: currentTask,
+            conflictingTaskInput: otherTask,
+            conflictingModule: null,
+          ));
+        }
+      }
+    }
+
+    setState(() => _scheduleOverlaps = overlaps);
   }
 
   // Show unsaved changes dialog
@@ -478,12 +680,18 @@ Future<void> _saveModule() async {
         setState(() => _isLoading = false);
         _cachedSemester = null; // Clear cache after successful creation
 
-        // Invalidate providers to refresh data
+        // Invalidate providers to refresh data - enhanced for immediate refresh
         ref.invalidate(currentSemesterModulesProvider);
         ref.invalidate(allCurrentSemesterTasksProvider);
+        ref.invalidate(selectedSemesterModulesProvider);
+        ref.invalidate(allSelectedSemesterTasksProvider);
+        if (moduleId.isNotEmpty) {
+          ref.invalidate(recurringTasksProvider(moduleId));
+          ref.invalidate(assessmentsProvider(moduleId));
+        }
 
-        // Small delay to ensure UI updates before navigation
-        await Future.delayed(const Duration(milliseconds: 100));
+        // Increased delay to ensure Firestore listener emits updated data
+        await Future.delayed(const Duration(milliseconds: 400));
 
         if (mounted) {
           Navigator.pop(context);
@@ -532,6 +740,7 @@ Future<void> _saveModule() async {
       body: Form(
         key: _formKey,
         child: ListView(
+          controller: _scrollController,
           padding: const EdgeInsets.all(24),
           children: [
             Center(
@@ -782,6 +991,44 @@ Future<void> _saveModule() async {
               ],
             ),
             const SizedBox(height: 16),
+            // Schedule overlap warning banner
+            if (_scheduleOverlaps.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  border: Border.all(color: Colors.orange.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.warning_amber, color: Colors.orange.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Schedule Conflicts Detected',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade900,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ..._scheduleOverlaps.map((overlap) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '• ${overlap.dayName} ${overlap.timeRange}: overlaps with ${overlap.conflictDescription}',
+                        style: TextStyle(fontSize: 13, color: Colors.orange.shade900),
+                      ),
+                    )),
+                  ],
+                ),
+              ),
             if (_recurringTasks.isEmpty)
               Container(
                 padding: const EdgeInsets.all(24),
@@ -816,11 +1063,31 @@ Future<void> _saveModule() async {
               ..._recurringTasks.asMap().entries.map((entry) {
                 final index = entry.key;
                 final task = entry.value;
-                return _RecurringTaskCard(
-                  key: ObjectKey(task),
-                  task: task,
-                  onRemove: () => _removeRecurringTask(index),
-                  onChanged: () => setState(() {}),
+                final isHighlighted = _isHighlighted && _highlightedEventId == task.id;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: isHighlighted
+                        ? [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.3),
+                              blurRadius: 12,
+                              spreadRadius: 4,
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: _RecurringTaskCard(
+                    key: ObjectKey(task),
+                    task: task,
+                    onRemove: () => _removeRecurringTask(index),
+                    onChanged: () {
+                      setState(() {});
+                      // Check for overlaps whenever schedule changes
+                      _checkScheduleOverlaps();
+                    },
+                  ),
                 );
               }),
             const SizedBox(height: 32),
@@ -866,11 +1133,27 @@ Future<void> _saveModule() async {
               ..._assessments.asMap().entries.map((entry) {
                 final index = entry.key;
                 final assessment = entry.value;
-                return _AssessmentCard(
-                  key: ObjectKey(assessment),
-                  assessment: assessment,
-                  onRemove: () => _removeAssessment(index),
-                  onChanged: () => setState(() {}),
+                final isHighlighted = _isHighlighted && _highlightedEventId == assessment.id;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: isHighlighted
+                        ? [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.3),
+                              blurRadius: 12,
+                              spreadRadius: 4,
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: _AssessmentCard(
+                    key: ObjectKey(assessment),
+                    assessment: assessment,
+                    onRemove: () => _removeAssessment(index),
+                    onChanged: () => setState(() {}),
+                  ),
                 );
               }),
             const SizedBox(height: 32),
@@ -916,6 +1199,7 @@ Future<void> _saveModule() async {
 class _RecurringTaskInput {
   static int _counter = 0;
   final String id;
+  String? originalId; // Store the original Firestore ID for scrolling/highlighting
   String name = '';
   RecurringTaskType type = RecurringTaskType.lecture;
   int? dayOfWeek; // No default - user must select
@@ -1273,6 +1557,7 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
 class _AssessmentInput {
   static int _counter = 0;
   final String id;
+  String? originalId; // Store the original Firestore ID for scrolling/highlighting
   String name = '';
   AssessmentType type = AssessmentType.coursework;
   DateTime? dueDate;
@@ -1899,11 +2184,48 @@ class _SemesterSelectionField extends ConsumerWidget {
                                   ],
                                 ),
                               ),
-                              PopupMenuButton<String>(
-                                icon: const Icon(Icons.more_vert, size: 20),
-                                tooltip: 'Semester options',
-                                onSelected: (value) {
-                                  if (value == 'edit') {
+                              _ScaleOnHoverIconButton(
+                                onPressed: () async {
+                                  final RenderBox button =
+                                      context.findRenderObject() as RenderBox;
+                                  final RenderBox overlay =
+                                      Navigator.of(context).overlay!.context.findRenderObject()
+                                          as RenderBox;
+                                  final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
+
+                                  final value = await showMenu<String>(
+                                    context: context,
+                                    position: RelativeRect.fromLTRB(
+                                      buttonPosition.dx,
+                                      buttonPosition.dy + button.size.height,
+                                      overlay.size.width - buttonPosition.dx - button.size.width,
+                                      overlay.size.height - buttonPosition.dy - button.size.height,
+                                    ),
+                                    items: const [
+                                      PopupMenuItem(
+                                        value: 'edit',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.edit_outlined, size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Edit Semester'),
+                                          ],
+                                        ),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'assignments',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.assessment_outlined, size: 18),
+                                            SizedBox(width: 8),
+                                            Text('View Assignments'),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  );
+
+                                  if (value == 'edit' && context.mounted) {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
@@ -1912,7 +2234,7 @@ class _SemesterSelectionField extends ConsumerWidget {
                                         ),
                                       ),
                                     );
-                                  } else if (value == 'assignments') {
+                                  } else if (value == 'assignments' && context.mounted) {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
@@ -1921,28 +2243,7 @@ class _SemesterSelectionField extends ConsumerWidget {
                                     );
                                   }
                                 },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.edit_outlined, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Edit Semester'),
-                                      ],
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'assignments',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.assessment_outlined, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('View Assignments'),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                                child: const Icon(Icons.more_vert, size: 20),
                               ),
                             ],
                           ),
@@ -2063,6 +2364,75 @@ class _CustomTaskAutocompleteState extends ConsumerState<_CustomTaskAutocomplete
         onChanged: (value) {
           widget.onChanged(value);
         },
+      ),
+    );
+  }
+}
+
+// Model for schedule overlap conflicts
+class _ScheduleOverlap {
+  final _RecurringTaskInput taskInput;
+  final RecurringTask? conflictingTask; // From another module
+  final _RecurringTaskInput? conflictingTaskInput; // From same form
+  final Module? conflictingModule;
+
+  _ScheduleOverlap({
+    required this.taskInput,
+    this.conflictingTask,
+    this.conflictingTaskInput,
+    this.conflictingModule,
+  });
+
+  String get dayName {
+    const days = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    return days[taskInput.dayOfWeek ?? 1];
+  }
+
+  String get timeRange {
+    return '${taskInput.time ?? ''} - ${taskInput.endTime ?? ''}';
+  }
+
+  String get conflictDescription {
+    if (conflictingTask != null && conflictingModule != null) {
+      return '${conflictingModule!.code} ${conflictingTask!.type.toString().split('.').last}';
+    } else if (conflictingTaskInput != null) {
+      return 'Another ${conflictingTaskInput!.type.toString().split('.').last} in this module';
+    }
+    return 'Unknown conflict';
+  }
+}
+
+// Reusable widget for scale-on-hover effect (no grey circle)
+class _ScaleOnHoverIconButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onPressed;
+
+  const _ScaleOnHoverIconButton({
+    required this.child,
+    required this.onPressed,
+  });
+
+  @override
+  State<_ScaleOnHoverIconButton> createState() => _ScaleOnHoverIconButtonState();
+}
+
+class _ScaleOnHoverIconButtonState extends State<_ScaleOnHoverIconButton> {
+  bool _isHovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onPressed,
+        child: AnimatedScale(
+          scale: _isHovering ? 1.15 : 1.0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          child: widget.child,
+        ),
       ),
     );
   }

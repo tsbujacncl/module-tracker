@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:module_tracker/models/module.dart';
 import 'package:module_tracker/models/recurring_task.dart';
 import 'package:module_tracker/models/task_completion.dart';
@@ -497,94 +498,43 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                       // Three dots menu button
                       Transform.translate(
                         offset: const Offset(8, -3.5),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(20),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: _ScaleOnHoverIcon(
+                            icon: Icons.more_vert,
+                            size: 28 * scaleFactor,
                             onTap: () {
-                              final RenderBox button =
-                                  context.findRenderObject() as RenderBox;
-                              final RenderBox overlay =
-                                  Navigator.of(
-                                        context,
-                                      ).overlay!.context.findRenderObject()
-                                      as RenderBox;
-
-                              // Get button position
-                              final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
-
-                              // Position menu to the left and slightly down from the button
-                              final RelativeRect position = RelativeRect.fromLTRB(
-                                buttonPosition.dx - 80, // Move left 80px
-                                buttonPosition.dy + 30, // Move down 30px
-                                overlay.size.width - buttonPosition.dx - button.size.width + 80,
-                                overlay.size.height - buttonPosition.dy - button.size.height - 30,
-                              );
-
-                              showMenu<String>(
+                              showDialog(
                                 context: context,
-                                position: position,
-                                items: [
-                                  const PopupMenuItem(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.edit_outlined, size: 20),
-                                        SizedBox(width: 12),
-                                        Text('Edit Module'),
-                                      ],
-                                    ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'share',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.share_rounded, size: 20, color: Color(0xFF0EA5E9)),
-                                        SizedBox(width: 12),
-                                        Text('Share Module'),
-                                      ],
-                                    ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'delete',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.delete_outline, size: 20, color: Color(0xFFEF4444)),
-                                        SizedBox(width: 12),
-                                        Text('Delete Module', style: TextStyle(color: Color(0xFFEF4444))),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ).then((value) {
-                                if (value == 'share') {
-                                  // Show module selection dialog
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) => ModuleSelectionDialog(
-                                      preSelectedModule: widget.module,
-                                      semesterId: widget.module.semesterId,
-                                    ),
-                                  );
-                                } else if (value == 'edit') {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => ModuleFormScreen(
-                                        existingModule: widget.module,
+                                builder: (context) => ModuleActionsDialog(
+                                  module: widget.module,
+                                  semester: semester,
+                                  onEdit: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ModuleFormScreen(
+                                          existingModule: widget.module,
+                                          semesterId: widget.module.semesterId,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  onShare: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => ModuleSelectionDialog(
+                                        preSelectedModule: widget.module,
                                         semesterId: widget.module.semesterId,
                                       ),
-                                    ),
-                                  );
-                                } else if (value == 'delete') {
-                                  _showDeleteDialog(context, ref);
-                                }
-                              });
+                                    );
+                                  },
+                                  onDelete: () {
+                                    _showDeleteDialog(context, ref);
+                                  },
+                                ),
+                              );
                             },
-                            child: Padding(
-                              padding: const EdgeInsets.all(4),
-                              child: Icon(Icons.more_vert, size: 28 * scaleFactor),
-                            ),
                           ),
                         ),
                       ),
@@ -2380,6 +2330,283 @@ class _WeekDetailRow extends ConsumerWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+// Centered module actions dialog (Option 1: Three horizontal pill buttons)
+class ModuleActionsDialog extends StatelessWidget {
+  final Module module;
+  final Semester? semester;
+  final VoidCallback onEdit;
+  final VoidCallback onShare;
+  final VoidCallback onDelete;
+
+  const ModuleActionsDialog({
+    super.key,
+    required this.module,
+    this.semester,
+    required this.onEdit,
+    required this.onShare,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Container(
+        width: 450, // Increased from 380 to fix overflow
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with close button
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Module Name (Bold Title)
+                      Text(
+                        module.name,
+                        style: GoogleFonts.inter(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: isDarkMode ? const Color(0xFFF1F5F9) : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // Module Code (Subtitle)
+                      Text(
+                        module.code.isNotEmpty ? module.code : 'N/A',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Close button (X)
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close, size: 24),
+                  color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+
+            // Semester and weeks info
+            if (semester != null) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  // Semester info with icon
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.school_outlined,
+                          size: 18,
+                          color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            semester!.name,
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  // Weeks info with icon
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today_outlined,
+                        size: 18,
+                        color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${semester!.numberOfWeeks} weeks',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 24),
+
+            // Three pill-shaped buttons in horizontal row
+            Row(
+              children: [
+                // Edit Button
+                Expanded(
+                  child: _PillButton(
+                    icon: Icons.edit_outlined,
+                    label: 'Edit',
+                    backgroundColor: isDarkMode
+                      ? const Color(0xFF64748B)
+                      : const Color(0xFF94A3B8),
+                    textColor: Colors.white,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onEdit();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Share Button
+                Expanded(
+                  child: _PillButton(
+                    icon: Icons.share_rounded,
+                    label: 'Share',
+                    backgroundColor: const Color(0xFF0EA5E9),
+                    textColor: Colors.white,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onShare();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Delete Button
+                Expanded(
+                  child: _PillButton(
+                    icon: Icons.delete_outline,
+                    label: 'Delete',
+                    backgroundColor: const Color(0xFFEF4444),
+                    textColor: Colors.white,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onDelete();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Pill-shaped button for the dialog
+class _PillButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color backgroundColor;
+  final Color textColor;
+  final VoidCallback onTap;
+
+  const _PillButton({
+    required this.icon,
+    required this.label,
+    required this.backgroundColor,
+    required this.textColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(100), // Fully rounded (pill shape)
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(100), // Fully rounded (pill shape)
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: textColor),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: textColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Reusable widget for scale-on-hover effect (no grey circle)
+class _ScaleOnHoverIcon extends StatefulWidget {
+  final IconData icon;
+  final double size;
+  final Color? color;
+  final VoidCallback onTap;
+
+  const _ScaleOnHoverIcon({
+    required this.icon,
+    required this.size,
+    this.color,
+    required this.onTap,
+  });
+
+  @override
+  State<_ScaleOnHoverIcon> createState() => _ScaleOnHoverIconState();
+}
+
+class _ScaleOnHoverIconState extends State<_ScaleOnHoverIcon> {
+  bool _isHovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _isHovering ? 1.15 : 1.0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          child: Icon(
+            widget.icon,
+            size: widget.size,
+            color: widget.color,
+          ),
+        ),
+      ),
     );
   }
 }

@@ -7,10 +7,12 @@ import 'package:module_tracker/models/assessment.dart';
 import 'package:module_tracker/providers/module_provider.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
+import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/theme/design_tokens.dart';
 import 'package:intl/intl.dart';
 import 'package:module_tracker/screens/module/module_form_screen.dart';
 import 'package:module_tracker/widgets/module_selection_dialog.dart';
+import 'package:module_tracker/widgets/module_card.dart';
 
 class AssessmentsTab extends ConsumerStatefulWidget {
   final Module module;
@@ -115,6 +117,11 @@ class _AssessmentsTabState extends ConsumerState<AssessmentsTab> {
   @override
   Widget build(BuildContext context) {
     final assessmentsAsync = ref.watch(assessmentsProvider(widget.module.id));
+    final semestersAsync = ref.watch(semestersProvider);
+    final semester = semestersAsync.maybeWhen(
+      data: (semesters) => semesters.where((s) => s.id == widget.module.semesterId).firstOrNull,
+      orElse: () => null,
+    );
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return assessmentsAsync.when(
@@ -235,78 +242,36 @@ class _AssessmentsTabState extends ConsumerState<AssessmentsTab> {
                   IconButton(
                     icon: const Icon(Icons.more_vert),
                     onPressed: () {
-                      final RenderBox button = context.findRenderObject() as RenderBox;
-                      final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
-
-                      // Get button position
-                      final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
-
-                      // Position menu to the left and slightly down from the button
-                      final RelativeRect position = RelativeRect.fromLTRB(
-                        buttonPosition.dx - 80, // Move left 80px
-                        buttonPosition.dy + 30, // Move down 30px
-                        overlay.size.width - buttonPosition.dx - button.size.width + 80,
-                        overlay.size.height - buttonPosition.dy - button.size.height - 30,
-                      );
-
-                      showMenu<String>(
+                      showDialog(
                         context: context,
-                        position: position,
-                        items: [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit_outlined, size: 20),
-                                SizedBox(width: 12),
-                                Text('Edit Module'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'share',
-                            child: Row(
-                              children: [
-                                Icon(Icons.share_rounded, size: 20, color: Color(0xFF0EA5E9)),
-                                SizedBox(width: 12),
-                                Text('Share Module'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete_outline, size: 20, color: Color(0xFFEF4444)),
-                                SizedBox(width: 12),
-                                Text('Delete Module', style: TextStyle(color: Color(0xFFEF4444))),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ).then((value) {
-                        if (value == 'edit') {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ModuleFormScreen(
-                                existingModule: widget.module,
+                        builder: (context) => ModuleActionsDialog(
+                          module: widget.module,
+                          semester: semester,
+                          onEdit: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ModuleFormScreen(
+                                  existingModule: widget.module,
+                                  semesterId: widget.module.semesterId,
+                                ),
+                              ),
+                            );
+                          },
+                          onShare: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => ModuleSelectionDialog(
+                                preSelectedModule: widget.module,
                                 semesterId: widget.module.semesterId,
                               ),
-                            ),
-                          );
-                        } else if (value == 'share') {
-                          showDialog(
-                            context: context,
-                            builder: (context) => ModuleSelectionDialog(
-                              preSelectedModule: widget.module,
-                              semesterId: widget.module.semesterId,
-                            ),
-                          );
-                        } else if (value == 'delete') {
-                          _showDeleteDialog(context, ref);
-                        }
-                      });
+                            );
+                          },
+                          onDelete: () {
+                            _showDeleteDialog(context, ref);
+                          },
+                        ),
+                      );
                     },
                   ),
                 ],
