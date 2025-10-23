@@ -21,6 +21,19 @@ import 'package:module_tracker/utils/birthday_helper.dart';
 import 'package:module_tracker/utils/date_picker_utils.dart';
 import 'package:module_tracker/utils/responsive_text_utils.dart';
 
+// Helper function to get opaque event box color based on completion status
+// Instead of using opacity which allows hour lines to show through,
+// we use fully opaque colors with different lightness
+Color getEventBoxColor(Color baseColor, bool isCompleted) {
+  if (isCompleted) {
+    // Completed: bright and lighter (moderate white mixed in)
+    return Color.lerp(baseColor, Colors.white, 0.30)!;
+  } else {
+    // Uncompleted: lighter pastel shade (more white mixed in)
+    return Color.lerp(baseColor, Colors.white, 0.65)!;
+  }
+}
+
 class WeeklyCalendar extends ConsumerStatefulWidget {
   final Semester? semester;
   final int currentWeek;
@@ -71,7 +84,27 @@ int calculateDuration(String? startTime, String? endTime) {
 
 // Get scale factor for font size based on event duration (in hours)
 // Longer events get smaller text to prevent overflow
-double getDurationScaleFactor(double durationHours) {
+double getDurationScaleFactor(double durationHours, {double? availableHeight, double? contentHeight}) {
+  // If available height and content height are provided, check if content fits
+  if (availableHeight != null && contentHeight != null && availableHeight < contentHeight) {
+    // Calculate scale factor needed to fit content
+    final heightScale = (availableHeight / contentHeight).clamp(0.65, 1.0);
+
+    // Also apply duration-based scaling
+    double durationScale = 1.0;
+    if (durationHours > 2.0) {
+      if (durationHours >= 10.0) {
+        durationScale = 0.75;
+      } else {
+        durationScale = 1.0 - ((durationHours - 2.0) * 0.03125);
+      }
+    }
+
+    // Use the more aggressive scaling (smaller value)
+    return math.min(heightScale, durationScale);
+  }
+
+  // Standard duration-based scaling
   if (durationHours <= 2.0) return 1.0; // No scaling for short events
   if (durationHours >= 10.0) return 0.75; // Maximum reduction for very long events
 
@@ -107,6 +140,30 @@ double calculateDynamicTextGap({
 
   // Clamp available space to reasonable bounds
   return availableSpace.clamp(minGap, maxGap);
+}
+
+// Calculate minimum height required for event boxes to prevent overflow
+// Based on responsive font sizes and padding
+double calculateMinimumEventHeight(double screenWidth) {
+  // Get base font sizes for this screen width
+  final moduleCodeFontSize = ResponsiveText.getCalendarModuleCodeFontSize(screenWidth);
+  final eventTypeFontSize = ResponsiveText.getCalendarEventTypeFontSize(screenWidth);
+
+  // Get padding based on screen width
+  final boxPadding = screenWidth < 600 ? 1.0 : screenWidth < 1200 ? 1.5 : screenWidth < 1600 ? 1.25 : 1.0;
+
+  // Calculate minimum space needed:
+  // - Module code text height
+  // - Event type text height
+  // - Top and bottom padding
+  // - Minimum gap between texts (can be 0)
+  const lineHeight = 1.0;
+  final minHeight = (moduleCodeFontSize * lineHeight) +
+                   (eventTypeFontSize * lineHeight) +
+                   (boxPadding * 2);
+
+  // Add small buffer for safety (2px)
+  return minHeight + 2.0;
 }
 
 // Calculate the actual height an event should take in the calendar,
@@ -822,82 +879,12 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
     Color borderColor,
     double eventMargin,
     double overlapGap,
+    double screenWidth,
   ) {
-    // Calculate hour multipliers for this specific week
+    // Use constant hour multipliers - all hours have equal height
     final hourMultipliers = <int, int>{};
     for (int hour = startHour; hour < endHour; hour++) {
-      int maxMultiplier = 1;
-
-      // Check each day
-      for (int day = 1; day <= 5; day++) {
-        final dayTasks = getTasksForDay(day);
-        final dayAssessments = getAssessmentsForDay(
-          day,
-          weekStartDate: weekStartForColumns,
-        );
-
-        final dayEvents = <_CalendarEvent>[];
-
-        for (final taskWithModule in dayTasks) {
-          final task = taskWithModule.task;
-          if (task.time == null) continue;
-
-          final taskMinutes = parseTimeToMinutes(task.time!);
-          final duration = calculateDuration(task.time, task.endTime);
-          final endMinutes = taskMinutes + duration;
-
-          dayEvents.add(
-            _CalendarEvent(
-              startMinutes: taskMinutes,
-              endMinutes: endMinutes,
-              isTask: true,
-              taskWithModule: taskWithModule,
-            ),
-          );
-        }
-
-        for (final assessmentWithModule in dayAssessments) {
-          final assessment = assessmentWithModule.assessment;
-          if (assessment.time == null) continue;
-
-          final assessmentMinutes = parseTimeToMinutes(assessment.time!);
-          final endMinutes = assessmentMinutes + 60;
-
-          dayEvents.add(
-            _CalendarEvent(
-              startMinutes: assessmentMinutes,
-              endMinutes: endMinutes,
-              isTask: false,
-              assessmentWithModule: assessmentWithModule,
-            ),
-          );
-        }
-
-        final hourStart = hour * 60;
-        final hourEnd = (hour + 1) * 60;
-
-        int maxConcurrent = 0;
-        for (final event in dayEvents) {
-          if (event.startMinutes < hourEnd && event.endMinutes > hourStart) {
-            int concurrent = dayEvents
-                .where(
-                  (e) =>
-                      e.startMinutes < event.endMinutes &&
-                      e.endMinutes > event.startMinutes,
-                )
-                .length;
-            maxConcurrent = maxConcurrent > concurrent
-                ? maxConcurrent
-                : concurrent;
-          }
-        }
-
-        maxMultiplier = maxMultiplier > maxConcurrent
-            ? maxMultiplier
-            : maxConcurrent;
-      }
-
-      hourMultipliers[hour] = maxMultiplier > 0 ? maxMultiplier : 1;
+      hourMultipliers[hour] = 1; // All hours have the same height
     }
 
     // Build day columns
@@ -1006,7 +993,10 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
         final stackPosition = overlappingEvents.indexOf(event);
         final totalInStack = overlappingEvents.length;
 
-        final itemHeight = (height - overlapGap) / totalInStack;
+        // Calculate minimum height to prevent content overflow
+        final minHeight = calculateMinimumEventHeight(screenWidth);
+        final calculatedHeight = (height - overlapGap) / totalInStack;
+        final itemHeight = math.max(calculatedHeight, minHeight);
         final itemTop = topPosition + (stackPosition * itemHeight);
 
         if (event.isTask) {
@@ -1461,86 +1451,10 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                       );
                     }
 
-                    // Calculate multipliers - need to check ALL days for overlaps
+                    // Use constant hour multipliers - all hours have equal height
                     final hourMultipliers = <int, int>{};
                     for (int hour = startHour; hour < endHour; hour++) {
-                      int maxMultiplier = 1;
-
-                      // Check each day
-                      for (int day = 1; day <= 5; day++) {
-                        final dayTasks = getTasksForDay(day);
-                        final dayAssessments = getAssessmentsForDay(day);
-
-                        final dayEvents = <_CalendarEvent>[];
-
-                        for (final taskWithModule in dayTasks) {
-                          final task = taskWithModule.task;
-                          if (task.time == null) continue;
-
-                          final taskMinutes = parseTimeToMinutes(task.time!);
-                          final duration = calculateDuration(
-                            task.time,
-                            task.endTime,
-                          );
-                          final endMinutes = taskMinutes + duration;
-
-                          dayEvents.add(
-                            _CalendarEvent(
-                              startMinutes: taskMinutes,
-                              endMinutes: endMinutes,
-                              isTask: true,
-                              taskWithModule: taskWithModule,
-                            ),
-                          );
-                        }
-
-                        for (final assessmentWithModule in dayAssessments) {
-                          final assessment = assessmentWithModule.assessment;
-                          if (assessment.time == null) continue;
-
-                          final assessmentMinutes = parseTimeToMinutes(
-                            assessment.time!,
-                          );
-                          final endMinutes = assessmentMinutes + 60;
-
-                          dayEvents.add(
-                            _CalendarEvent(
-                              startMinutes: assessmentMinutes,
-                              endMinutes: endMinutes,
-                              isTask: false,
-                              assessmentWithModule: assessmentWithModule,
-                            ),
-                          );
-                        }
-
-                        final hourStart = hour * 60;
-                        final hourEnd = (hour + 1) * 60;
-
-                        int maxConcurrent = 0;
-                        for (final event in dayEvents) {
-                          if (event.startMinutes < hourEnd &&
-                              event.endMinutes > hourStart) {
-                            int concurrent = dayEvents
-                                .where(
-                                  (e) =>
-                                      e.startMinutes < event.endMinutes &&
-                                      e.endMinutes > event.startMinutes,
-                                )
-                                .length;
-                            maxConcurrent = maxConcurrent > concurrent
-                                ? maxConcurrent
-                                : concurrent;
-                          }
-                        }
-
-                        maxMultiplier = maxMultiplier > maxConcurrent
-                            ? maxMultiplier
-                            : maxConcurrent;
-                      }
-
-                      hourMultipliers[hour] = maxMultiplier > 0
-                          ? maxMultiplier
-                          : 1;
+                      hourMultipliers[hour] = 1; // All hours have the same height
                     }
 
                     // Calculate total height
@@ -1600,6 +1514,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                         borderColor,
                                                         eventMargin,
                                                         overlapGap,
+                                                        fullScreenWidth,
                                                       ),
                                                 ),
                                               ),
@@ -1715,7 +1630,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                       );
                                                     }
 
-                                                    // Calculate height multiplier for each hour based on overlaps
+                                                    // Use constant hour multipliers - all hours have equal height
                                                     final hourMultipliers =
                                                         <int, int>{};
                                                     for (
@@ -1723,44 +1638,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                       hour < endHour;
                                                       hour++
                                                     ) {
-                                                      final hourStart =
-                                                          hour * 60;
-                                                      final hourEnd =
-                                                          (hour + 1) * 60;
-
-                                                      // Count events that overlap this hour
-                                                      int maxConcurrent = 0;
-                                                      for (final event
-                                                          in events) {
-                                                        // Check if event overlaps with this hour
-                                                        if (event.startMinutes <
-                                                                hourEnd &&
-                                                            event.endMinutes >
-                                                                hourStart) {
-                                                          // Count concurrent events at the start of this event
-                                                          int
-                                                          concurrent = events
-                                                              .where(
-                                                                (e) =>
-                                                                    e.startMinutes <
-                                                                        event
-                                                                            .endMinutes &&
-                                                                    e.endMinutes >
-                                                                        event
-                                                                            .startMinutes,
-                                                              )
-                                                              .length;
-                                                          maxConcurrent =
-                                                              maxConcurrent >
-                                                                  concurrent
-                                                              ? maxConcurrent
-                                                              : concurrent;
-                                                        }
-                                                      }
-                                                      hourMultipliers[hour] =
-                                                          maxConcurrent > 0
-                                                          ? maxConcurrent
-                                                          : 1;
+                                                      hourMultipliers[hour] = 1; // All hours have the same height
                                                     }
 
                                                     // Build positioned widgets with adjusted positions
@@ -1838,9 +1716,10 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                           overlappingEvents
                                                               .length;
 
-                                                      final itemHeight =
-                                                          (height - overlapGap) /
-                                                          totalInStack;
+                                                      // Calculate minimum height to prevent content overflow
+                                                      final minHeight = calculateMinimumEventHeight(fullScreenWidth);
+                                                      final calculatedHeight = (height - overlapGap) / totalInStack;
+                                                      final itemHeight = math.max(calculatedHeight, minHeight);
                                                       final itemTop =
                                                           topPosition +
                                                           (stackPosition *
@@ -2136,6 +2015,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                         borderColor,
                                                         eventMargin,
                                                         overlapGap,
+                                                        fullScreenWidth,
                                                       ),
                                                 ),
                                               ),
@@ -2228,46 +2108,14 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                             );
                                           }
 
-                                          // Calculate height multiplier for each hour based on overlaps
+                                          // Use constant hour multipliers - all hours have equal height
                                           final hourMultipliers = <int, int>{};
                                           for (
                                             int hour = startHour;
                                             hour < endHour;
                                             hour++
                                           ) {
-                                            final hourStart = hour * 60;
-                                            final hourEnd = (hour + 1) * 60;
-
-                                            // Count events that overlap this hour
-                                            int maxConcurrent = 0;
-                                            for (final event in events) {
-                                              // Check if event overlaps with this hour
-                                              if (event.startMinutes <
-                                                      hourEnd &&
-                                                  event.endMinutes >
-                                                      hourStart) {
-                                                // Count concurrent events at the start of this event
-                                                int concurrent = events
-                                                    .where(
-                                                      (e) =>
-                                                          e.startMinutes <
-                                                              event
-                                                                  .endMinutes &&
-                                                          e.endMinutes >
-                                                              event
-                                                                  .startMinutes,
-                                                    )
-                                                    .length;
-                                                maxConcurrent =
-                                                    maxConcurrent > concurrent
-                                                    ? maxConcurrent
-                                                    : concurrent;
-                                              }
-                                            }
-                                            hourMultipliers[hour] =
-                                                maxConcurrent > 0
-                                                ? maxConcurrent
-                                                : 1;
+                                            hourMultipliers[hour] = 1; // All hours have the same height
                                           }
 
                                           // Build positioned widgets with adjusted positions
@@ -2334,8 +2182,10 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                             final totalInStack =
                                                 overlappingEvents.length;
 
-                                            final itemHeight =
-                                                (height - overlapGap) / totalInStack;
+                                            // Calculate minimum height to prevent content overflow
+                                            final minHeight = calculateMinimumEventHeight(fullScreenWidth);
+                                            final calculatedHeight = (height - overlapGap) / totalInStack;
+                                            final itemHeight = math.max(calculatedHeight, minHeight);
                                             final itemTop =
                                                 topPosition +
                                                 (stackPosition * itemHeight);
@@ -3009,9 +2859,10 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                 height: height,
                 padding: EdgeInsets.all(boxPadding),
                 decoration: BoxDecoration(
-                  color: const Color(
-                    0xFFF87171,
-                  ).withOpacity(isCompleted ? 0.75 : 0.45), // Red color
+                  color: getEventBoxColor(
+                    const Color(0xFFF87171), // Red color
+                    isCompleted,
+                  ),
                   borderRadius: BorderRadius.circular(6),
                   border: const Border(
                     left: BorderSide(
@@ -3025,7 +2876,8 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                     // Assessment content - module code full width, type truncates at checkbox
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisSize: MainAxisSize.max,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         // Module code - full width, no cutoff
                         Text(
@@ -3041,33 +2893,36 @@ class _TimetableAssessmentBox extends ConsumerWidget {
                           maxLines: 1,
                           overflow: TextOverflow.visible,
                         ),
-                        SizedBox(height: textGap),
-                        // Assessment type truncated with ellipsis at checkbox
-                        Padding(
-                          padding: EdgeInsets.only(right: checkboxSize + checkboxGap),
-                          child: Text(
-                            assessment.type
-                                    .toString()
-                                    .split('.')
-                                    .last[0]
-                                    .toUpperCase() +
-                                assessment.type
-                                    .toString()
-                                    .split('.')
-                                    .last
-                                    .substring(1),
-                            style: GoogleFonts.inter(
-                              fontSize: eventTypeFontSize,
-                              fontWeight: FontWeight.w500,
-                              color: isDarkMode
-                                  ? const Color(0xFF94A3B8)
-                                  : const Color(0xFF64748B),
-                              height: 1.0,
+                        // Only show assessment type if box height is sufficient
+                        if (height >= 22) ...[
+                          SizedBox(height: textGap),
+                          // Assessment type truncated with ellipsis at checkbox
+                          Padding(
+                            padding: EdgeInsets.only(right: checkboxSize + checkboxGap),
+                            child: Text(
+                              assessment.type
+                                      .toString()
+                                      .split('.')
+                                      .last[0]
+                                      .toUpperCase() +
+                                  assessment.type
+                                      .toString()
+                                      .split('.')
+                                      .last
+                                      .substring(1),
+                              style: GoogleFonts.inter(
+                                fontSize: eventTypeFontSize,
+                                fontWeight: FontWeight.w500,
+                                color: isDarkMode
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
+                                height: 1.0,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
+                        ],
                       ],
                     ),
                     // Circular checkbox at right center (visual indicator only)
@@ -3332,9 +3187,10 @@ class _TimetableTaskBox extends ConsumerWidget {
                 height: height,
                 padding: EdgeInsets.all(boxPadding),
                 decoration: BoxDecoration(
-                  color: getTaskColor(
-                    task.type,
-                  ).withOpacity(isCompleted ? 0.75 : 0.45),
+                  color: getEventBoxColor(
+                    getTaskColor(task.type),
+                    isCompleted,
+                  ),
                   borderRadius: BorderRadius.circular(6),
                   border: Border(
                     left: BorderSide(color: getTaskColor(task.type), width: 3),
@@ -3349,7 +3205,8 @@ class _TimetableTaskBox extends ConsumerWidget {
                       ), // Leave space for checkbox dynamically
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+                        mainAxisSize: MainAxisSize.max,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             module.code.isNotEmpty ? module.code : module.name,
@@ -3364,20 +3221,23 @@ class _TimetableTaskBox extends ConsumerWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          SizedBox(height: textGap),
-                          Text(
-                            getTaskTypeName(task.type),
-                            style: GoogleFonts.inter(
-                              fontSize: eventTypeFontSize,
-                              fontWeight: FontWeight.w500,
-                              color: isDarkMode
-                                  ? const Color(0xFF94A3B8)
-                                  : const Color(0xFF64748B),
-                              height: 1.0,
+                          // Only show event type if box height is sufficient
+                          if (height >= 22) ...[
+                            SizedBox(height: textGap),
+                            Text(
+                              getTaskTypeName(task.type),
+                              style: GoogleFonts.inter(
+                                fontSize: eventTypeFontSize,
+                                fontWeight: FontWeight.w500,
+                                color: isDarkMode
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
+                                height: 1.0,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          ],
                           if (task.location != null && height > 80) ...[
                             Row(
                               children: [

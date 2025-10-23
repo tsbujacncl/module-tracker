@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:module_tracker/models/semester.dart';
-import 'package:module_tracker/models/assessment.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
-import 'package:module_tracker/providers/module_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
+import 'package:module_tracker/providers/grade_provider.dart';
 import 'package:module_tracker/screens/semester/semester_setup_screen.dart';
 import 'package:module_tracker/screens/assessments/assessments_screen.dart'
     show AssignmentsScreen;
 import 'package:module_tracker/widgets/gradient_header.dart';
-import 'package:module_tracker/utils/grade_calculator.dart';
+import 'package:module_tracker/widgets/semester_card.dart';
 
 class SemesterArchiveScreen extends ConsumerStatefulWidget {
   const SemesterArchiveScreen({super.key});
@@ -194,9 +192,10 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _SemesterCard(
-                    semester: currentSemester,
-                    status: SemesterStatus.current,
+                  _buildSemesterCard(
+                    currentSemester,
+                    SemesterCardStatus.current,
+                    null,
                   ),
                   const SizedBox(height: 32),
                 ],
@@ -214,9 +213,10 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
                   ...futureSemesters.map(
                     (semester) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: _SemesterCard(
-                        semester: semester,
-                        status: SemesterStatus.future,
+                      child: _buildSemesterCard(
+                        semester,
+                        SemesterCardStatus.future,
+                        null,
                       ),
                     ),
                   ),
@@ -259,11 +259,10 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
                   ...archivedSemesters.map(
                     (semester) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: _SemesterCard(
-                        semester: semester,
-                        status: SemesterStatus.archived,
-                        onRestore: () =>
-                            _restoreSemester(context, ref, semester),
+                      child: _buildSemesterCard(
+                        semester,
+                        SemesterCardStatus.archived,
+                        () => _restoreSemester(context, ref, semester),
                       ),
                     ),
                   ),
@@ -303,299 +302,66 @@ class _SemesterArchiveScreenState extends ConsumerState<SemesterArchiveScreen> {
       ),
     );
   }
-}
 
-enum SemesterStatus { current, future, archived }
+  /// Helper method to build a SemesterCard with all required data
+  Widget _buildSemesterCard(
+    Semester semester,
+    SemesterCardStatus status,
+    VoidCallback? onRestore,
+  ) {
+    // Get overall grade
+    final overallGradeData = ref.watch(
+      semesterOverallGradeProvider(semester.id),
+    );
+    final overallGrade = overallGradeData?.$1;
 
-class _SemesterCard extends ConsumerStatefulWidget {
-  final Semester semester;
-  final SemesterStatus status;
-  final VoidCallback? onArchive;
-  final VoidCallback? onRestore;
+    // Get credits
+    final creditsData = ref.watch(
+      accountedCreditsProvider(semester.id),
+    );
+    final (_, totalCredits) = creditsData;
 
-  const _SemesterCard({
-    required this.semester,
-    required this.status,
-    this.onArchive,
-    this.onRestore,
-  });
+    // Get assignment completion
+    final assessmentsCount = ref.watch(
+      semesterAssessmentsCountProvider(semester.id),
+    );
+    final (completedCount, totalCount) = assessmentsCount;
 
-  @override
-  ConsumerState<_SemesterCard> createState() => _SemesterCardState();
-}
-
-class _SemesterCardState extends ConsumerState<_SemesterCard> {
-  List<Color> _getGradientColors() {
-    switch (widget.status) {
-      case SemesterStatus.current:
-        return [const Color(0xFF0EA5E9), const Color(0xFF06B6D4)];
-      case SemesterStatus.future:
-        return [const Color(0xFF8B5CF6), const Color(0xFFEC4899)];
-      case SemesterStatus.archived:
-        return [const Color(0xFF64748B), const Color(0xFF475569)];
-    }
-  }
-
-  String? _getStatusLabel() {
-    switch (widget.status) {
-      case SemesterStatus.current:
-        return 'CURRENT';
-      case SemesterStatus.future:
-        return 'UPCOMING';
-      case SemesterStatus.archived:
-        return 'ARCHIVED';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dateFormat = DateFormat('MMM d, y');
-    final gradientColors = _getGradientColors();
-    final statusLabel = _getStatusLabel();
-
-    // Watch modules for this semester
-    final modulesAsync = ref.watch(modulesForSemesterProvider(widget.semester.id));
-
-    return modulesAsync.when(
-      data: (modules) {
-        // Sort modules by code (alphabetically/numerically)
-        final sortedModules = [...modules]..sort((a, b) => a.code.compareTo(b.code));
-
-        // Fetch assessments for each module and build map
-        final assessmentsByModule = <String, List<Assessment>>{};
-        for (final module in sortedModules) {
-          final assessmentsAsync = ref.watch(assessmentsProvider(module.id));
-          assessmentsAsync.whenData((assessments) {
-            assessmentsByModule[module.id] = assessments;
-          });
-        }
-
-        // Calculate totals
-        final totalCredits = sortedModules.fold<int>(0, (sum, m) => sum + m.credits);
-        final overallGrade = GradeCalculator.calculateSemesterGrade(
-          sortedModules,
-          assessmentsByModule,
-        );
-
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const AssignmentsScreen(),
-              ),
-            );
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: gradientColors),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: gradientColors.first.withValues(alpha: 0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.semester.name,
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    if (statusLabel != null) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          statusLabel,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    // Menu button
-                    Builder(
-                      builder: (context) => GestureDetector(
-                        onTap: () {
-                          final RenderBox button = context.findRenderObject() as RenderBox;
-                          final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
-                          final buttonPosition = button.localToGlobal(Offset.zero, ancestor: overlay);
-
-                          showMenu<String>(
-                            context: context,
-                            position: RelativeRect.fromLTRB(
-                              buttonPosition.dx,
-                              buttonPosition.dy + button.size.height,
-                              overlay.size.width - buttonPosition.dx - button.size.width,
-                              overlay.size.height - buttonPosition.dy - button.size.height,
-                            ),
-                            items: [
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Edit Semester'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'assignments',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.assessment_outlined, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('View Assignments'),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ).then((value) {
-                            if (!context.mounted) return;
-
-                            if (value == 'assignments') {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const AssignmentsScreen(),
-                                ),
-                              );
-                            } else if (value == 'edit') {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => SemesterSetupScreen(
-                                    semesterToEdit: widget.semester,
-                                  ),
-                                ),
-                              );
-                            }
-                          });
-                        },
-                        child: const Padding(
-                          padding: EdgeInsets.all(4),
-                          child: Icon(
-                            Icons.more_vert,
-                            size: 20,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${dateFormat.format(widget.semester.startDate)} - ${dateFormat.format(widget.semester.endDate)}',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  [
-                    '${widget.semester.numberOfWeeks} weeks',
-                    if (sortedModules.isNotEmpty && totalCredits > 0)
-                      '$totalCredits credits',
-                  ].join(' • '),
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: overallGrade != null
-                          ? Text(
-                              'Overall: ${overallGrade.toStringAsFixed(1)}%',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white.withValues(alpha: 0.95),
-                              ),
-                            )
-                          : Text(
-                              'No grades yet',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white.withValues(alpha: 0.6),
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                    ),
-                    if (widget.status == SemesterStatus.archived && widget.onRestore != null)
-                      TextButton.icon(
-                        onPressed: widget.onRestore,
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          backgroundColor: Colors.white.withValues(alpha: 0.2),
-                        ),
-                        icon: const Icon(Icons.unarchive_outlined, size: 18),
-                        label: const Text('Restore'),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+    return SemesterCard(
+      semester: semester,
+      status: status,
+      overallGrade: overallGrade,
+      totalCredits: totalCredits,
+      completedAssignments: completedCount,
+      totalAssignments: totalCount,
+      showMenu: true,
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AssignmentsScreen(),
           ),
         );
       },
-      loading: () => Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: gradientColors),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Padding(
-          padding: EdgeInsets.all(16),
-          child: Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          ),
-        ),
-      ),
-      error: (error, stack) => Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: gradientColors),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            'Error loading modules',
-            style: GoogleFonts.inter(
-              color: Colors.white.withValues(alpha: 0.9),
+      onMenuEdit: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SemesterSetupScreen(
+              semesterToEdit: semester,
             ),
           ),
-        ),
-      ),
+        );
+      },
+      onMenuAssignments: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AssignmentsScreen(),
+          ),
+        );
+      },
+      onRestore: onRestore,
     );
   }
 }

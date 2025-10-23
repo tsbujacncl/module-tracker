@@ -86,6 +86,8 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
   String? _initialSelectedSemesterId;
   int _initialRecurringTasksCount = 0;
   int _initialAssessmentsCount = 0;
+  List<String> _initialRecurringTasksData = []; // Serialized task data
+  List<String> _initialAssessmentsData = []; // Serialized assessment data
 
   @override
   void initState() {
@@ -195,6 +197,21 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
     _initialSelectedSemesterId = _selectedSemesterId;
     _initialRecurringTasksCount = _recurringTasks.length;
     _initialAssessmentsCount = _assessments.length;
+
+    // Store serialized task and assessment data for deep comparison
+    _initialRecurringTasksData = _recurringTasks.map((task) => _serializeTask(task)).toList();
+    _initialAssessmentsData = _assessments.map((assessment) => _serializeAssessment(assessment)).toList();
+  }
+
+  // Serialize a recurring task to a string for comparison
+  String _serializeTask(_RecurringTaskInput task) {
+    final customTasksData = task.customTasks.map((ct) => '${ct.name}|${ct.type.toString()}').join(',');
+    return '${task.name}|${task.type.toString()}|${task.dayOfWeek}|${task.time}|${task.endTime}|${task.location}|[$customTasksData]';
+  }
+
+  // Serialize an assessment to a string for comparison
+  String _serializeAssessment(_AssessmentInput assessment) {
+    return '${assessment.name}|${assessment.type.toString()}|${assessment.dueDate?.toIso8601String()}|${assessment.weighting}|${assessment.description}|${assessment.startWeek}|${assessment.endWeek}|${assessment.dayOfWeek}|${assessment.submitTiming?.toString()}|${assessment.time}';
   }
 
   @override
@@ -322,12 +339,48 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
     // For new modules, we don't want to block them from leaving
     if (widget.existingModule == null) return false;
 
-    return _nameController.text != _initialName ||
+    // Check basic fields
+    if (_nameController.text != _initialName ||
         _codeController.text != _initialCode ||
         _creditsController.text != _initialCredits ||
-        _selectedSemesterId != _initialSelectedSemesterId ||
-        _recurringTasks.length != _initialRecurringTasksCount ||
-        _assessments.length != _initialAssessmentsCount;
+        _selectedSemesterId != _initialSelectedSemesterId) {
+      return true;
+    }
+
+    // Check if number of tasks or assessments changed
+    if (_recurringTasks.length != _initialRecurringTasksCount ||
+        _assessments.length != _initialAssessmentsCount) {
+      return true;
+    }
+
+    // Deep comparison: check if task content changed
+    final currentTasksData = _recurringTasks.map((task) => _serializeTask(task)).toList();
+    if (currentTasksData.length != _initialRecurringTasksData.length) return true;
+    for (int i = 0; i < currentTasksData.length; i++) {
+      if (currentTasksData[i] != _initialRecurringTasksData[i]) {
+        return true;
+      }
+    }
+
+    // Deep comparison: check if assessment content changed
+    final currentAssessmentsData = _assessments.map((assessment) => _serializeAssessment(assessment)).toList();
+    if (currentAssessmentsData.length != _initialAssessmentsData.length) return true;
+    for (int i = 0; i < currentAssessmentsData.length; i++) {
+      if (currentAssessmentsData[i] != _initialAssessmentsData[i]) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // Check if save button should be enabled
+  bool get _canSave {
+    // For new modules, always allow saving (unless loading)
+    if (widget.existingModule == null) return true;
+
+    // For existing modules, only allow if there are unsaved changes
+    return _hasUnsavedChanges;
   }
 
   // Helper to parse time string to minutes
@@ -1161,7 +1214,7 @@ Future<void> _saveModule() async {
               child: SizedBox(
                 width: 300,
                 child: FilledButton(
-                  onPressed: _isLoading ? null : _saveModule,
+                  onPressed: (_isLoading || !_canSave) ? null : _saveModule,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     textStyle: const TextStyle(
@@ -1178,9 +1231,11 @@ Future<void> _saveModule() async {
                             color: Colors.white,
                           ),
                         )
-                      : Text(widget.existingModule != null
-                          ? 'Update Module'
-                          : 'Create Module'),
+                      : Text(
+                          widget.existingModule != null
+                              ? (_canSave ? 'Update Module' : 'No Changes')
+                              : 'Create Module',
+                        ),
                 ),
               ),
             ),

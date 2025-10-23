@@ -240,6 +240,31 @@ final totalAssessmentsCountProvider = Provider<(int, int)>((ref) {
   );
 });
 
+/// Provider for total assessments count for a specific semester (completed, total)
+final semesterAssessmentsCountProvider = Provider.family<(int, int), String>((ref, semesterId) {
+  final modulesAsync = ref.watch(modulesForSemesterProvider(semesterId));
+
+  return modulesAsync.maybeWhen(
+    data: (modules) {
+      if (modules.isEmpty) return (0, 0);
+
+      int totalCount = 0;
+      int completedCount = 0;
+
+      for (final module in modules) {
+        final assessmentsAsync = ref.watch(assessmentsProvider(module.id));
+        assessmentsAsync.whenData((assessments) {
+          totalCount += assessments.length;
+          completedCount += assessments.where((a) => a.markEarned != null).length;
+        });
+      }
+
+      return (completedCount, totalCount);
+    },
+    orElse: () => (0, 0),
+  );
+});
+
 /// Provider for accounted credits in a semester (accounted, total)
 final accountedCreditsProvider = Provider.family<(int, int), String>((ref, semesterId) {
   final modulesAsync = ref.watch(modulesForSemesterProvider(semesterId));

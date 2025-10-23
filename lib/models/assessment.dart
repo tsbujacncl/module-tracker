@@ -13,6 +13,13 @@ enum AssessmentStatus {
   graded,
 }
 
+enum AssessmentPriority {
+  high,
+  medium,
+  low,
+  optional,
+}
+
 enum SubmitTiming {
   startOfNextWeek, // Due on the start of the following week
   endOfCurrentWeek, // Due at the end of the current week
@@ -24,6 +31,7 @@ class Assessment {
   final String name;
   final AssessmentType type;
   final AssessmentStatus status; // Stage of the assessment
+  final AssessmentPriority priority; // Priority level of the assessment
   final DateTime? dueDate; // Optional - can be TBC
   final double weighting; // Percentage (0-100)
   final int? weekNumber; // Optional - calculated from dueDate if available
@@ -43,6 +51,7 @@ class Assessment {
     required this.name,
     required this.type,
     this.status = AssessmentStatus.notStarted,
+    this.priority = AssessmentPriority.medium,
     this.dueDate,
     required this.weighting,
     this.weekNumber,
@@ -73,6 +82,12 @@ class Assessment {
               orElse: () => AssessmentStatus.notStarted,
             )
           : AssessmentStatus.notStarted,
+      priority: data['priority'] != null
+          ? AssessmentPriority.values.firstWhere(
+              (e) => e.toString() == 'AssessmentPriority.${data['priority']}',
+              orElse: () => AssessmentPriority.medium,
+            )
+          : AssessmentPriority.medium,
       dueDate: data['dueDate'] != null ? (data['dueDate'] as Timestamp).toDate() : null,
       weighting: (data['weighting'] ?? 0.0).toDouble(),
       weekNumber: data['weekNumber'] as int?,
@@ -98,6 +113,7 @@ class Assessment {
       'name': name,
       'type': type.toString().split('.').last,
       'status': status.toString().split('.').last,
+      'priority': priority.toString().split('.').last,
       'dueDate': dueDate != null ? Timestamp.fromDate(dueDate!) : null,
       'weighting': weighting,
       'weekNumber': weekNumber,
@@ -129,6 +145,12 @@ class Assessment {
               orElse: () => AssessmentStatus.notStarted,
             )
           : AssessmentStatus.notStarted,
+      priority: map['priority'] != null
+          ? AssessmentPriority.values.firstWhere(
+              (e) => e.toString() == 'AssessmentPriority.${map['priority']}',
+              orElse: () => AssessmentPriority.medium,
+            )
+          : AssessmentPriority.medium,
       dueDate: map['dueDate'] != null ? DateTime.parse(map['dueDate']) : null,
       weighting: (map['weighting'] ?? 0.0).toDouble(),
       weekNumber: map['weekNumber'] as int?,
@@ -156,6 +178,7 @@ class Assessment {
       'name': name,
       'type': type.toString().split('.').last,
       'status': status.toString().split('.').last,
+      'priority': priority.toString().split('.').last,
       'dueDate': dueDate?.toIso8601String(),
       'weighting': weighting,
       'weekNumber': weekNumber,
@@ -177,6 +200,7 @@ class Assessment {
     String? name,
     AssessmentType? type,
     AssessmentStatus? status,
+    AssessmentPriority? priority,
     DateTime? dueDate,
     double? weighting,
     int? weekNumber,
@@ -196,6 +220,7 @@ class Assessment {
       name: name ?? this.name,
       type: type ?? this.type,
       status: status ?? this.status,
+      priority: priority ?? this.priority,
       dueDate: dueDate ?? this.dueDate,
       weighting: weighting ?? this.weighting,
       weekNumber: weekNumber ?? this.weekNumber,
