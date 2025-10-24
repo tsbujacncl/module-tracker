@@ -994,25 +994,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Future<void> _showBirthdayPicker() async {
-    final currentBirthday = ref.read(userPreferencesProvider).birthday;
-
-    final selectedDate = await showAppDatePicker(
-      context: context,
-      ref: ref,
-      initialDate: currentBirthday ?? DateTime(2000, 1, 1),
-      firstDate: DateTime(1900),
-      lastDate: DateTime.now(),
-      helpText: 'Select Your Birthday',
-    );
-
-    if (selectedDate != null) {
-      await ref
-          .read(userPreferencesProvider.notifier)
-          .setBirthday(selectedDate);
-    }
-  }
-
   Future<void> _showDeleteAccountDialog() async {
     final passwordController = TextEditingController();
 
@@ -1622,25 +1603,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                             const Divider(height: 1),
                           ],
-                          ListTile(
-                            leading: Icon(
-                              Icons.cake_outlined,
-                              size: 24 * scaleFactor,
-                            ),
-                            title: Text(
-                              userPreferences.birthday != null
-                                  ? 'Birthday: ${userPreferences.birthday!.day}/${userPreferences.birthday!.month}/${userPreferences.birthday!.year}'
-                                  : 'Birthday',
-                            ),
-                            subtitle: userPreferences.birthday == null
-                                ? const Text('Tap to set your birthday')
-                                : null,
-                            trailing: Icon(
-                              Icons.chevron_right,
-                              size: 24 * scaleFactor,
-                            ),
-                            onTap: _showBirthdayPicker,
-                          ),
                           // Hide Change Password for guests (they don't have a password)
                           if (!isGuest) ...[
                             const Divider(height: 1),

@@ -1145,20 +1145,28 @@ class _WeekNavigationWrapper extends StatelessWidget {
           // Navigation controls overlaid
           Positioned(
             left: 0,
-            top: 0,
+            top: 1.5,
             bottom: 0,
-            child: IconButton(
-              icon: const Icon(Icons.chevron_left),
-              onPressed: () => onWeekChanged(selectedWeek - 1),
+            child: GestureDetector(
+              onTap: () => onWeekChanged(selectedWeek - 1),
+              child: Container(
+                color: Colors.transparent,
+                padding: const EdgeInsets.all(8.0),
+                child: const Icon(Icons.chevron_left),
+              ),
             ),
           ),
           Positioned(
             right: 0,
-            top: 0,
+            top: 1.5,
             bottom: 0,
-            child: IconButton(
-              icon: const Icon(Icons.chevron_right),
-              onPressed: () => onWeekChanged(selectedWeek + 1),
+            child: GestureDetector(
+              onTap: () => onWeekChanged(selectedWeek + 1),
+              child: Container(
+                color: Colors.transparent,
+                padding: const EdgeInsets.all(8.0),
+                child: const Icon(Icons.chevron_right),
+              ),
             ),
           ),
         ],

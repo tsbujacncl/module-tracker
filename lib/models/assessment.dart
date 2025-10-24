@@ -8,7 +8,6 @@ enum AssessmentType {
 
 enum AssessmentStatus {
   notStarted,
-  working,
   submitted,
   graded,
 }

@@ -17,6 +17,54 @@ import 'package:module_tracker/utils/celebration_helper.dart';
 import 'package:module_tracker/utils/responsive_text_utils.dart';
 import 'package:module_tracker/widgets/module_selection_dialog.dart';
 
+// Helper function to get color for assessment type badge
+Color getAssessmentTypeColor(AssessmentType type) {
+  switch (type) {
+    case AssessmentType.coursework:
+      return const Color(0xFF7C3AED); // Purple
+    case AssessmentType.exam:
+      return const Color(0xFFEF4444); // Red
+    case AssessmentType.weekly:
+      return const Color(0xFF3B82F6); // Blue
+  }
+}
+
+// Helper function to get assessment type name
+String getAssessmentTypeName(AssessmentType type) {
+  switch (type) {
+    case AssessmentType.coursework:
+      return 'Coursework';
+    case AssessmentType.exam:
+      return 'Exam';
+    case AssessmentType.weekly:
+      return 'Weekly';
+  }
+}
+
+// Helper function to get urgency color based on days until due
+Color getUrgencyColor(int daysUntilDue) {
+  if (daysUntilDue < 0 || daysUntilDue <= 6) {
+    return const Color(0xFFEF4444); // Red (overdue or 0-6 days)
+  } else if (daysUntilDue <= 13) {
+    return const Color(0xFFFF9800); // Orange (7-13 days)
+  } else {
+    return const Color(0xFF10B981); // Green (14+ days)
+  }
+}
+
+// Helper function to format days remaining text
+String formatDaysRemaining(int days) {
+  if (days < 0) {
+    return 'Overdue';
+  } else if (days == 0) {
+    return 'Today';
+  } else if (days == 1) {
+    return '1 day';
+  } else {
+    return '$days days';
+  }
+}
+
 class ModuleCard extends ConsumerStatefulWidget {
   final Module module;
   final int weekNumber;
@@ -816,43 +864,54 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                         TaskStatus.notStarted;
 
                                     // Calculate the due date for this assessment in this week
-                                    String? dueDateBadge;
+                                    DateTime? dueDate;
                                     if (assessment.dueDate != null) {
-                                      final dueDate = assessment.dueDate!;
-                                      final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                                      final dayOfWeek = dayNames[dueDate.weekday - 1];
-                                      final day = dueDate.day;
-                                      dueDateBadge = '$dayOfWeek $day${getOrdinalSuffix(day)}';
+                                      dueDate = assessment.dueDate!;
                                     } else if (assessment.type == AssessmentType.weekly &&
                                                assessment.dayOfWeek != null) {
                                       // For weekly assessments, calculate based on week
                                       final weekStartDate = semester!.startDate.add(
                                         Duration(days: (widget.weekNumber - 1) * 7),
                                       );
-                                      DateTime dueDate;
                                       if (assessment.submitTiming == SubmitTiming.startOfNextWeek) {
                                         final nextWeekStart = weekStartDate.add(const Duration(days: 7));
                                         dueDate = nextWeekStart.add(Duration(days: assessment.dayOfWeek! - 1));
                                       } else {
                                         dueDate = weekStartDate.add(Duration(days: assessment.dayOfWeek! - 1));
                                       }
-                                      final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                                      final dayOfWeek = dayNames[dueDate.weekday - 1];
-                                      final day = dueDate.day;
-                                      dueDateBadge = '$dayOfWeek $day${getOrdinalSuffix(day)}';
                                     }
+
+                                    // Calculate days until due for color coding
+                                    final now = DateTime.now();
+                                    final daysUntilDue = dueDate != null
+                                        ? dueDate.difference(DateTime(now.year, now.month, now.day)).inDays
+                                        : 0;
+
+                                    // Get type badge info
+                                    final typeBadgeText = getAssessmentTypeName(assessment.type);
+                                    final typeBadgeColor = getAssessmentTypeColor(assessment.type);
+
+                                    // Get time/urgency badge info - show "Complete" if task is completed
+                                    final timeBadgeText = status == TaskStatus.complete
+                                        ? 'Complete'
+                                        : formatDaysRemaining(daysUntilDue);
+                                    final timeBadgeColor = status == TaskStatus.complete
+                                        ? const Color(0xFF10B981) // Green for completed
+                                        : getUrgencyColor(daysUntilDue);
 
                                     return _TaskItem(
                                       taskName: assessment.name,
                                       taskId: assessment.id,
                                       status: status,
                                       completedAt: completion?.completedAt,
-                                      isAssessment: true,
+                                      isAssessment: false,
                                       scaleFactor: scaleFactor,
                                       textOpacity: 1.0,
                                       checkboxOpacity: 1.0,
-                                      timeBadge: dueDateBadge,
-                                      badgeColor: const Color(0xFF7C3AED), // Purple for this week's assessments
+                                      typeBadge: typeBadgeText,
+                                      typeBadgeColor: typeBadgeColor,
+                                      timeBadge: timeBadgeText,
+                                      badgeColor: timeBadgeColor,
                                       onTouchDown: onTouchDown,
                                       onSelectTask: selectTask,
                                       getTemporaryStatus: getTemporaryStatus,
@@ -1017,7 +1076,7 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                     outstandingTasksData.add({
                                       'week': week,
                                       'taskId': assessment.id,
-                                      'name': '${assessment.name}$dueDateStr',
+                                      'name': assessment.name,
                                       'isAssessment': true,
                                       'completion': completion,
                                       'status': effectiveStatus,
@@ -1136,15 +1195,25 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                       final completion = taskData['completion'] as TaskCompletion?;
                                       final status = taskData['status'] as TaskStatus;
 
+                                      // For assessments, show "Complete" if completed, otherwise "Overdue"
+                                      final String? overdueTypeBadge = !isAssessment ? null
+                                          : (status == TaskStatus.complete ? 'Complete' : 'Overdue');
+                                      final Color? overdueTypeBadgeColor = !isAssessment ? null
+                                          : (status == TaskStatus.complete
+                                              ? const Color(0xFF10B981) // Green for completed
+                                              : const Color(0xFFEF4444)); // Red for overdue
+
                                       return _TaskItem(
                                         taskName: taskName,
                                         taskId: taskId,
                                         status: status,
                                         completedAt: completion?.completedAt,
-                                        isAssessment: isAssessment,
+                                        isAssessment: false,
                                         scaleFactor: scaleFactor,
                                         textOpacity: getTaskOpacity(taskId, weekNumber),
                                         checkboxOpacity: getTaskCheckboxOpacity(taskId, weekNumber),
+                                        typeBadge: overdueTypeBadge,
+                                        typeBadgeColor: overdueTypeBadgeColor,
                                         weekBadge: weekNumber,
                                         onTouchDown: (tid, currentStatus) => onTouchDownWithWeek(tid, weekNumber, currentStatus),
                                         onSelectTask: (tid, currentStatus) => selectTaskWithWeek(tid, weekNumber, currentStatus),
@@ -1200,17 +1269,17 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                   assessmentsAsync.when(
                     data: (allAssessments) {
                       final now = DateTime.now();
+                      final thirtyDaysFromNow = now.add(const Duration(days: 30));
 
-                      // Filter: Only show assessments in the next 3 weeks, not completed this week, AND not due this week
+                      // Filter: Show assessments from next week through 30 days from today
                       final upcomingAssessments = allAssessments
                           .where((a) {
                             if (a.dueDate == null) return false;
                             // Exclude assessments due in the current week
                             if (a.weekNumber == widget.weekNumber) return false;
-                            // Show only assessments due in the next 3 weeks (current week + 3)
+                            // Show only assessments due after today and within the next 30 days
                             return a.dueDate!.isAfter(now) &&
-                                   a.weekNumber != null &&
-                                   a.weekNumber! <= widget.weekNumber + 3;
+                                   a.dueDate!.isBefore(thirtyDaysFromNow);
                           })
                           .toList()
                         ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
@@ -1366,50 +1435,30 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                     final status = completion?.status ?? TaskStatus.notStarted;
                                     final daysUntilDue = assessment.dueDate!.difference(now).inDays;
 
-                                    // Determine time text
-                                    String timeText;
-                                    if (daysUntilDue == 0) {
-                                      timeText = 'Today';
-                                    } else if (daysUntilDue == 1) {
-                                      timeText = 'Tomorrow';
-                                    } else {
-                                      timeText = '$daysUntilDue days';
-                                    }
+                                    // Get type badge info
+                                    final typeBadgeText = getAssessmentTypeName(assessment.type);
+                                    final typeBadgeColor = getAssessmentTypeColor(assessment.type);
 
-                                    // Get assessment type name
-                                    String typeName;
-                                    switch (assessment.type) {
-                                      case AssessmentType.weekly:
-                                        typeName = 'Weekly';
-                                        break;
-                                      case AssessmentType.exam:
-                                        typeName = 'Exam';
-                                        break;
-                                      case AssessmentType.coursework:
-                                        typeName = 'Coursework';
-                                        break;
-                                    }
-
-                                    // Determine badge color based on days until due
-                                    Color badgeColor;
-                                    if (daysUntilDue <= 3) {
-                                      badgeColor = const Color(0xFFEF4444); // Red
-                                    } else if (daysUntilDue <= 13) {
-                                      badgeColor = const Color(0xFFF97316); // Orange
-                                    } else {
-                                      badgeColor = const Color(0xFF10B981); // Green
-                                    }
+                                    // Get time/urgency badge info - show "Complete" if task is completed
+                                    final timeBadgeText = status == TaskStatus.complete
+                                        ? 'Complete'
+                                        : formatDaysRemaining(daysUntilDue);
+                                    final timeBadgeColor = status == TaskStatus.complete
+                                        ? const Color(0xFF10B981) // Green for completed
+                                        : getUrgencyColor(daysUntilDue);
 
                                     return _TaskItem(
-                                      taskName: '${assessment.name} ($typeName)',
+                                      taskName: assessment.name,
                                       taskId: assessment.id,
                                       status: status,
                                       completedAt: completion?.completedAt,
                                       scaleFactor: scaleFactor,
                                       textOpacity: getTaskOpacity(assessment.id, widget.weekNumber),
                                       checkboxOpacity: getTaskCheckboxOpacity(assessment.id, widget.weekNumber),
-                                      timeBadge: timeText,
-                                      badgeColor: badgeColor,
+                                      typeBadge: typeBadgeText,
+                                      typeBadgeColor: typeBadgeColor,
+                                      timeBadge: timeBadgeText,
+                                      badgeColor: timeBadgeColor,
                                       onTouchDown: onTouchDown,
                                       onSelectTask: selectTask,
                                       getTemporaryStatus: getTemporaryStatus,
@@ -1575,6 +1624,8 @@ class _TaskItem extends ConsumerStatefulWidget {
   final TaskStatus? Function(String, TaskStatus)? getTemporaryStatus;
   final Function(String, TaskStatus)? onUpdateTemporaryStatus;
   final int? weekBadge;
+  final String? typeBadge;
+  final Color? typeBadgeColor;
   final String? timeBadge;
   final Color? badgeColor;
 
@@ -1594,6 +1645,8 @@ class _TaskItem extends ConsumerStatefulWidget {
     this.getTemporaryStatus,
     this.onUpdateTemporaryStatus,
     this.weekBadge,
+    this.typeBadge,
+    this.typeBadgeColor,
     this.timeBadge,
     this.badgeColor,
   });
@@ -1673,7 +1726,33 @@ class _TaskItemState extends ConsumerState<_TaskItem> {
                       ),
                     ),
                   ),
-                // Time badge for upcoming assignments
+                // Type badge for assessments (Coursework/Exam/Weekly)
+                if (widget.typeBadge != null && widget.typeBadgeColor != null)
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 6 * widget.scaleFactor,
+                      vertical: 2 * widget.scaleFactor,
+                    ),
+                    decoration: BoxDecoration(
+                      color: widget.typeBadgeColor!.withValues(alpha: 0.15), // Light version of badge color
+                      borderRadius: BorderRadius.circular(4 * widget.scaleFactor),
+                      border: Border.all(
+                        color: widget.typeBadgeColor!, // Full color for border
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      widget.typeBadge!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize:
+                            (Theme.of(context).textTheme.bodySmall?.fontSize ?? 12) *
+                            widget.scaleFactor,
+                        fontWeight: FontWeight.w500,
+                        color: widget.typeBadgeColor, // Use badge color for text
+                      ),
+                    ),
+                  ),
+                // Time/urgency badge for assignments
                 if (widget.timeBadge != null && widget.badgeColor != null)
                   Container(
                     padding: EdgeInsets.symmetric(

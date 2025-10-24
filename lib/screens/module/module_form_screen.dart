@@ -506,37 +506,52 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
         ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w500,
+          SizedBox(
+            width: 110,
+            child: OutlinedButton(
+              onPressed: () => Navigator.pop(context, false),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.grey[700],
+                side: BorderSide(color: Colors.grey[400]!),
+              ),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
-          OutlinedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              side: const BorderSide(color: Colors.red),
-            ),
-            child: Text(
-              'Discard',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600,
+          const SizedBox(width: 14),
+          SizedBox(
+            width: 110,
+            child: OutlinedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red),
+              ),
+              child: Text(
+                'Discard',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.pop(context, false);
-              await _saveModule();
-            },
-            child: Text(
-              'Save',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600,
+          const SizedBox(width: 14),
+          SizedBox(
+            width: 110,
+            child: FilledButton(
+              onPressed: () async {
+                Navigator.pop(context, false);
+                await _saveModule();
+              },
+              child: Text(
+                'Save',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -1159,6 +1174,7 @@ Future<void> _saveModule() async {
                       Text(
                         'Total: ${totalWeighting.toStringAsFixed(1)}%',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontSize: 16,
                               color: (totalWeighting - 100).abs() < 0.01
                                   ? Colors.green
                                   : Colors.red,
@@ -1289,17 +1305,6 @@ class _RecurringTaskCard extends StatefulWidget {
 
 class _RecurringTaskCardState extends State<_RecurringTaskCard> {
   final List<String> days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-  List<String> _getCurrentFormTaskNames() {
-    // Get all custom task names from the current form's recurring tasks
-    final names = <String>{};
-    for (final customTask in widget.task.customTasks) {
-      if (customTask.name.isNotEmpty) {
-        names.add(customTask.name);
-      }
-    }
-    return names.toList();
-  }
 
   // Parse time string (e.g., "09:00") to TimeOfDay
   TimeOfDay? _parseTimeOfDay(String? timeString) {
@@ -1544,64 +1549,6 @@ class _RecurringTaskCardState extends State<_RecurringTaskCard> {
               ],
             ),
             const SizedBox(height: 16),
-            // Custom tasks section
-            Row(
-              children: [
-                Text(
-                  'Related Tasks',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      widget.task.customTasks.add(_CustomTaskInput());
-                    });
-                    widget.onChanged();
-                  },
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Add Task'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ...widget.task.customTasks.asMap().entries.map((entry) {
-              final index = entry.key;
-              final customTask = entry.value;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _CustomTaskAutocomplete(
-                        initialValue: customTask.name,
-                        currentFormTaskNames: _getCurrentFormTaskNames(),
-                        onChanged: (value) {
-                          customTask.name = value;
-                          widget.onChanged();
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () {
-                        setState(() {
-                          widget.task.customTasks.removeAt(index);
-                        });
-                        widget.onChanged();
-                      },
-                    ),
-                  ],
-                ),
-              );
-            }),
           ],
         ),
       ),

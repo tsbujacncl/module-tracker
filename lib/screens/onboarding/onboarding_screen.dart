@@ -15,7 +15,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   TimeOfDay? _reminderTime;
   bool _remindersEnabled = true;
   double _targetGrade = 70.0;
-  DateTime? _selectedBirthday;
 
   @override
   void initState() {
@@ -45,9 +44,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final prefsNotifier = ref.read(userPreferencesProvider.notifier);
 
     await prefsNotifier.setUserName(_nameController.text);
-    if (_selectedBirthday != null) {
-      await prefsNotifier.setBirthday(_selectedBirthday);
-    }
 
     // Save reminder time if enabled
     if (_remindersEnabled && _reminderTime != null) {
@@ -280,53 +276,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                     onChanged: (value) => setState(() => _targetGrade = value),
                                   ),
                                 ],
-                              ),
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            // Birthday (optional, last)
-                            _buildSectionLabel('Birthday', optional: true, emoji: '🎂'),
-                            const SizedBox(height: 8),
-                            InkWell(
-                              onTap: () async {
-                                final date = await showDatePicker(
-                                  context: context,
-                                  initialDate: DateTime.now().subtract(const Duration(days: 365 * 20)),
-                                  firstDate: DateTime(1900),
-                                  lastDate: DateTime.now(),
-                                );
-                                if (date != null) {
-                                  setState(() => _selectedBirthday = date);
-                                }
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                decoration: BoxDecoration(
-                                  color: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      _selectedBirthday != null
-                                          ? '${_selectedBirthday!.day}/${_selectedBirthday!.month}/${_selectedBirthday!.year}'
-                                          : 'Select your birthday',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 16,
-                                        color: _selectedBirthday != null
-                                            ? (isDarkMode ? Colors.white : const Color(0xFF0F172A))
-                                            : (isDarkMode ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
-                                      ),
-                                    ),
-                                    Icon(
-                                      Icons.calendar_today,
-                                      size: 18,
-                                      color: isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                                    ),
-                                  ],
-                                ),
                               ),
                             ),
 
