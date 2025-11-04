@@ -1,6 +1,17 @@
 [build]
   publish = "build/web"
-  command = "flutter build web --release"
+  command = """
+    # Install Flutter
+    if [ ! -d "$HOME/flutter" ]; then
+      git clone https://github.com/flutter/flutter.git -b stable --depth 1 $HOME/flutter
+    fi
+    export PATH="$PATH:$HOME/flutter/bin"
+
+    # Enable web support and build
+    flutter config --enable-web
+    flutter pub get
+    flutter build web --release
+  """
 
 [[redirects]]
   from = "/*"
