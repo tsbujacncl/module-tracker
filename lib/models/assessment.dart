@@ -250,8 +250,12 @@ class Assessment {
     final dueDates = <DateTime>[];
 
     for (int week = startWeek!; week <= endWeek!; week++) {
-      // Get the start of this week (Monday)
-      final weekStartDate = semesterStartDate.add(Duration(days: (week - 1) * 7));
+      // Get the start of this week (Monday) - normalized to start of day
+      final weekStartDate = DateTime(
+        semesterStartDate.year,
+        semesterStartDate.month,
+        semesterStartDate.day + (week - 1) * 7,
+      );
 
       DateTime dueDate;
 
@@ -262,6 +266,16 @@ class Assessment {
       } else {
         // Due on specified day of CURRENT week
         dueDate = weekStartDate.add(Duration(days: dayOfWeek! - 1));
+      }
+
+      // Apply time if specified
+      if (time != null) {
+        final timeParts = time!.split(':');
+        if (timeParts.length == 2) {
+          final hour = int.tryParse(timeParts[0]) ?? 0;
+          final minute = int.tryParse(timeParts[1]) ?? 0;
+          dueDate = DateTime(dueDate.year, dueDate.month, dueDate.day, hour, minute);
+        }
       }
 
       dueDates.add(dueDate);

@@ -584,34 +584,51 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
       }
     }
 
-    // Check assessments (only those scheduled for the current week)
+    // Check assessments (only those that will actually appear on weekdays Mon-Fri)
     for (final moduleId in widget.assessmentsByModule.keys) {
       final assessments = widget.assessmentsByModule[moduleId]!;
       for (final assessment in assessments) {
-        // Check if assessment is in current week
-        bool isInCurrentWeek = false;
+        if (assessment.time == null) continue;
 
-        if (assessment.weekNumber == widget.currentWeek) {
-          isInCurrentWeek = true;
-        } else if (assessment.type == AssessmentType.weekly &&
-            widget.semester != null) {
-          // For weekly assessments, check if any occurrence falls in this week
-          final dueDates = assessment.getWeeklyDueDates(
-            widget.semester!.startDate,
-          );
-          final weekEnd = weekStartDate.add(const Duration(days: 7));
-          for (final dueDate in dueDates) {
-            if (dueDate.isAfter(
-                  weekStartDate.subtract(const Duration(days: 1)),
-                ) &&
-                dueDate.isBefore(weekEnd)) {
-              isInCurrentWeek = true;
-              break;
+        // Check if assessment appears on any of the displayed weekdays (Mon-Fri)
+        bool appearsOnWeekday = false;
+
+        for (int dayOffset = 0; dayOffset < 5; dayOffset++) {
+          final currentDate = weekStartDate.add(Duration(days: dayOffset));
+          bool matchesDate = false;
+
+          if (assessment.type == AssessmentType.weekly &&
+              widget.semester != null) {
+            // Get all due dates for this weekly assessment
+            final dueDates = assessment.getWeeklyDueDates(
+              widget.semester!.startDate,
+            );
+            // Check if any due date matches this specific weekday
+            for (final dueDate in dueDates) {
+              if (dueDate.year == currentDate.year &&
+                  dueDate.month == currentDate.month &&
+                  dueDate.day == currentDate.day) {
+                matchesDate = true;
+                break;
+              }
             }
+          } else if (assessment.dueDate != null) {
+            // For non-weekly assessments, check if dueDate matches this weekday
+            final dueDate = assessment.dueDate!;
+            if (dueDate.year == currentDate.year &&
+                dueDate.month == currentDate.month &&
+                dueDate.day == currentDate.day) {
+              matchesDate = true;
+            }
+          }
+
+          if (matchesDate) {
+            appearsOnWeekday = true;
+            break;
           }
         }
 
-        if (isInCurrentWeek && assessment.time != null) {
+        if (appearsOnWeekday) {
           final startMinutes = parseTimeToMinutes(assessment.time!);
           final startH = startMinutes ~/ 60;
           earliestHour = math.min(earliestHour, startH);
