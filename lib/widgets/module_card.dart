@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -456,6 +457,136 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
     return assessments;
   }
 
+  // Calculate module card status based on task completion and assessment deadlines
+  String _calculateModuleStatus({
+    required List<RecurringTask> tasks,
+    required List<Assessment> allAssessments,
+    required List<Assessment> weekAssessments,
+    required Map<String, TaskCompletion> completionsMap,
+    required int currentWeekNumber,
+    DateTime? semesterStartDate,
+    required WidgetRef ref,
+  }) {
+    final now = DateTime.now();
+
+    // FIRST PRIORITY: Check for outstanding tasks from previous weeks
+    if (semesterStartDate != null && currentWeekNumber > 1) {
+      final daysSinceStart = now.difference(semesterStartDate).inDays;
+      final actualCurrentWeek = (daysSinceStart / 7).floor() + 1;
+      // Only check weeks that have passed before the viewed week
+      // Example: Viewing Week 7 from Week 5 → check weeks 1-4 (not Week 5)
+      // Example: Viewing Week 3 from Week 5 → check weeks 1-2
+      final maxWeekToCheck = math.min(actualCurrentWeek - 1, currentWeekNumber - 1);
+
+      // Check each previous week for incomplete tasks
+      for (int week = 1; week <= maxWeekToCheck; week++) {
+        final prevWeekCompletionsAsync = ref.watch(
+          taskCompletionsProvider((moduleId: widget.module.id, weekNumber: week)),
+        );
+
+        if (prevWeekCompletionsAsync.hasValue) {
+          final prevCompletions = prevWeekCompletionsAsync.value ?? [];
+          final prevCompletionMap = {for (var c in prevCompletions) c.taskId: c};
+
+          // Check recurring tasks from previous week
+          for (final task in tasks) {
+            if (task.parentTaskId != null) continue; // Skip subtasks
+            final completion = prevCompletionMap[task.id];
+            final status = completion?.status ?? TaskStatus.notStarted;
+            if (status != TaskStatus.complete) {
+              return 'overdue'; // RED - has outstanding tasks
+            }
+          }
+
+          // Check assessments from previous week
+          final prevWeekAssessments = getAssessmentsForWeek(
+            allAssessments,
+            semesterStartDate,
+            week,
+          );
+          for (final assessment in prevWeekAssessments) {
+            final completion = prevCompletionMap[assessment.id];
+            final status = completion?.status ?? TaskStatus.notStarted;
+            if (status != TaskStatus.complete) {
+              return 'overdue'; // RED - has outstanding assessments
+            }
+          }
+        }
+      }
+    }
+
+    // SECOND PRIORITY: Check for overdue assessments in current week
+    for (final assessment in weekAssessments) {
+      if (assessment.dueDate != null && assessment.dueDate!.isBefore(now)) {
+        final completion = completionsMap[assessment.id];
+        if (completion == null || completion.status != TaskStatus.complete) {
+          return 'overdue'; // RED - overdue assessment
+        }
+      }
+    }
+
+    // THIRD PRIORITY: Check for assessments due this week (incomplete only)
+    // Past weeks → RED (overdue), Current week → YELLOW (due), Future weeks → skip to WHITE
+    final daysSinceStart = semesterStartDate != null
+        ? now.difference(semesterStartDate).inDays
+        : 0;
+    final actualCurrentWeek = (daysSinceStart / 7).floor() + 1;
+    final isViewingPastWeek = currentWeekNumber < actualCurrentWeek;
+    final isViewingCurrentWeek = currentWeekNumber == actualCurrentWeek;
+
+    bool hasIncompleteAssessments = false;
+    for (final assessment in weekAssessments) {
+      final completion = completionsMap[assessment.id];
+      if (completion == null || completion.status != TaskStatus.complete) {
+        // If viewing a past week, incomplete assessments are overdue
+        if (isViewingPastWeek) {
+          return 'overdue'; // RED - past week with incomplete assessment
+        }
+        hasIncompleteAssessments = true;
+        break;
+      }
+    }
+    // Only show YELLOW if viewing the CURRENT week (not future weeks)
+    if (hasIncompleteAssessments && isViewingCurrentWeek) {
+      return 'due'; // YELLOW - current week with incomplete assessment
+    }
+    // Future weeks with assessments stay WHITE (not due yet)
+
+    // FOURTH PRIORITY: Calculate current week task completion
+    // Only count main tasks (exclude subtasks with parentTaskId)
+    final mainTasks = tasks.where((t) => t.parentTaskId == null).toList();
+    final totalTasks = mainTasks.length + weekAssessments.length;
+
+    if (totalTasks == 0) {
+      return 'incomplete'; // No tasks, use default white
+    }
+
+    int completedCount = 0;
+
+    // Count completed main tasks
+    for (final task in mainTasks) {
+      final completion = completionsMap[task.id];
+      if (completion != null && completion.status == TaskStatus.complete) {
+        completedCount++;
+      }
+    }
+
+    // Count completed assessments
+    for (final assessment in weekAssessments) {
+      final completion = completionsMap[assessment.id];
+      if (completion != null && completion.status == TaskStatus.complete) {
+        completedCount++;
+      }
+    }
+
+    // Check if all current week tasks are complete
+    if (completedCount == totalTasks) {
+      return 'complete'; // GREEN - all complete
+    }
+
+    return 'incomplete'; // WHITE - default
+  }
+
   @override
   Widget build(BuildContext context) {
     final semester = ref.watch(currentSemesterProvider);
@@ -494,8 +625,59 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
         ? 4.0
         : 16.0 * scaleFactor;
 
+    // Helper to get background color based on status
+    Color getStatusColor(String status) {
+      switch (status) {
+        case 'overdue':
+          return const Color(0xFFFFEBEE); // Light red
+        case 'due':
+          return const Color(0xFFFFF9C4); // Light yellow
+        case 'complete':
+          return const Color(0xFFE8F5E9); // Light green
+        default:
+          return Colors.white; // Default white
+      }
+    }
+
+    // Calculate status from available data
+    String currentStatus = 'incomplete';
+    bool showCheckmark = false;
+
+    if (recurringTasksAsync.hasValue &&
+        assessmentsAsync.hasValue &&
+        completionsAsync.hasValue) {
+      final tasks = recurringTasksAsync.value ?? [];
+      final assessments = assessmentsAsync.value ?? [];
+      final completions = completionsAsync.value ?? [];
+
+      final weekAssessments = semester != null
+          ? getAssessmentsForWeek(
+              assessments,
+              semester.startDate,
+              widget.weekNumber,
+            )
+          : <Assessment>[];
+
+      final completionMap = {
+        for (var c in completions) c.taskId: c,
+      };
+
+      currentStatus = _calculateModuleStatus(
+        tasks: tasks,
+        allAssessments: assessments,
+        weekAssessments: weekAssessments,
+        completionsMap: completionMap,
+        currentWeekNumber: widget.weekNumber,
+        semesterStartDate: semester?.startDate,
+        ref: ref,
+      );
+
+      showCheckmark = currentStatus == 'complete';
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
+      color: getStatusColor(currentStatus),
       child: Padding(
         padding: EdgeInsets.all(cardPadding),
         child: Stack(
@@ -513,18 +695,32 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.start,
                           children: [
-                            Text(
-                              widget.module.name,
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize:
-                                        (Theme.of(
-                                              context,
-                                            ).textTheme.titleLarge?.fontSize ??
-                                            22) *
-                                        scaleFactor,
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    widget.module.name,
+                                    style: Theme.of(context).textTheme.titleLarge
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize:
+                                              (Theme.of(
+                                                    context,
+                                                  ).textTheme.titleLarge?.fontSize ??
+                                                  22) *
+                                              scaleFactor,
+                                        ),
                                   ),
+                                ),
+                                if (showCheckmark) ...[
+                                  SizedBox(width: 8 * scaleFactor),
+                                  Icon(
+                                    Icons.check_circle,
+                                    color: const Color(0xFF10B981),
+                                    size: 20 * scaleFactor,
+                                  ),
+                                ],
+                              ],
                             ),
                             if (widget.module.code.isNotEmpty)
                               Text(
