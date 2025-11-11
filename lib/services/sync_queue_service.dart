@@ -1,5 +1,6 @@
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:module_tracker/models/sync_queue_item.dart';
+import 'package:module_tracker/services/app_logger.dart';
 import 'package:uuid/uuid.dart';
 
 /// Service for managing offline sync queue
@@ -16,7 +17,7 @@ class SyncQueueService {
   Future<void> initialize() async {
     if (_queueBox == null || !_queueBox!.isOpen) {
       _queueBox = await Hive.openBox<Map>(_boxName);
-      print('DEBUG SYNC: Sync queue initialized with ${_queueBox!.length} items');
+      AppLogger.debug(' SYNC: Sync queue initialized with ${_queueBox!.length} items');
     }
   }
 
@@ -43,7 +44,7 @@ class SyncQueueService {
     );
 
     await _queueBox!.put(item.id, item.toMap());
-    print('DEBUG SYNC: Enqueued ${operation.name} ${entityType.name} (${item.id})');
+    AppLogger.debug(' SYNC: Enqueued ${operation.name} ${entityType.name} (${item.id})');
 
     return item.id;
   }
@@ -74,7 +75,7 @@ class SyncQueueService {
   Future<void> dequeue(String itemId) async {
     await initialize();
     await _queueBox!.delete(itemId);
-    print('DEBUG SYNC: Dequeued item $itemId');
+    AppLogger.debug(' SYNC: Dequeued item $itemId');
   }
 
   /// Update retry count for a failed sync
@@ -86,7 +87,7 @@ class SyncQueueService {
       final item = SyncQueueItem.fromMap(Map<String, dynamic>.from(map));
       final updated = item.copyWith(retryCount: item.retryCount + 1);
       await _queueBox!.put(itemId, updated.toMap());
-      print('DEBUG SYNC: Retry count for $itemId: ${updated.retryCount}');
+      AppLogger.debug(' SYNC: Retry count for $itemId: ${updated.retryCount}');
     }
   }
 
@@ -94,7 +95,7 @@ class SyncQueueService {
   Future<void> clear() async {
     await initialize();
     await _queueBox!.clear();
-    print('DEBUG SYNC: Queue cleared');
+    AppLogger.debug(' SYNC: Queue cleared');
   }
 
   /// Check if there are conflicting operations for the same entity
@@ -140,7 +141,7 @@ class SyncQueueService {
     final mergedItem = lastItem.copyWith(data: merged);
     await _queueBox!.put(lastItem.id, mergedItem.toMap());
 
-    print('DEBUG SYNC: Merged ${updates.length} updates for $entityType $entityId');
+    AppLogger.debug(' SYNC: Merged ${updates.length} updates for $entityType $entityId');
   }
 
   /// Get items grouped by entity type
@@ -165,7 +166,7 @@ class SyncQueueService {
     for (final item in items) {
       if (item.timestamp.isBefore(cutoff) && item.retryCount > 5) {
         await dequeue(item.id);
-        print('DEBUG SYNC: Pruned old item ${item.id} (${item.retryCount} retries)');
+        AppLogger.debug(' SYNC: Pruned old item ${item.id} (${item.retryCount} retries)');
       }
     }
   }

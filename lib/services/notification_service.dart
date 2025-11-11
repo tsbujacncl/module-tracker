@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:module_tracker/services/app_logger.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -15,7 +16,7 @@ class NotificationService {
   Future<void> initialize() async {
     if (_initialized) return;
 
-    print('DEBUG NOTIFICATIONS: Initializing notification service');
+    AppLogger.debug('Initializing notification service');
 
     // Initialize timezone
     tz.initializeTimeZones();
@@ -47,12 +48,12 @@ class NotificationService {
     );
 
     _initialized = true;
-    print('DEBUG NOTIFICATIONS: Notification service initialized');
+    AppLogger.debug('Notification service initialized');
   }
 
   /// Request notification permissions (iOS/macOS)
   Future<bool> requestPermissions() async {
-    print('DEBUG NOTIFICATIONS: Requesting permissions');
+    AppLogger.debug('Requesting permissions');
 
     // Android 13+ requires runtime permission
     if (await _notifications
@@ -63,7 +64,7 @@ class NotificationService {
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
           ?.requestNotificationsPermission();
 
-      print('DEBUG NOTIFICATIONS: Android permission granted: $granted');
+      AppLogger.debug('Android permission granted: $granted');
       return granted ?? false;
     }
 
@@ -76,13 +77,13 @@ class NotificationService {
       sound: true,
     );
 
-    print('DEBUG NOTIFICATIONS: iOS permission granted: $granted');
+    AppLogger.debug('iOS permission granted: $granted');
     return granted ?? true;
   }
 
   /// Schedule daily notification at 5pm
   Future<void> scheduleDailyReminder() async {
-    print('DEBUG NOTIFICATIONS: Scheduling daily 5pm reminder');
+    AppLogger.debug('Scheduling daily 5pm reminder');
 
     await cancelDailyReminder(); // Cancel existing first
 
@@ -102,7 +103,7 @@ class NotificationService {
       scheduledTime = scheduledTime.add(const Duration(days: 1));
     }
 
-    print('DEBUG NOTIFICATIONS: Next reminder scheduled for: $scheduledTime');
+    AppLogger.debug('Next reminder scheduled for: $scheduledTime');
 
     await _notifications.zonedSchedule(
       0, // Notification ID
@@ -136,7 +137,7 @@ class NotificationService {
     for (int i = 10; i <= 16; i++) {
       await _notifications.cancel(i);
     }
-    print('DEBUG NOTIFICATIONS: Daily reminder cancelled');
+    AppLogger.debug('Daily reminder cancelled');
   }
 
   /// Schedule daily reminder with custom time and days
@@ -146,13 +147,13 @@ class NotificationService {
     TimeOfDay time,
     Set<int> days,
   ) async {
-    print('DEBUG NOTIFICATIONS: Scheduling custom daily reminder at ${time.hour}:${time.minute} for days: $days');
+    AppLogger.debug('Scheduling custom daily reminder at ${time.hour}:${time.minute} for days: $days');
 
     // Cancel existing daily reminders
     await cancelDailyReminder();
 
     if (days.isEmpty) {
-      print('DEBUG NOTIFICATIONS: No days selected, skipping schedule');
+      AppLogger.debug('No days selected, skipping schedule');
       return;
     }
 
@@ -172,7 +173,7 @@ class NotificationService {
         scheduledTime = scheduledTime.add(const Duration(days: 7));
       }
 
-      print('DEBUG NOTIFICATIONS: Scheduling for weekday $day at $scheduledTime');
+      AppLogger.debug('Scheduling for weekday $day at $scheduledTime');
 
       await _notifications.zonedSchedule(
         9 + day, // IDs 10-16 for Mon-Sun
@@ -238,11 +239,11 @@ class NotificationService {
   /// Send immediate notification for incomplete tasks
   Future<void> sendTaskReminder(int incompleteCount, int overdueCount) async {
     if (incompleteCount == 0 && overdueCount == 0) {
-      print('DEBUG NOTIFICATIONS: No incomplete tasks, skipping notification');
+      AppLogger.debug('No incomplete tasks, skipping notification');
       return;
     }
 
-    print('DEBUG NOTIFICATIONS: Sending task reminder - Incomplete: $incompleteCount, Overdue: $overdueCount');
+    AppLogger.debug('Sending task reminder - Incomplete: $incompleteCount, Overdue: $overdueCount');
 
     String title = 'Task Reminder';
     String body;
@@ -278,7 +279,7 @@ class NotificationService {
 
   /// Schedule weekend planning reminder (Sunday evening)
   Future<void> scheduleWeekendPlanning(TimeOfDay time) async {
-    print('DEBUG NOTIFICATIONS: Scheduling weekend planning at ${time.hour}:${time.minute}');
+    AppLogger.debug('Scheduling weekend planning at ${time.hour}:${time.minute}');
 
     await cancelWeekendPlanning();
 
@@ -294,7 +295,7 @@ class NotificationService {
       scheduledTime = scheduledTime.add(const Duration(days: 7));
     }
 
-    print('DEBUG NOTIFICATIONS: Next weekend planning scheduled for: $scheduledTime');
+    AppLogger.debug('Next weekend planning scheduled for: $scheduledTime');
 
     await _notifications.zonedSchedule(
       20, // Weekend planning notification ID
@@ -324,7 +325,7 @@ class NotificationService {
   /// Cancel weekend planning reminder
   Future<void> cancelWeekendPlanning() async {
     await _notifications.cancel(20);
-    print('DEBUG NOTIFICATIONS: Weekend planning cancelled');
+    AppLogger.debug('Weekend planning cancelled');
   }
 
   /// Schedule assessment due alerts
@@ -340,7 +341,7 @@ class NotificationService {
 
     // Don't schedule if the notification time has passed
     if (notificationTime.isBefore(now)) {
-      print('DEBUG NOTIFICATIONS: Assessment alert time has passed, skipping');
+      AppLogger.debug('Assessment alert time has passed, skipping');
       return;
     }
 
@@ -374,7 +375,7 @@ class NotificationService {
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
     );
 
-    print('DEBUG NOTIFICATIONS: Scheduled assessment alert for $assessmentName, due $timeFrame');
+    AppLogger.debug('Scheduled assessment alert for $assessmentName, due $timeFrame');
   }
 
   /// Cancel all assessment alerts (IDs 100-1999)
@@ -382,7 +383,7 @@ class NotificationService {
     for (int i = 100; i < 2000; i++) {
       await _notifications.cancel(i);
     }
-    print('DEBUG NOTIFICATIONS: All assessment alerts cancelled');
+    AppLogger.debug('All assessment alerts cancelled');
   }
 
   /// Schedule lecture reminder
@@ -397,7 +398,7 @@ class NotificationService {
 
     // Don't schedule if the notification time has passed
     if (notificationTime.isBefore(now)) {
-      print('DEBUG NOTIFICATIONS: Lecture reminder time has passed, skipping');
+      AppLogger.debug('Lecture reminder time has passed, skipping');
       return;
     }
 
@@ -429,7 +430,7 @@ class NotificationService {
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
     );
 
-    print('DEBUG NOTIFICATIONS: Scheduled lecture reminder for $lectureName');
+    AppLogger.debug('Scheduled lecture reminder for $lectureName');
   }
 
   /// Cancel all lecture reminders (IDs 2000-2999)
@@ -437,12 +438,12 @@ class NotificationService {
     for (int i = 2000; i < 3000; i++) {
       await _notifications.cancel(i);
     }
-    print('DEBUG NOTIFICATIONS: All lecture reminders cancelled');
+    AppLogger.debug('All lecture reminders cancelled');
   }
 
   /// Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
-    print('DEBUG NOTIFICATIONS: Notification tapped - payload: ${response.payload}');
+    AppLogger.debug('Notification tapped - payload: ${response.payload}');
     // Handle navigation when notification is tapped
     // You can use a global navigator key or stream to handle this
   }
@@ -450,9 +451,9 @@ class NotificationService {
   /// Check pending notifications (for debugging)
   Future<void> checkPendingNotifications() async {
     final pending = await _notifications.pendingNotificationRequests();
-    print('DEBUG NOTIFICATIONS: Pending notifications: ${pending.length}');
+    AppLogger.debug('Pending notifications: ${pending.length}');
     for (final notification in pending) {
-      print('  - ID: ${notification.id}, Title: ${notification.title}, Body: ${notification.body}');
+      AppLogger.debug('  - ID: ${notification.id}, Title: ${notification.title}, Body: ${notification.body}');
     }
   }
 }

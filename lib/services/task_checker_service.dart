@@ -4,6 +4,7 @@ import 'package:module_tracker/models/module.dart';
 import 'package:module_tracker/models/semester.dart';
 import 'package:module_tracker/repositories/firestore_repository.dart';
 import 'package:module_tracker/utils/date_utils.dart' as utils;
+import 'package:module_tracker/services/app_logger.dart';
 
 // Import TaskStatus enum
 import 'package:module_tracker/models/task_completion.dart' show TaskStatus;
@@ -15,12 +16,12 @@ class TaskCheckerService {
   /// Returns (incompleteToday, overdue)
   Future<(int, int)> checkIncompleteTasks(String userId) async {
     try {
-      print('DEBUG TASK CHECKER: Checking incomplete tasks for user: $userId');
+      AppLogger.debug('Checking incomplete tasks for user: $userId');
 
       // Get current semester
       final semesters = await _repository.getUserSemesters(userId).first;
       if (semesters.isEmpty) {
-        print('DEBUG TASK CHECKER: No semesters found');
+        AppLogger.debug('No semesters found');
         return (0, 0);
       }
 
@@ -29,7 +30,7 @@ class TaskCheckerService {
         orElse: () => semesters.first,
       );
 
-      print('DEBUG TASK CHECKER: Current semester: ${currentSemester.name}');
+      AppLogger.debug('Current semester: ${currentSemester.name}');
 
       // Get all active modules for current semester
       final modules = await _repository
@@ -37,17 +38,17 @@ class TaskCheckerService {
           .first;
 
       if (modules.isEmpty) {
-        print('DEBUG TASK CHECKER: No active modules found');
+        AppLogger.debug('No active modules found');
         return (0, 0);
       }
 
-      print('DEBUG TASK CHECKER: Found ${modules.length} active modules');
+      AppLogger.debug('Found ${modules.length} active modules');
 
       // Calculate current week number
       final now = DateTime.now();
       final currentWeek = utils.DateUtils.getWeekNumber(now, currentSemester.startDate);
 
-      print('DEBUG TASK CHECKER: Current week: $currentWeek');
+      AppLogger.debug('Current week: $currentWeek');
 
       int incompleteTodayCount = 0;
       int overdueCount = 0;
@@ -90,11 +91,11 @@ class TaskCheckerService {
         }
       }
 
-      print('DEBUG TASK CHECKER: Incomplete today: $incompleteTodayCount, Overdue: $overdueCount');
+      AppLogger.debug('Incomplete today: $incompleteTodayCount, Overdue: $overdueCount');
 
       return (incompleteTodayCount, overdueCount);
     } catch (e) {
-      print('DEBUG TASK CHECKER: Error checking tasks - $e');
+      AppLogger.error('Error checking tasks', error: e);
       return (0, 0);
     }
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:module_tracker/providers/grade_provider.dart';
+import 'package:module_tracker/services/app_logger.dart';
 
 class OverallGradeWidget extends ConsumerWidget {
   const OverallGradeWidget({super.key});
@@ -11,14 +12,14 @@ class OverallGradeWidget extends ConsumerWidget {
     final overallGrade = ref.watch(overallUniversityGradeProvider);
 
     // Debug: Check what's happening
-    print('DEBUG OverallGrade: $overallGrade');
+    AppLogger.debug('OverallGrade: $overallGrade');
     if (overallGrade != null) {
-      print('DEBUG Credits: ${overallGrade.totalCreditsCompleted} / ${overallGrade.totalCreditsPossible}');
-      print('DEBUG Percentage: ${overallGrade.overallPercentage}%');
+      AppLogger.debug('Credits: ${overallGrade.totalCreditsCompleted} / ${overallGrade.totalCreditsPossible}');
+      AppLogger.debug('Percentage: ${overallGrade.overallPercentage}%');
     }
 
     if (overallGrade == null) {
-      print('DEBUG: Overall grade is null - no graded assessments yet');
+      AppLogger.debug('Overall grade is null - no graded assessments yet');
       return const SizedBox.shrink();
     }
 

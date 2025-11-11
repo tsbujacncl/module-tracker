@@ -4,12 +4,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:module_tracker/firebase_options.dart';
 import 'package:module_tracker/services/notification_service.dart';
 import 'package:module_tracker/services/task_checker_service.dart';
+import 'package:module_tracker/services/app_logger.dart';
 
 /// Background task callback - runs in isolate
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
-    print('DEBUG BACKGROUND: Task started - $task');
+    AppLogger.debug('Task started - $task');
 
     try {
       // Initialize Firebase in background isolate
@@ -20,17 +21,17 @@ void callbackDispatcher() {
       // Get current user
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        print('DEBUG BACKGROUND: No user logged in, skipping task check');
+        AppLogger.debug('No user logged in, skipping task check');
         return Future.value(true);
       }
 
-      print('DEBUG BACKGROUND: Checking tasks for user: ${user.uid}');
+      AppLogger.debug('Checking tasks for user: ${user.uid}');
 
       // Check for incomplete tasks
       final taskChecker = TaskCheckerService();
       final (incompleteToday, overdue) = await taskChecker.checkIncompleteTasks(user.uid);
 
-      print('DEBUG BACKGROUND: Found $incompleteToday incomplete tasks today, $overdue overdue');
+      AppLogger.debug('Found $incompleteToday incomplete tasks today, $overdue overdue');
 
       // Send notification if there are incomplete/overdue tasks
       if (incompleteToday > 0 || overdue > 0) {
@@ -41,7 +42,7 @@ void callbackDispatcher() {
 
       return Future.value(true);
     } catch (e) {
-      print('DEBUG BACKGROUND: Error in background task - $e');
+      AppLogger.error('Error in background task', error: e);
       return Future.value(false);
     }
   });
@@ -52,7 +53,7 @@ class BackgroundTaskService {
 
   /// Register the daily task check (runs at 5pm)
   static Future<void> registerDailyTaskCheck() async {
-    print('DEBUG BACKGROUND: Registering daily task check');
+    AppLogger.debug('Registering daily task check');
 
     await Workmanager().initialize(
       callbackDispatcher,
@@ -73,7 +74,7 @@ class BackgroundTaskService {
       existingWorkPolicy: ExistingWorkPolicy.replace,
     );
 
-    print('DEBUG BACKGROUND: Daily task check registered with initial delay: ${_getInitialDelay()}');
+    AppLogger.debug('Daily task check registered with initial delay: ${_getInitialDelay()}');
   }
 
   /// Calculate initial delay to run at 5pm today/tomorrow
@@ -91,13 +92,13 @@ class BackgroundTaskService {
 
   /// Cancel the daily task check
   static Future<void> cancelDailyTaskCheck() async {
-    print('DEBUG BACKGROUND: Cancelling daily task check');
+    AppLogger.debug('Cancelling daily task check');
     await Workmanager().cancelByUniqueName(_dailyTaskCheckId);
   }
 
   /// Run task check immediately (for testing)
   static Future<void> runTaskCheckNow() async {
-    print('DEBUG BACKGROUND: Running task check now');
+    AppLogger.debug('Running task check now');
 
     await Workmanager().registerOneOffTask(
       'test_task_check',

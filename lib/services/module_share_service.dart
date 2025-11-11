@@ -4,6 +4,7 @@ import 'package:module_tracker/models/module.dart';
 import 'package:module_tracker/models/assessment.dart';
 import 'package:module_tracker/models/recurring_task.dart';
 import 'package:module_tracker/models/shared_module.dart';
+import 'package:module_tracker/services/app_logger.dart';
 
 class ModuleShareService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -72,7 +73,7 @@ class ModuleShareService {
 
       return sharedModule;
     } catch (e) {
-      print('Error fetching shared module: $e');
+      AppLogger.error('Error fetching shared module', error: e);
       return null;
     }
   }
@@ -84,7 +85,7 @@ class ModuleShareService {
         'importCount': FieldValue.increment(1),
       });
     } catch (e) {
-      print('Error incrementing import count: $e');
+      AppLogger.error('Error incrementing import count', error: e);
     }
   }
 
@@ -103,7 +104,7 @@ class ModuleShareService {
       }
       await batch.commit();
     } catch (e) {
-      print('Error cleaning up expired shares: $e');
+      AppLogger.error('Error cleaning up expired shares', error: e);
     }
   }
 
@@ -175,7 +176,7 @@ class ModuleShareService {
 
       return bundle;
     } catch (e) {
-      print('Error fetching shared bundle: $e');
+      AppLogger.error('Error fetching shared bundle', error: e);
       return null;
     }
   }
@@ -189,7 +190,7 @@ class ModuleShareService {
       final data = doc.data() as Map<String, dynamic>?;
       return data?['isBundle'] == true;
     } catch (e) {
-      print('Error checking share type: $e');
+      AppLogger.error('Error checking share type', error: e);
       return false;
     }
   }

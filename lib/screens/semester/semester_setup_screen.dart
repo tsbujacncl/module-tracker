@@ -9,6 +9,7 @@ import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/utils/date_utils.dart' as utils;
 import 'package:module_tracker/utils/date_picker_utils.dart';
 import 'package:module_tracker/widgets/gradient_header.dart';
+import 'package:module_tracker/services/app_logger.dart';
 
 class SemesterSetupScreen extends ConsumerStatefulWidget {
   final Semester? semesterToEdit;
@@ -244,7 +245,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
 
       if (_isEditMode) {
         // Update existing semester
-        print('DEBUG SEMESTER: Updating semester ${widget.semesterToEdit!.id}');
+        AppLogger.debug('Updating semester ${widget.semesterToEdit!.id}');
 
         final updatedSemester = widget.semesterToEdit!.copyWith(
           name: _nameController.text.trim(),
@@ -268,7 +269,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
           },
         );
 
-        print('DEBUG SEMESTER: Semester updated successfully!');
+        AppLogger.debug('Semester updated successfully!');
 
         if (mounted) {
           Navigator.pop(context);
@@ -281,7 +282,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
         }
       } else {
         // Create new semester
-        print('DEBUG SEMESTER: Creating semester for user: ${user.uid}');
+        AppLogger.debug('Creating semester for user: ${user.uid}');
 
         final semester = Semester(
           id: '',
@@ -303,7 +304,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
           },
         );
 
-        print('DEBUG SEMESTER: Semester created successfully!');
+        AppLogger.debug('Semester created successfully!');
 
         if (mounted) {
           // Return the created semester ID so it can be auto-selected
@@ -317,7 +318,7 @@ class _SemesterSetupScreenState extends ConsumerState<SemesterSetupScreen> {
         }
       }
     } catch (e) {
-      print('DEBUG SEMESTER: Error saving semester - $e');
+      AppLogger.error('Error saving semester', error: e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

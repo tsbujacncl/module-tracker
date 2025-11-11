@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:module_tracker/services/app_logger.dart';
 import 'package:module_tracker/utils/env_config.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
@@ -18,9 +19,9 @@ class AuthService {
   Stream<User?> get authStateChanges {
     return _auth.authStateChanges().map((user) {
       if (user != null) {
-        print('DEBUG AUTH: User authenticated - UID: ${user.uid}, Email: ${user.email}');
+        AppLogger.debug('AUTH: User authenticated - UID: ${user.uid}, Email: ${user.email}');
       } else {
-        print('DEBUG AUTH: User signed out');
+        AppLogger.debug('AUTH: User signed out');
       }
       return user;
     });
@@ -30,7 +31,7 @@ class AuthService {
   User? get currentUser {
     final user = _auth.currentUser;
     if (user != null) {
-      print('DEBUG AUTH: Current user - UID: ${user.uid}, Email: ${user.email}');
+      AppLogger.debug('AUTH: Current user - UID: ${user.uid}, Email: ${user.email}');
     }
     return user;
   }
@@ -41,15 +42,15 @@ class AuthService {
     String password,
   ) async {
     try {
-      print('DEBUG AUTH: Attempting sign in for email: $email');
+      AppLogger.debug('AUTH: Attempting sign in for email: $email');
       final credential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-      print('DEBUG AUTH: Sign in successful - UID: ${credential.user?.uid}');
+      AppLogger.debug('AUTH: Sign in successful - UID: ${credential.user?.uid}');
       return credential;
     } on FirebaseAuthException catch (e) {
-      print('DEBUG AUTH: Sign in failed - ${e.code}: ${e.message}');
+      AppLogger.debug('AUTH: Sign in failed - ${e.code}: ${e.message}');
       throw _handleAuthException(e);
     }
   }
@@ -144,23 +145,23 @@ class AuthService {
   // Sign in with Google
   Future<UserCredential?> signInWithGoogle() async {
     try {
-      print('DEBUG AUTH: Starting Google Sign-In flow');
+      AppLogger.debug('AUTH: Starting Google Sign-In flow');
 
       // Trigger the authentication flow with timeout
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn().timeout(
         const Duration(seconds: 60),
         onTimeout: () {
-          print('DEBUG AUTH: Google Sign-In timed out');
+          AppLogger.debug('AUTH: Google Sign-In timed out');
           return null;
         },
       );
 
       if (googleUser == null) {
-        print('DEBUG AUTH: Google Sign-In cancelled by user');
+        AppLogger.debug('AUTH: Google Sign-In cancelled by user');
         return null; // User cancelled the sign-in
       }
 
-      print('DEBUG AUTH: Google Sign-In successful - ${googleUser.email}');
+      AppLogger.debug('AUTH: Google Sign-In successful - ${googleUser.email}');
 
       // Obtain the auth details from the request
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
@@ -173,14 +174,14 @@ class AuthService {
 
       // Sign in to Firebase with the Google credential
       final userCredential = await _auth.signInWithCredential(credential);
-      print('DEBUG AUTH: Firebase sign-in successful - UID: ${userCredential.user?.uid}');
+      AppLogger.debug('AUTH: Firebase sign-in successful - UID: ${userCredential.user?.uid}');
 
       return userCredential;
     } on FirebaseAuthException catch (e) {
-      print('DEBUG AUTH: Firebase error - ${e.code}: ${e.message}');
+      AppLogger.debug('AUTH: Firebase error - ${e.code}: ${e.message}');
       throw _handleAuthException(e);
     } catch (e) {
-      print('DEBUG AUTH: Google Sign-In error - $e');
+      AppLogger.debug('AUTH: Google Sign-In error - $e');
       throw 'Failed to sign in with Google: ${e.toString()}';
     }
   }
@@ -196,7 +197,7 @@ class AuthService {
         throw 'No anonymous user to link. Please sign in as a guest first.';
       }
 
-      print('DEBUG AUTH: Linking anonymous account with email: $email');
+      AppLogger.debug('AUTH: Linking anonymous account with email: $email');
 
       final credential = EmailAuthProvider.credential(
         email: email,
@@ -204,14 +205,14 @@ class AuthService {
       );
 
       final userCredential = await user.linkWithCredential(credential);
-      print('DEBUG AUTH: Successfully linked anonymous account - UID: ${userCredential.user?.uid}');
+      AppLogger.debug('AUTH: Successfully linked anonymous account - UID: ${userCredential.user?.uid}');
 
       return userCredential;
     } on FirebaseAuthException catch (e) {
-      print('DEBUG AUTH: Link with email/password failed - ${e.code}: ${e.message}');
+      AppLogger.debug('AUTH: Link with email/password failed - ${e.code}: ${e.message}');
       throw _handleAuthException(e);
     } catch (e) {
-      print('DEBUG AUTH: Link with email/password error - $e');
+      AppLogger.debug('AUTH: Link with email/password error - $e');
       throw 'Failed to link account: ${e.toString()}';
     }
   }
@@ -224,23 +225,23 @@ class AuthService {
         throw 'No anonymous user to link. Please sign in as a guest first.';
       }
 
-      print('DEBUG AUTH: Linking anonymous account with Google');
+      AppLogger.debug('AUTH: Linking anonymous account with Google');
 
       // Trigger the authentication flow with timeout
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn().timeout(
         const Duration(seconds: 60),
         onTimeout: () {
-          print('DEBUG AUTH: Google Sign-In timed out');
+          AppLogger.debug('AUTH: Google Sign-In timed out');
           return null;
         },
       );
 
       if (googleUser == null) {
-        print('DEBUG AUTH: Google Sign-In cancelled by user');
+        AppLogger.debug('AUTH: Google Sign-In cancelled by user');
         return null; // User cancelled the sign-in
       }
 
-      print('DEBUG AUTH: Google Sign-In successful - ${googleUser.email}');
+      AppLogger.debug('AUTH: Google Sign-In successful - ${googleUser.email}');
 
       // Obtain the auth details from the request
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
@@ -253,14 +254,14 @@ class AuthService {
 
       // Link the credential to the anonymous user
       final userCredential = await user.linkWithCredential(credential);
-      print('DEBUG AUTH: Successfully linked anonymous account with Google - UID: ${userCredential.user?.uid}');
+      AppLogger.debug('AUTH: Successfully linked anonymous account with Google - UID: ${userCredential.user?.uid}');
 
       return userCredential;
     } on FirebaseAuthException catch (e) {
-      print('DEBUG AUTH: Link with Google failed - ${e.code}: ${e.message}');
+      AppLogger.debug('AUTH: Link with Google failed - ${e.code}: ${e.message}');
       throw _handleAuthException(e);
     } catch (e) {
-      print('DEBUG AUTH: Link with Google error - $e');
+      AppLogger.debug('AUTH: Link with Google error - $e');
       throw 'Failed to link account with Google: ${e.toString()}';
     }
   }
@@ -268,7 +269,7 @@ class AuthService {
   // Sign in with Apple
   Future<UserCredential?> signInWithApple() async {
     try {
-      print('DEBUG AUTH: Starting Apple Sign-In flow');
+      AppLogger.debug('AUTH: Starting Apple Sign-In flow');
 
       // Check if Apple Sign In is available
       if (!kIsWeb && !Platform.isIOS && !Platform.isMacOS) {
@@ -283,7 +284,7 @@ class AuthService {
         ],
       );
 
-      print('DEBUG AUTH: Apple credential received');
+      AppLogger.debug('AUTH: Apple credential received');
 
       // Create an `OAuthCredential` from the credential returned by Apple
       final oauthCredential = OAuthProvider("apple.com").credential(
@@ -293,7 +294,7 @@ class AuthService {
 
       // Sign in to Firebase with the Apple credential
       final userCredential = await _auth.signInWithCredential(oauthCredential);
-      print('DEBUG AUTH: Firebase sign-in successful with Apple - UID: ${userCredential.user?.uid}');
+      AppLogger.debug('AUTH: Firebase sign-in successful with Apple - UID: ${userCredential.user?.uid}');
 
       // Update display name if available from Apple
       if (userCredential.user != null &&
@@ -302,22 +303,22 @@ class AuthService {
         final displayName = '${appleCredential.givenName ?? ''} ${appleCredential.familyName ?? ''}'.trim();
         if (displayName.isNotEmpty) {
           await userCredential.user!.updateDisplayName(displayName);
-          print('DEBUG AUTH: Updated display name from Apple: $displayName');
+          AppLogger.debug('AUTH: Updated display name from Apple: $displayName');
         }
       }
 
       return userCredential;
     } on SignInWithAppleAuthorizationException catch (e) {
-      print('DEBUG AUTH: Apple Sign-In authorization error - ${e.code}: ${e.message}');
+      AppLogger.debug('AUTH: Apple Sign-In authorization error - ${e.code}: ${e.message}');
       if (e.code == AuthorizationErrorCode.canceled) {
         return null; // User cancelled
       }
       throw 'Apple Sign-In failed: ${e.message}';
     } on FirebaseAuthException catch (e) {
-      print('DEBUG AUTH: Firebase error with Apple Sign-In - ${e.code}: ${e.message}');
+      AppLogger.debug('AUTH: Firebase error with Apple Sign-In - ${e.code}: ${e.message}');
       throw _handleAuthException(e);
     } catch (e) {
-      print('DEBUG AUTH: Apple Sign-In error - $e');
+      AppLogger.debug('AUTH: Apple Sign-In error - $e');
       throw 'Failed to sign in with Apple: ${e.toString()}';
     }
   }

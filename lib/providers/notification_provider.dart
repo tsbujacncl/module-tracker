@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:module_tracker/models/notification_settings.dart';
+import 'package:module_tracker/services/app_logger.dart';
 import 'package:module_tracker/services/notification_service.dart';
 
 /// Notification settings provider
@@ -24,7 +25,7 @@ class NotificationSettingsNotifier extends StateNotifier<NotificationSettings> {
         state = NotificationSettings.fromMap(Map<String, dynamic>.from(savedSettings));
       }
     } catch (e) {
-      print('Error loading notification settings: $e');
+      AppLogger.debug('Error loading notification settings: $e');
     }
   }
 
@@ -35,7 +36,7 @@ class NotificationSettingsNotifier extends StateNotifier<NotificationSettings> {
       // Reschedule all notifications with new settings
       await _rescheduleNotifications();
     } catch (e) {
-      print('Error saving notification settings: $e');
+      AppLogger.debug('Error saving notification settings: $e');
     }
   }
 

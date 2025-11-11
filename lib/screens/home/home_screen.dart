@@ -28,6 +28,7 @@ import 'package:module_tracker/theme/design_tokens.dart';
 import 'package:module_tracker/widgets/weekly_completion_dialog.dart';
 import 'package:module_tracker/widgets/hover_scale_widget.dart';
 import 'package:module_tracker/utils/responsive_text_utils.dart';
+import 'package:module_tracker/services/app_logger.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -78,14 +79,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Trigger auto-archive check for completed semesters
     ref.watch(autoArchiveCompletedSemestersProvider);
 
-    print(
-      'DEBUG HOME: Building HomeScreen, semesters state: ${semestersAsync.runtimeType}',
-    );
+    AppLogger.debug('Building HomeScreen, semesters state: ${semestersAsync.runtimeType}');
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile =
         screenWidth < 600; // Increased threshold to catch more devices
-    print('DEBUG: Screen width: $screenWidth, isMobile: $isMobile');
+    AppLogger.debug('Screen width: $screenWidth, isMobile: $isMobile');
 
     // Dynamic scaling based on screen width - balanced approach
     final scaleFactor = screenWidth < 360
@@ -648,11 +647,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
       body: semestersAsync.when(
         data: (semesters) {
-          print(
-            'DEBUG HOME: Semesters data received - count: ${semesters.length}',
-          );
+          AppLogger.debug('Semesters data received - count: ${semesters.length}');
           if (semesters.isEmpty) {
-            print('DEBUG HOME: No semesters found, showing empty state');
+            AppLogger.debug('No semesters found, showing empty state');
             // No semester setup yet - show add module button
             return EmptyState(
               icon: Icons.school_rounded,

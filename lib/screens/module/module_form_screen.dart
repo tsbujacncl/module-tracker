@@ -16,6 +16,7 @@ import 'package:module_tracker/screens/semester/semester_setup_screen.dart';
 import 'package:module_tracker/screens/assessments/assessments_screen.dart'
     show AssignmentsScreen;
 import 'package:module_tracker/widgets/gradient_header.dart';
+import 'package:module_tracker/services/app_logger.dart';
 
 // Provider to get all unique custom task names from all modules
 final customTaskNamesProvider = FutureProvider<List<String>>((ref) async {
@@ -181,9 +182,9 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
         }
       });
 
-      print('DEBUG: Loaded ${_recurringTasks.length} existing tasks and ${_assessments.length} assessments');
+      AppLogger.debug('Loaded ${_recurringTasks.length} existing tasks and ${_assessments.length} assessments');
     } catch (e) {
-      print('DEBUG: Error loading existing data: $e');
+      AppLogger.error('Error loading existing data', error: e);
     } finally {
       // Store initial state after loading
       _storeInitialState();
@@ -272,7 +273,7 @@ class _ModuleFormScreenState extends ConsumerState<ModuleFormScreen> {
 
     // If event not found, return
     if (targetIndex == null || targetIndex == -1) {
-      print('DEBUG: Event not found for scrolling');
+      AppLogger.debug('Event not found for scrolling');
       return;
     }
 
@@ -575,7 +576,7 @@ Future<void> _saveModule() async {
       return;
     }
 
-    print('DEBUG: Creating module with semesterId: $_selectedSemesterId');
+    AppLogger.debug('Creating module with semesterId: $_selectedSemesterId');
 
     // Validate assessments - only check if total exceeds 100%
     if (_assessments.isNotEmpty) {
@@ -600,18 +601,18 @@ Future<void> _saveModule() async {
 
       // Use cached semester if available, otherwise fetch from Firestore
       Semester? semester = _cachedSemester;
-      print('DEBUG: Checking cached semester: ${_cachedSemester?.id ?? "null"}');
+      AppLogger.debug('Checking cached semester: ${_cachedSemester?.id ?? "null"}');
 
       if (semester == null) {
-        print('DEBUG: No cached semester, fetching from Firestore with userId: ${user.uid}, semesterId: $_selectedSemesterId');
+        AppLogger.debug('No cached semester, fetching from Firestore with userId: ${user.uid}, semesterId: $_selectedSemesterId');
         semester = await repository.getSemester(user.uid, _selectedSemesterId!);
-        print('DEBUG: Semester fetch result: ${semester?.id ?? "null"}');
+        AppLogger.debug('Semester fetch result: ${semester?.id ?? "null"}');
 
         if (semester == null) {
           throw Exception('Semester not found in database. The semester may still be syncing. Please wait a moment and try again.');
         }
       } else {
-        print('DEBUG: Using cached semester: ${semester.id}');
+        AppLogger.debug('Using cached semester: ${semester.id}');
       }
 
       // Create or update module
@@ -631,21 +632,21 @@ Future<void> _saveModule() async {
         // Update existing module
         await repository.updateModule(user.uid, module.id, module);
         moduleId = module.id;
-        print('DEBUG: Module updated with ID: $moduleId');
+        AppLogger.debug('Module updated with ID: $moduleId');
 
         // Delete all existing recurring tasks before creating new ones
         final existingTasks = await repository.getRecurringTasks(user.uid, moduleId).first;
         for (final task in existingTasks) {
           await repository.deleteRecurringTask(user.uid, moduleId, task.id);
         }
-        print('DEBUG: Deleted ${existingTasks.length} existing tasks');
+        AppLogger.debug('Deleted ${existingTasks.length} existing tasks');
 
         // Delete all existing assessments before creating new ones
         final existingAssessments = await repository.getAssessments(user.uid, moduleId).first;
         for (final assessment in existingAssessments) {
           await repository.deleteAssessment(user.uid, moduleId, assessment.id);
         }
-        print('DEBUG: Deleted ${existingAssessments.length} existing assessments');
+        AppLogger.debug('Deleted ${existingAssessments.length} existing assessments');
       } else {
         // Create new module with timeout
         moduleId = await repository.createModule(user.uid, module).timeout(
@@ -654,7 +655,7 @@ Future<void> _saveModule() async {
             throw Exception('Module creation timed out. Please check your internet connection and Firestore security rules.');
           },
         );
-        print('DEBUG: Module created with ID: $moduleId');
+        AppLogger.debug('Module created with ID: $moduleId');
       }
 
       // Sort recurring tasks by day of week (Monday to Sunday)
@@ -744,7 +745,7 @@ Future<void> _saveModule() async {
 
       if (mounted) {
         final isUpdate = widget.existingModule != null;
-        print('DEBUG: Module ${isUpdate ? "update" : "creation"} successful, navigating back');
+        AppLogger.debug('Module ${isUpdate ? "update" : "creation"} successful, navigating back');
         setState(() => _isLoading = false);
         _cachedSemester = null; // Clear cache after successful creation
 
@@ -772,7 +773,7 @@ Future<void> _saveModule() async {
         }
       }
     } catch (e) {
-      print('DEBUG: Error creating module: $e');
+      AppLogger.error('Error creating module', error: e);
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(

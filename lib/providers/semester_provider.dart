@@ -2,22 +2,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:module_tracker/models/semester.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
+import 'package:module_tracker/services/app_logger.dart';
 
 // Get all semesters for current user
 // Note: Not using autoDispose to prevent disposal issues during navigation
 final semestersProvider = StreamProvider<List<Semester>>((ref) {
-  print('DEBUG PROVIDER: semestersProvider initialized');
+  AppLogger.debug(' PROVIDER: semestersProvider initialized');
   final user = ref.watch(currentUserProvider);
   final repository = ref.watch(firestoreRepositoryProvider);
 
   if (user == null) {
-    print('DEBUG PROVIDER: semestersProvider - no user, returning empty');
+    AppLogger.debug(' PROVIDER: semestersProvider - no user, returning empty');
     return Stream.value([]);
   }
 
-  print(
-    'DEBUG PROVIDER: semestersProvider - user found, setting up stream for UID: ${user.uid}',
-  );
+  AppLogger.debug('PROVIDER: semestersProvider - user found, setting up stream for UID: ${user.uid}');
   return repository.getUserSemesters(user.uid);
 });
 
@@ -43,9 +42,9 @@ final autoArchiveCompletedSemestersProvider = FutureProvider<void>((ref) async {
       for (final semester in completedSemesters) {
         try {
           await repository.autoArchiveSemesterModules(user.uid, semester.id);
-          print('DEBUG: Auto-archived modules for semester: ${semester.name}');
+          AppLogger.debug(': Auto-archived modules for semester: ${semester.name}');
         } catch (e) {
-          print('DEBUG: Error auto-archiving modules for semester ${semester.name}: $e');
+          AppLogger.debug(': Error auto-archiving modules for semester ${semester.name}: $e');
         }
       }
     },

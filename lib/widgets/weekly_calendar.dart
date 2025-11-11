@@ -19,6 +19,7 @@ import 'package:module_tracker/screens/module/module_form_screen.dart';
 import 'package:module_tracker/utils/celebration_helper.dart';
 import 'package:module_tracker/utils/date_picker_utils.dart';
 import 'package:module_tracker/utils/responsive_text_utils.dart';
+import 'package:module_tracker/services/app_logger.dart';
 
 // Helper function to get opaque event box color based on completion status
 // Instead of using opacity which allows hour lines to show through,
@@ -242,7 +243,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
     // Update time tracker immediately when week changes
     if (oldWidget.weekStartDate != widget.weekStartDate ||
         oldWidget.currentWeek != widget.currentWeek) {
-      print('DEBUG: Week changed - updating time tracker position');
+      AppLogger.debug('Week changed - updating time tracker position');
       _updateTimeTrackerPosition();
     }
   }
@@ -313,7 +314,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
   bool _shouldShowTimeTracker(DateTime now, DateTime weekStart) {
     // Only show on weekdays (Mon-Fri)
     if (now.weekday > 5) {
-      print('DEBUG: Not showing tracker - weekend (weekday: ${now.weekday})');
+      AppLogger.debug('Not showing tracker - weekend (weekday: ${now.weekday})');
       return false;
     }
 
@@ -328,18 +329,16 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
       const Duration(days: 4),
     ); // Friday is 4 days after Monday
 
-    print(
-      'DEBUG: Time tracker check - today: $today, weekStart: $weekStartDay, weekEnd: $weekEndDay',
-    );
+    AppLogger.debug('Time tracker check - today: $today, weekStart: $weekStartDay, weekEnd: $weekEndDay');
 
     // Show only if today is within Mon-Fri of the displayed week
     // today must be >= weekStartDay and <= weekEndDay
     if (today.isBefore(weekStartDay) || today.isAfter(weekEndDay)) {
-      print('DEBUG: Not showing tracker - today not in displayed week');
+      AppLogger.debug('Not showing tracker - today not in displayed week');
       return false;
     }
 
-    print('DEBUG: Showing tracker - today is in displayed week');
+    AppLogger.debug('Showing tracker - today is in displayed week');
     return true;
   }
 
@@ -425,22 +424,22 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
       // Properly extract data from AsyncValue
       cancelledEvents.when(
         data: (events) {
-          print('DEBUG CALENDAR: Found ${events.length} cancelled events for module $moduleId, week ${widget.currentWeek}');
+          AppLogger.debug('Found ${events.length} cancelled events for module $moduleId, week ${widget.currentWeek}');
           for (final event in events) {
-            print('DEBUG CALENDAR: Filtering out event: ${event.eventId}');
+            AppLogger.debug('Filtering out event: ${event.eventId}');
             cancelledIds.add(event.eventId);
           }
         },
         loading: () {
-          print('DEBUG CALENDAR: Still loading cancelled events for module $moduleId');
+          AppLogger.debug('Still loading cancelled events for module $moduleId');
         },
         error: (e, st) {
-          print('DEBUG CALENDAR: Error loading cancelled events for module $moduleId: $e');
+          AppLogger.error('Error loading cancelled events for module $moduleId', error: e);
         },
       );
     }
 
-    print('DEBUG CALENDAR: Total cancelled event IDs: ${cancelledIds.length} - $cancelledIds');
+    AppLogger.debug('Total cancelled event IDs: ${cancelledIds.length} - $cancelledIds');
     return cancelledIds;
   }
 
@@ -660,11 +659,9 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
     }
 
     // Debug: Print the calculated range
-    print(
-      'DEBUG CALENDAR: Time range calculated - Start: ${earliestHour}:00, End: ${latestHour}:00, Latest event ends at ${latestEndMinutes} minutes (${(latestEndMinutes / 60).floor()}:${(latestEndMinutes % 60).toString().padLeft(2, '0')})',
-    );
+    AppLogger.debug('CALENDAR: Time range calculated - Start: ${earliestHour}:00, End: ${latestHour}:00, Latest event ends at ${latestEndMinutes} minutes (${(latestEndMinutes / 60).floor()}:${(latestEndMinutes % 60).toString().padLeft(2, '0')})');
     if (latestEventInfo != null) {
-      print('DEBUG CALENDAR: Latest event is: $latestEventInfo');
+      AppLogger.debug('DEBUG CALENDAR: Latest event is: $latestEventInfo');
     }
 
     return (earliestHour, latestHour);
@@ -3813,14 +3810,14 @@ class _AssessmentDetailsDialogState
                   );
 
                   if (result != null) {
-                    print('DEBUG DIALOG: Delete dialog result: $result');
+                    AppLogger.debug('DEBUG DIALOG: Delete dialog result: $result');
                     final user = ref.read(currentUserProvider);
                     if (user == null) return;
 
                     final repository = ref.read(firestoreRepositoryProvider);
 
                     if (result == 'this') {
-                      print('DEBUG DIALOG: Cancelling assessment for week ${widget.weekNumber}');
+                      AppLogger.debug('DEBUG DIALOG: Cancelling assessment for week ${widget.weekNumber}');
                       // Cancel this event for this week only
                       await repository.cancelEvent(
                         user.uid,
@@ -3830,7 +3827,7 @@ class _AssessmentDetailsDialogState
                         EventType.assessment,
                       );
                     } else if (result == 'following') {
-                      print('DEBUG DIALOG: Deleting assessment permanently');
+                      AppLogger.debug('DEBUG DIALOG: Deleting assessment permanently');
                       // Delete permanently
                       await repository.deleteAssessment(
                         user.uid,
@@ -4476,14 +4473,14 @@ class _TaskDetailsDialogState extends ConsumerState<_TaskDetailsDialog> {
                   );
 
                   if (result != null) {
-                    print('DEBUG DIALOG: Delete dialog result: $result');
+                    AppLogger.debug('DEBUG DIALOG: Delete dialog result: $result');
                     final user = ref.read(currentUserProvider);
                     if (user == null) return;
 
                     final repository = ref.read(firestoreRepositoryProvider);
 
                     if (result == 'this') {
-                      print('DEBUG DIALOG: Cancelling task for week ${widget.weekNumber}');
+                      AppLogger.debug('DEBUG DIALOG: Cancelling task for week ${widget.weekNumber}');
                       // Cancel this event for this week only
                       await repository.cancelEvent(
                         user.uid,
@@ -4493,7 +4490,7 @@ class _TaskDetailsDialogState extends ConsumerState<_TaskDetailsDialog> {
                         EventType.recurringTask,
                       );
                     } else if (result == 'following') {
-                      print('DEBUG DIALOG: Deleting task permanently');
+                      AppLogger.debug('DEBUG DIALOG: Deleting task permanently');
                       // Delete permanently
                       await repository.deleteRecurringTask(
                         user.uid,

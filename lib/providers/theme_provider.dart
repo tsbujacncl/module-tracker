@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:module_tracker/services/app_logger.dart';
 
 /// Theme mode options
 enum AppThemeMode {
@@ -83,25 +84,25 @@ class ThemeNotifier extends StateNotifier<AppThemeMode> {
           (mode) => mode.name == savedTheme,
           orElse: () => AppThemeMode.system,
         );
-        print('DEBUG THEME: Loaded saved theme: ${state.displayName}');
+        AppLogger.debug('DEBUG THEME: Loaded saved theme: ${state.displayName}');
       } else {
-        print('DEBUG THEME: No saved theme, using system default');
+        AppLogger.debug('DEBUG THEME: No saved theme, using system default');
       }
     } catch (e) {
-      print('DEBUG THEME: Error loading theme - $e');
+      AppLogger.debug('DEBUG THEME: Error loading theme - $e');
     }
   }
 
   /// Change theme mode
   Future<void> setThemeMode(AppThemeMode mode) async {
-    print('DEBUG THEME: Changing theme to: ${mode.displayName}');
+    AppLogger.debug('DEBUG THEME: Changing theme to: ${mode.displayName}');
     state = mode;
 
     try {
       await _settingsBox?.put(_themeKey, mode.name);
-      print('DEBUG THEME: Theme saved successfully');
+      AppLogger.debug('DEBUG THEME: Theme saved successfully');
     } catch (e) {
-      print('DEBUG THEME: Error saving theme - $e');
+      AppLogger.debug('DEBUG THEME: Error saving theme - $e');
     }
   }
 

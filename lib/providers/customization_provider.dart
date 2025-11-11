@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:module_tracker/models/customization_preferences.dart';
+import 'package:module_tracker/services/app_logger.dart';
 
 /// Notifier for customization preferences
 class CustomizationNotifier extends StateNotifier<CustomizationPreferences> {
@@ -24,7 +25,7 @@ class CustomizationNotifier extends StateNotifier<CustomizationPreferences> {
         );
       }
     } catch (e) {
-      print('Error loading customization preferences: $e');
+      AppLogger.debug('Error loading customization preferences: $e');
     }
   }
 
@@ -33,7 +34,7 @@ class CustomizationNotifier extends StateNotifier<CustomizationPreferences> {
     try {
       await _prefsBox?.put(_prefsKey, state.toMap());
     } catch (e) {
-      print('Error saving customization preferences: $e');
+      AppLogger.debug('Error saving customization preferences: $e');
     }
   }
 

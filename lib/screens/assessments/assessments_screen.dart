@@ -16,6 +16,7 @@ import 'package:module_tracker/widgets/hover_scale_widget.dart';
 import 'package:module_tracker/widgets/module_selection_dialog.dart';
 import 'package:module_tracker/widgets/gradient_header.dart';
 import 'package:module_tracker/widgets/module_card.dart';
+import 'package:module_tracker/services/app_logger.dart';
 
 class AssignmentsScreen extends ConsumerStatefulWidget {
   const AssignmentsScreen({super.key});
@@ -1611,7 +1612,7 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard>
       // Trigger success animation
       _successFlashController.forward(from: 0);
     } catch (e) {
-      print('Error saving grade: $e');
+      AppLogger.error('Error saving grade', error: e);
       // Show error to user
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1677,7 +1678,7 @@ class _AssessmentCardState extends ConsumerState<_AssessmentCard>
       // Trigger success animation
       _successFlashController.forward(from: 0);
     } catch (e) {
-      print('Error saving status: $e');
+      AppLogger.error('Error saving status', error: e);
       // Show error to user
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -5,6 +5,7 @@ import 'package:module_tracker/models/recurring_task.dart';
 import 'package:module_tracker/models/assessment.dart';
 import 'package:module_tracker/models/task_completion.dart';
 import 'package:module_tracker/models/cancelled_event.dart';
+import 'package:module_tracker/services/app_logger.dart';
 
 class FirestoreRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -13,7 +14,7 @@ class FirestoreRepository {
 
   /// Get user's semesters
   Stream<List<Semester>> getUserSemesters(String userId) {
-    print('DEBUG REPO: Setting up semester stream for user: $userId');
+    AppLogger.debug('REPO: Setting up semester stream for user: $userId');
 
     return _firestore
         .collection('users')
@@ -22,7 +23,7 @@ class FirestoreRepository {
         .orderBy('startDate', descending: true)
         .snapshots(includeMetadataChanges: true)
         .map((snapshot) {
-          print('DEBUG REPO: Semester stream emitted - count: ${snapshot.docs.length}, from cache: ${snapshot.metadata.isFromCache}');
+          AppLogger.debug('REPO: Semester stream emitted - count: ${snapshot.docs.length}, from cache: ${snapshot.metadata.isFromCache}');
           return snapshot.docs.map((doc) => Semester.fromFirestore(doc)).toList();
         });
   }
@@ -33,7 +34,7 @@ class FirestoreRepository {
     for (int attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) {
         await Future.delayed(Duration(milliseconds: 300 * attempt));
-        print('DEBUG REPO: Retry attempt $attempt for semester $semesterId');
+        AppLogger.debug('REPO: Retry attempt $attempt for semester $semesterId');
       }
 
       final doc = await _firestore
@@ -44,19 +45,19 @@ class FirestoreRepository {
           .get();
 
       if (doc.exists) {
-        print('DEBUG REPO: Semester found on attempt ${attempt + 1}');
+        AppLogger.debug('REPO: Semester found on attempt ${attempt + 1}');
         return Semester.fromFirestore(doc);
       }
     }
 
-    print('DEBUG REPO: Semester $semesterId not found after 3 attempts');
+    AppLogger.debug('REPO: Semester $semesterId not found after 3 attempts');
     return null;
   }
 
   /// Create a new semester
   Future<String> createSemester(String userId, Semester semester) async {
-    print('DEBUG REPO: Creating semester for user: $userId');
-    print('DEBUG REPO: Semester name: ${semester.name}');
+    AppLogger.debug('REPO: Creating semester for user: $userId');
+    AppLogger.debug('REPO: Semester name: ${semester.name}');
 
     final docRef = await _firestore
         .collection('users')
@@ -64,12 +65,12 @@ class FirestoreRepository {
         .collection('semesters')
         .add(semester.toFirestore());
 
-    print('DEBUG REPO: Semester created with ID: ${docRef.id}');
-    print('DEBUG REPO: Verifying write...');
+    AppLogger.debug('REPO: Semester created with ID: ${docRef.id}');
+    AppLogger.debug('REPO: Verifying write...');
 
     // Verify the write by reading it back
     final verifyDoc = await docRef.get();
-    print('DEBUG REPO: Write verification - exists: ${verifyDoc.exists}');
+    AppLogger.debug('REPO: Write verification - exists: ${verifyDoc.exists}');
 
     return docRef.id;
   }
@@ -106,7 +107,7 @@ class FirestoreRepository {
   /// Get modules for a specific semester
   Stream<List<Module>> getModulesBySemester(
       String userId, String semesterId, {bool? activeOnly}) {
-    print('DEBUG REPO: Setting up modules stream for user: $userId, semester: $semesterId');
+    AppLogger.debug('REPO: Setting up modules stream for user: $userId, semester: $semesterId');
 
     var query = _firestore
         .collection('users')
@@ -119,15 +120,15 @@ class FirestoreRepository {
     }
 
     return query.snapshots(includeMetadataChanges: true).map((snapshot) {
-      print('DEBUG REPO: Modules stream emitted - count: ${snapshot.docs.length}, from cache: ${snapshot.metadata.isFromCache}');
+      AppLogger.debug('REPO: Modules stream emitted - count: ${snapshot.docs.length}, from cache: ${snapshot.metadata.isFromCache}');
       return snapshot.docs.map((doc) => Module.fromFirestore(doc)).toList();
     });
   }
 
   /// Create a new module
   Future<String> createModule(String userId, Module module) async {
-    print('DEBUG REPO: Creating module for user: $userId');
-    print('DEBUG REPO: Module name: ${module.name}, Semester ID: ${module.semesterId}');
+    AppLogger.debug('REPO: Creating module for user: $userId');
+    AppLogger.debug('REPO: Module name: ${module.name}, Semester ID: ${module.semesterId}');
 
     final docRef = await _firestore
         .collection('users')
@@ -135,12 +136,12 @@ class FirestoreRepository {
         .collection('modules')
         .add(module.toFirestore());
 
-    print('DEBUG REPO: Module created with ID: ${docRef.id}');
-    print('DEBUG REPO: Verifying write...');
+    AppLogger.debug('REPO: Module created with ID: ${docRef.id}');
+    AppLogger.debug('REPO: Verifying write...');
 
     // Verify the write by reading it back
     final verifyDoc = await docRef.get();
-    print('DEBUG REPO: Write verification - exists: ${verifyDoc.exists}');
+    AppLogger.debug('REPO: Write verification - exists: ${verifyDoc.exists}');
 
     return docRef.id;
   }
@@ -465,7 +466,7 @@ class FirestoreRepository {
   /// Cancel an event for a specific week
   Future<void> cancelEvent(
       String userId, String moduleId, String eventId, int weekNumber, EventType eventType) async {
-    print('DEBUG REPO: Cancelling event - eventId: $eventId, moduleId: $moduleId, weekNumber: $weekNumber, type: $eventType');
+    AppLogger.debug('REPO: Cancelling event - eventId: $eventId, moduleId: $moduleId, weekNumber: $weekNumber, type: $eventType');
     final docId = '${eventId}_w$weekNumber';
     final cancelledEvent = CancelledEvent(
       id: docId,
@@ -485,7 +486,7 @@ class FirestoreRepository {
         .doc(docId)
         .set(cancelledEvent.toFirestore());
 
-    print('DEBUG REPO: Event cancelled successfully with docId: $docId');
+    AppLogger.debug('REPO: Event cancelled successfully with docId: $docId');
   }
 
   /// Restore a cancelled event
@@ -511,13 +512,13 @@ class FirestoreRepository {
 
   /// Get user preferences stream
   Stream<Map<String, dynamic>?> getUserPreferences(String userId) {
-    print('DEBUG REPO: Setting up user preferences stream for user: $userId');
+    AppLogger.debug('REPO: Setting up user preferences stream for user: $userId');
     return _getUserPrefsDoc(userId).snapshots().map((doc) {
       if (doc.exists) {
-        print('DEBUG REPO: User preferences loaded from Firestore');
+        AppLogger.debug('REPO: User preferences loaded from Firestore');
         return doc.data() as Map<String, dynamic>?;
       } else {
-        print('DEBUG REPO: No user preferences found in Firestore');
+        AppLogger.debug('REPO: No user preferences found in Firestore');
         return null;
       }
     });
@@ -525,28 +526,28 @@ class FirestoreRepository {
 
   /// Save user preferences to Firestore
   Future<void> saveUserPreferences(String userId, Map<String, dynamic> preferences) async {
-    print('DEBUG REPO: Saving user preferences to Firestore for user: $userId');
-    print('DEBUG REPO: Preferences: $preferences');
+    AppLogger.debug('REPO: Saving user preferences to Firestore for user: $userId');
+    AppLogger.debug('REPO: Preferences: $preferences');
 
     try {
       await _getUserPrefsDoc(userId).set(preferences, SetOptions(merge: true));
-      print('DEBUG REPO: User preferences saved successfully');
+      AppLogger.debug('REPO: User preferences saved successfully');
     } catch (e) {
-      print('DEBUG REPO: Error saving user preferences: $e');
+      AppLogger.debug('REPO: Error saving user preferences: $e');
       rethrow;
     }
   }
 
   /// Update specific user preference fields
   Future<void> updateUserPreferences(String userId, Map<String, dynamic> updates) async {
-    print('DEBUG REPO: Updating user preferences for user: $userId');
-    print('DEBUG REPO: Updates: $updates');
+    AppLogger.debug('REPO: Updating user preferences for user: $userId');
+    AppLogger.debug('REPO: Updates: $updates');
 
     try {
       await _getUserPrefsDoc(userId).update(updates);
-      print('DEBUG REPO: User preferences updated successfully');
+      AppLogger.debug('REPO: User preferences updated successfully');
     } catch (e) {
-      print('DEBUG REPO: Error updating user preferences: $e');
+      AppLogger.debug('REPO: Error updating user preferences: $e');
       // If document doesn't exist, create it
       if (e.toString().contains('NOT_FOUND')) {
         await saveUserPreferences(userId, updates);
@@ -558,18 +559,18 @@ class FirestoreRepository {
 
   /// Get user preferences once (for initial load)
   Future<Map<String, dynamic>?> getUserPreferencesOnce(String userId) async {
-    print('DEBUG REPO: Getting user preferences once for user: $userId');
+    AppLogger.debug('REPO: Getting user preferences once for user: $userId');
     try {
       final doc = await _getUserPrefsDoc(userId).get();
       if (doc.exists) {
-        print('DEBUG REPO: User preferences found in Firestore');
+        AppLogger.debug('REPO: User preferences found in Firestore');
         return doc.data() as Map<String, dynamic>?;
       } else {
-        print('DEBUG REPO: No user preferences document found');
+        AppLogger.debug('REPO: No user preferences document found');
         return null;
       }
     } catch (e) {
-      print('DEBUG REPO: Error getting user preferences: $e');
+      AppLogger.debug('REPO: Error getting user preferences: $e');
       return null;
     }
   }
@@ -595,7 +596,7 @@ class FirestoreRepository {
         return data;
       }).toList();
     } catch (e) {
-      print('Error getting notes from Firestore: $e');
+      AppLogger.error('Error getting notes from Firestore', error: e);
       return null;
     }
   }
@@ -623,7 +624,7 @@ class FirestoreRepository {
 
       await batch.commit();
     } catch (e) {
-      print('Error saving notes to Firestore: $e');
+      AppLogger.error('Error saving notes to Firestore', error: e);
       rethrow;
     }
   }

@@ -4,6 +4,7 @@ import 'package:module_tracker/models/note.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/repositories/firestore_repository.dart';
+import 'package:module_tracker/services/app_logger.dart';
 import 'package:uuid/uuid.dart';
 
 /// Notes notifier
@@ -48,7 +49,7 @@ class NotesNotifier extends StateNotifier<List<Note>> {
             return;
           }
         } catch (e) {
-          print('Error loading notes from Firestore: $e');
+          AppLogger.debug('Error loading notes from Firestore: $e');
         }
       }
 
@@ -63,7 +64,7 @@ class NotesNotifier extends StateNotifier<List<Note>> {
         state = notes;
       }
     } catch (e) {
-      print('Error loading notes: $e');
+      AppLogger.debug('Error loading notes: $e');
     }
   }
 
@@ -78,11 +79,11 @@ class NotesNotifier extends StateNotifier<List<Note>> {
         try {
           await _repository.saveNotes(_userId!, notesMaps);
         } catch (e) {
-          print('Error syncing notes to Firestore: $e');
+          AppLogger.debug('Error syncing notes to Firestore: $e');
         }
       }
     } catch (e) {
-      print('Error saving notes: $e');
+      AppLogger.debug('Error saving notes: $e');
     }
   }
 

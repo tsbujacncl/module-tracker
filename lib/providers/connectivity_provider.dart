@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:module_tracker/services/app_logger.dart';
 import 'package:module_tracker/services/sync_queue_service.dart';
 import 'package:module_tracker/models/sync_queue_item.dart';
 
@@ -84,14 +85,14 @@ class ConnectivityNotifier extends StateNotifier<ConnectivityState> {
         result == ConnectivityResult.ethernet);
 
     if (isConnected && state.status == ConnectionStatus.offline) {
-      print('DEBUG SYNC: Connection restored, triggering sync');
+      AppLogger.debug('DEBUG SYNC: Connection restored, triggering sync');
       state = state.copyWith(
         status: ConnectionStatus.online,
         syncError: null,
       );
       syncPendingChanges();
     } else if (!isConnected && state.status != ConnectionStatus.offline) {
-      print('DEBUG SYNC: Connection lost');
+      AppLogger.debug('DEBUG SYNC: Connection lost');
       state = state.copyWith(status: ConnectionStatus.offline);
     }
   }
@@ -104,12 +105,12 @@ class ConnectivityNotifier extends StateNotifier<ConnectivityState> {
   /// Manually trigger sync
   Future<void> syncPendingChanges() async {
     if (_isSyncing) {
-      print('DEBUG SYNC: Sync already in progress');
+      AppLogger.debug('DEBUG SYNC: Sync already in progress');
       return;
     }
 
     if (state.status == ConnectionStatus.offline) {
-      print('DEBUG SYNC: Cannot sync while offline');
+      AppLogger.debug('DEBUG SYNC: Cannot sync while offline');
       return;
     }
 
@@ -118,7 +119,7 @@ class ConnectivityNotifier extends StateNotifier<ConnectivityState> {
 
     try {
       final items = await _syncQueue.getPendingItems();
-      print('DEBUG SYNC: Processing ${items.length} pending items');
+      AppLogger.debug('DEBUG SYNC: Processing ${items.length} pending items');
 
       if (items.isEmpty) {
         state = state.copyWith(
@@ -135,14 +136,14 @@ class ConnectivityNotifier extends StateNotifier<ConnectivityState> {
         try {
           await _processSyncItem(item);
           await _syncQueue.dequeue(item.id);
-          print('DEBUG SYNC: Successfully synced ${item.entityType.name} ${item.operation.name}');
+          AppLogger.debug('DEBUG SYNC: Successfully synced ${item.entityType.name} ${item.operation.name}');
         } catch (e) {
-          print('DEBUG SYNC: Failed to sync item ${item.id}: $e');
+          AppLogger.debug('DEBUG SYNC: Failed to sync item ${item.id}: $e');
           await _syncQueue.incrementRetryCount(item.id);
 
           // If too many retries, it might be a permanent error
           if (item.retryCount >= 5) {
-            print('DEBUG SYNC: Item ${item.id} exceeded retry limit');
+            AppLogger.debug('DEBUG SYNC: Item ${item.id} exceeded retry limit');
           }
         }
       }
@@ -157,7 +158,7 @@ class ConnectivityNotifier extends StateNotifier<ConnectivityState> {
         lastSyncTime: DateTime.now(),
       );
     } catch (e) {
-      print('DEBUG SYNC: Sync error: $e');
+      AppLogger.debug('DEBUG SYNC: Sync error: $e');
       state = state.copyWith(
         status: ConnectionStatus.online,
         syncError: e.toString(),
@@ -171,7 +172,7 @@ class ConnectivityNotifier extends StateNotifier<ConnectivityState> {
   Future<void> _processSyncItem(SyncQueueItem item) async {
     // This is a placeholder - actual implementation would need access to FirestoreRepository
     // In practice, this would be injected or accessed via a provider
-    print('DEBUG SYNC: Processing ${item.operation.name} for ${item.entityType.name}');
+    AppLogger.debug('DEBUG SYNC: Processing ${item.operation.name} for ${item.entityType.name}');
 
     // The actual sync logic will be integrated in the repository
     // For now, we just mark items as processed
