@@ -1564,6 +1564,81 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 32),
+                    // Legal Section
+                    Card(
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF6B7280,
+                                    ).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.gavel_outlined,
+                                    color: const Color(0xFF6B7280),
+                                    size: 20 * scaleFactor,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Legal',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 18 * scaleFactor,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              Icons.privacy_tip_outlined,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: const Text('Privacy Policy'),
+                            subtitle: const Text('How we handle your data'),
+                            trailing: Icon(
+                              Icons.open_in_new,
+                              size: 20 * scaleFactor,
+                            ),
+                            onTap: () async {
+                              final url = Uri.parse('https://tyrbujac.com/privacy-policy');
+                              if (await canLaunchUrl(url)) {
+                                await launchUrl(url, mode: LaunchMode.externalApplication);
+                              }
+                            },
+                          ),
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: Icon(
+                              Icons.description_outlined,
+                              size: 24 * scaleFactor,
+                            ),
+                            title: const Text('Terms of Service'),
+                            subtitle: const Text('Terms and conditions'),
+                            trailing: Icon(
+                              Icons.open_in_new,
+                              size: 20 * scaleFactor,
+                            ),
+                            onTap: () async {
+                              final url = Uri.parse('https://tyrbujac.com/terms-of-service');
+                              if (await canLaunchUrl(url)) {
+                                await launchUrl(url, mode: LaunchMode.externalApplication);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
                     // Modules Section
                     Card(
                       child: Column(
