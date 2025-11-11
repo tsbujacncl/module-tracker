@@ -54,12 +54,6 @@ class CustomizationNotifier extends StateNotifier<CustomizationPreferences> {
     state = state.copyWith(defaultTaskView: view);
     await _savePreferences();
   }
-
-  /// Set grade display format
-  Future<void> setGradeDisplayFormat(GradeDisplayFormat format) async {
-    state = state.copyWith(gradeDisplayFormat: format);
-    await _savePreferences();
-  }
 }
 
 /// Provider for customization preferences

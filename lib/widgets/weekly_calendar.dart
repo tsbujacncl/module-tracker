@@ -17,7 +17,6 @@ import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/screens/module/module_form_screen.dart';
 import 'package:module_tracker/utils/celebration_helper.dart';
-import 'package:module_tracker/utils/birthday_helper.dart';
 import 'package:module_tracker/utils/date_picker_utils.dart';
 import 'package:module_tracker/utils/responsive_text_utils.dart';
 
@@ -678,7 +677,6 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
   ) {
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final userBirthday = ref.watch(userPreferencesProvider).birthday;
 
     // Reduce gap on small devices for tighter spacing
     final screenWidth = MediaQuery.of(context).size.width;
@@ -693,7 +691,6 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
               DateTime.now().day == date.day &&
               DateTime.now().month == date.month &&
               DateTime.now().year == date.year;
-          final isBirthday = isDateBirthday(date, userBirthday);
 
           return Expanded(
             child: Column(
@@ -716,37 +713,14 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                 SizedBox(
                   width: 32,
                   height: 32,
-                  child: isBirthday
-                      ? Stack(
-                          alignment: Alignment.center,
-                          clipBehavior: Clip.none,
-                          children: [
-                            Transform.translate(
-                              offset: const Offset(-1, -9),
-                              child: const Text(
-                                '🎂',
-                                style: TextStyle(fontSize: 31),
-                              ),
-                            ),
-                            Text(
-                              '${date.day}',
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                                height: 1.1, // Tighter line height
-                              ),
-                            ),
-                          ],
-                        )
-                      : Container(
-                          width: isToday ? 30.4 : 32,
-                          height: isToday ? 30.4 : 32,
-                          decoration: BoxDecoration(
-                            color: isToday
-                                ? const Color(0xFF38BDF8) // Lighter blue
-                                : Colors.transparent,
-                            shape: BoxShape.circle,
+                  child: Container(
+                    width: isToday ? 30.4 : 32,
+                    height: isToday ? 30.4 : 32,
+                    decoration: BoxDecoration(
+                      color: isToday
+                          ? const Color(0xFF38BDF8) // Lighter blue
+                          : Colors.transparent,
+                      shape: BoxShape.circle,
                           ),
                           child: Center(
                             child: Text(
@@ -783,7 +757,6 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
   ) {
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final userBirthday = ref.watch(userPreferencesProvider).birthday;
 
     return Row(
       children: [
@@ -796,7 +769,6 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
               DateTime.now().day == date.day &&
               DateTime.now().month == date.month &&
               DateTime.now().year == date.year;
-          final isBirthday = isDateBirthday(date, userBirthday);
 
           return Expanded(
             child: Column(
@@ -818,45 +790,19 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                // Birthday cake with overlapping number OR blue circle with number
+                // Blue circle with number for today, regular for other days
                 // ALL days use same 32x32 container for even spacing
                 SizedBox(
                   width: 32,
                   height: 32,
-                  child: isBirthday
-                      ? Stack(
-                          alignment: Alignment.center,
-                          clipBehavior: Clip.none, // Allow cake to overflow
-                          children: [
-                            // Birthday cake emoji as background (can overflow)
-                            Transform.translate(
-                              offset: const Offset(-1, -9),
-                              child: const Text(
-                                '🎂',
-                                style: TextStyle(fontSize: 31),
-                              ),
-                            ),
-                            // Day number overlapping in front - CENTERED
-                            Text(
-                              '${date.day}',
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: isDarkMode
-                                    ? const Color(0xFF0F172A)
-                                    : const Color(0xFF0F172A),
-                              ),
-                            ),
-                          ],
-                        )
-                      : Container(
-                          width: isToday ? 30.4 : 32,
-                          height: isToday ? 30.4 : 32,
-                          decoration: BoxDecoration(
-                            color: isToday
-                                ? const Color(0xFF38BDF8) // Lighter blue
-                                : Colors.transparent,
-                            shape: BoxShape.circle,
+                  child: Container(
+                    width: isToday ? 30.4 : 32,
+                    height: isToday ? 30.4 : 32,
+                    decoration: BoxDecoration(
+                      color: isToday
+                          ? const Color(0xFF38BDF8) // Lighter blue
+                          : Colors.transparent,
+                      shape: BoxShape.circle,
                           ),
                           child: Center(
                             child: Text(

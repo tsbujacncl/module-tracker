@@ -24,7 +24,6 @@ import 'package:module_tracker/widgets/shared/empty_state.dart';
 import 'package:module_tracker/widgets/shared/app_loading_indicator.dart';
 import 'package:module_tracker/widgets/shared/app_error_state.dart';
 import 'package:module_tracker/theme/design_tokens.dart';
-import 'package:module_tracker/utils/birthday_helper.dart';
 import 'package:module_tracker/widgets/weekly_completion_dialog.dart';
 import 'package:module_tracker/widgets/hover_scale_widget.dart';
 import 'package:module_tracker/utils/responsive_text_utils.dart';
@@ -37,16 +36,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // Show birthday celebration after first frame if it's user's birthday
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (shouldShowBirthdayCelebration(ref)) {
-        _showBirthdayCelebration();
-      }
-    });
-  }
 
   /// Get responsive horizontal padding with smooth scaling from 1080p desktop to 4K
   /// Creates comfortable reading width on large displays (52% content on 4K)
@@ -77,20 +66,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Cap at 24% of screen width for 4K+ displays
       return width * 0.24;
     }
-  }
-
-  void _showBirthdayCelebration() {
-    final userName = ref.read(userPreferencesProvider).userName ?? 'there';
-    markBirthdayCelebrationShown(ref);
-
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) => WeeklyCompletionDialog(
-        userName: userName,
-        isBirthdayCelebration: true,
-      ),
-    );
   }
 
   @override
@@ -167,21 +142,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ],
                           ),
                           child: Center(
-                            child: isTodayBirthday(ref)
-                                ? Transform.translate(
-                                    offset: const Offset(0, -2),
-                                    child: Text(
-                                      '🎂',
-                                      style: TextStyle(
-                                        fontSize: 21 * scaleFactor,
-                                      ),
-                                    ),
-                                  )
-                                : Icon(
-                                    Icons.school_rounded,
-                                    size: 21 * scaleFactor,
-                                    color: Colors.white,
-                                  ),
+                            child: Icon(
+                              Icons.school_rounded,
+                              size: 21 * scaleFactor,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -197,7 +162,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 colors: [
                                   Color(0xFF0EA5E9),
                                   Color(0xFF06B6D4),
-                                  Color(0xFF10B981),
                                 ],
                               ).createShader(bounds),
                               child: Text(
@@ -365,7 +329,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       colors: [
                                         Color(0xFF0EA5E9),
                                         Color(0xFF06B6D4),
-                                        Color(0xFF10B981),
                                       ],
                                     ).createShader(bounds),
                                 child: Text(
@@ -419,20 +382,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     ),
                                   ],
                                 ),
-                                child: Center(
-                                  child: isTodayBirthday(ref)
-                                      ? Transform.translate(
-                                          offset: const Offset(0, -2),
-                                          child: const Text(
-                                            '🎂',
-                                            style: TextStyle(fontSize: 28),
-                                          ),
-                                        )
-                                      : const Icon(
-                                          Icons.school_rounded,
-                                          size: 28,
-                                          color: Colors.white,
-                                        ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.school_rounded,
+                                    size: 28,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                             ),

@@ -5,12 +5,10 @@ import 'package:google_fonts/google_fonts.dart';
 
 class WeeklyCompletionDialog extends StatefulWidget {
   final String userName;
-  final bool isBirthdayCelebration;
 
   const WeeklyCompletionDialog({
     super.key,
     required this.userName,
-    this.isBirthdayCelebration = false,
   });
 
   @override
@@ -43,19 +41,9 @@ class _WeeklyCompletionDialogState extends State<WeeklyCompletionDialog>
     'All done for the week, {name}!',
   ];
 
-  // Birthday messages
-  static const List<String> _birthdayMessages = [
-    'Happy Birthday, {name}!',
-    'Wishing you an amazing birthday, {name}!',
-    'Have a wonderful birthday, {name}!',
-    'Happy Birthday to you, {name}!',
-    'Hope your birthday is as awesome as you, {name}!',
-  ];
-
   String _getRandomMessage() {
     final random = Random();
-    final messageList = widget.isBirthdayCelebration ? _birthdayMessages : _messages;
-    final message = messageList[random.nextInt(messageList.length)];
+    final message = _messages[random.nextInt(_messages.length)];
     return message.replaceAll('{name}', widget.userName);
   }
 
@@ -193,9 +181,7 @@ class _WeeklyCompletionDialogState extends State<WeeklyCompletionDialog>
                     const SizedBox(height: 8),
                     // Subtitle
                     Text(
-                      widget.isBirthdayCelebration
-                          ? 'Make it a great one!'
-                          : 'All tasks completed!',
+                      'All tasks completed!',
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w400,

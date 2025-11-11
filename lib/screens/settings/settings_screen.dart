@@ -533,54 +533,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Future<void> _showGradeFormatDialog(GradeDisplayFormat current) async {
-    GradeDisplayFormat? tempFormat = current;
-
-    await showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Grade Display Format'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: GradeDisplayFormat.values.map((format) {
-              return RadioListTile<GradeDisplayFormat>(
-                title: Text(format.displayName),
-                value: format,
-                groupValue: tempFormat,
-                onChanged: (value) {
-                  setState(() {
-                    tempFormat = value;
-                  });
-                },
-              );
-            }).toList(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (tempFormat != null) {
-                  ref
-                      .read(customizationProvider.notifier)
-                      .setGradeDisplayFormat(tempFormat!);
-                }
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0EA5E9),
-              ),
-              child: const Text('Save', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _showTargetGradeDialog() async {
     final currentTarget = ref.read(userPreferencesProvider).targetGrade;
     double tempTarget = currentTarget;
@@ -1887,21 +1839,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                             onTap: () => _showWeekStartDialog(
                               customizationPrefs.weekStartDay,
-                            ),
-                          ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: Icon(Icons.grade, size: 24 * scaleFactor),
-                            title: const Text('Grade Display Format'),
-                            subtitle: Text(
-                              customizationPrefs.gradeDisplayFormat.displayName,
-                            ),
-                            trailing: Icon(
-                              Icons.chevron_right,
-                              size: 24 * scaleFactor,
-                            ),
-                            onTap: () => _showGradeFormatDialog(
-                              customizationPrefs.gradeDisplayFormat,
                             ),
                           ),
                           const Divider(height: 1),

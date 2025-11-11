@@ -12,7 +12,6 @@ class UserPreferences {
   final Color? customAssignmentColor;
   final double targetGrade;
   final String? userName;
-  final DateTime? birthday;
   final String? notificationTime; // 'morning', 'afternoon', 'evening', 'off'
   final bool hasCompletedOnboarding;
   final bool isLoading; // Track if preferences are still being loaded
@@ -24,7 +23,6 @@ class UserPreferences {
     this.customAssignmentColor,
     this.targetGrade = 70.0, // Default to First Class (70%)
     this.userName,
-    this.birthday,
     this.notificationTime,
     this.hasCompletedOnboarding = false,
     this.isLoading = true, // Start with loading state
@@ -37,7 +35,6 @@ class UserPreferences {
     Color? customAssignmentColor,
     double? targetGrade,
     ValueGetter<String?>? userName,
-    ValueGetter<DateTime?>? birthday,
     String? notificationTime,
     bool? hasCompletedOnboarding,
     bool? isLoading,
@@ -49,7 +46,6 @@ class UserPreferences {
       customAssignmentColor: customAssignmentColor ?? this.customAssignmentColor,
       targetGrade: targetGrade ?? this.targetGrade,
       userName: userName != null ? userName() : this.userName,
-      birthday: birthday != null ? birthday() : this.birthday,
       notificationTime: notificationTime ?? this.notificationTime,
       hasCompletedOnboarding: hasCompletedOnboarding ?? this.hasCompletedOnboarding,
       isLoading: isLoading ?? this.isLoading,
@@ -65,7 +61,6 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
   static const String _assignmentColorKey = 'custom_assignment_color';
   static const String _targetGradeKey = 'target_grade';
   static const String _userNameKey = 'user_name';
-  static const String _birthdayKey = 'birthday';
   static const String _notificationTimeKey = 'notification_time';
   static const String _hasCompletedOnboardingKey = 'has_completed_onboarding';
   Box? _settingsBox;
@@ -129,7 +124,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
         _applyPreferencesFromMap(firestorePrefs);
         // Also cache in Hive for offline access
         await _cachePreferencesToHive(firestorePrefs);
-        print('DEBUG LOAD: Loaded from Firestore - userName: ${state.userName}, birthday: ${state.birthday}');
+        print('DEBUG LOAD: Loaded from Firestore - userName: ${state.userName}');
         return;
       } else {
         print('DEBUG LOAD: No preferences in Firestore (or empty), checking Hive...');
@@ -151,17 +146,15 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
       final targetGrade = box.get(_getUserKey(_targetGradeKey), defaultValue: 70.0) as double;
 
       final userNameKey = _getUserKey(_userNameKey);
-      final birthdayKey = _getUserKey(_birthdayKey);
       final onboardingKey = _getUserKey(_hasCompletedOnboardingKey);
 
-      print('DEBUG LOAD: Keys being used - Name: $userNameKey, Birthday: $birthdayKey, Onboarding: $onboardingKey');
+      print('DEBUG LOAD: Keys being used - Name: $userNameKey, Onboarding: $onboardingKey');
 
       final userName = box.get(userNameKey) as String?;
-      final birthdayString = box.get(birthdayKey) as String?;
       final notificationTime = box.get(_getUserKey(_notificationTimeKey)) as String?;
       final hasCompletedOnboarding = box.get(onboardingKey, defaultValue: false) as bool;
 
-      print('DEBUG LOAD: Loaded from Hive - userName: $userName, birthday: $birthdayString, onboarding: $hasCompletedOnboarding');
+      print('DEBUG LOAD: Loaded from Hive - userName: $userName, onboarding: $hasCompletedOnboarding');
 
       state = UserPreferences(
         enableThreeStateTaskToggle: threeStateToggle,
@@ -170,7 +163,6 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
         customAssignmentColor: assignmentColorValue != null ? Color(assignmentColorValue) : null,
         targetGrade: targetGrade,
         userName: userName,
-        birthday: birthdayString != null ? DateTime.tryParse(birthdayString) : null,
         notificationTime: notificationTime,
         hasCompletedOnboarding: hasCompletedOnboarding,
         isLoading: false, // Loading complete
@@ -193,7 +185,6 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
       customAssignmentColor: map[_assignmentColorKey] != null ? Color(map[_assignmentColorKey] as int) : null,
       targetGrade: (map[_targetGradeKey] as num?)?.toDouble() ?? 70.0,
       userName: map[_userNameKey] as String?,
-      birthday: map[_birthdayKey] != null ? DateTime.tryParse(map[_birthdayKey] as String) : null,
       notificationTime: map[_notificationTimeKey] as String?,
       hasCompletedOnboarding: map[_hasCompletedOnboardingKey] as bool? ?? false,
       isLoading: false, // Loading complete from Firestore
@@ -238,9 +229,6 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
       }
       if (state.userName != null) {
         map[_userNameKey] = state.userName!;
-      }
-      if (state.birthday != null) {
-        map[_birthdayKey] = state.birthday!.toIso8601String();
       }
       if (state.notificationTime != null) {
         map[_notificationTimeKey] = state.notificationTime!;
@@ -344,34 +332,6 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     }
   }
 
-  /// Set birthday
-  Future<void> setBirthday(DateTime? birthday) async {
-    print('DEBUG SAVE: setBirthday called with: $birthday, userId: $_userId');
-    state = state.copyWith(birthday: () => birthday);
-    print('DEBUG SAVE: State updated, birthday is now: ${state.birthday}');
-
-    try {
-      final box = await _ensureBox();
-      final key = _getUserKey(_birthdayKey);
-      if (birthday != null) {
-        final isoString = birthday.toIso8601String();
-        await box.put(key, isoString);
-        print('DEBUG SAVE: Birthday saved to Hive: $isoString (key: $key)');
-
-        // Verify it was saved
-        final verify = box.get(key);
-        print('DEBUG SAVE: Verification read from Hive: $verify');
-      } else {
-        await box.delete(key);
-        print('DEBUG SAVE: Birthday cleared');
-      }
-      await _syncToFirestore();
-    } catch (e) {
-      print('ERROR SAVE: Error saving birthday: $e');
-      print('ERROR SAVE: Stack trace: ${StackTrace.current}');
-    }
-  }
-
   /// Set notification time
   Future<void> setNotificationTime(String time) async {
     state = state.copyWith(notificationTime: time);
@@ -390,7 +350,7 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
     print('DEBUG SAVE: completeOnboarding called, userId: $_userId');
     state = state.copyWith(hasCompletedOnboarding: true);
     print('DEBUG SAVE: State updated, hasCompletedOnboarding is now: ${state.hasCompletedOnboarding}');
-    print('DEBUG SAVE: Current state - userName: ${state.userName}, birthday: ${state.birthday}');
+    print('DEBUG SAVE: Current state - userName: ${state.userName}');
 
     try {
       final box = await _ensureBox();
@@ -400,9 +360,8 @@ class UserPreferencesNotifier extends StateNotifier<UserPreferences> {
 
       // Verify all data is in Hive
       final verifyName = box.get(_getUserKey(_userNameKey));
-      final verifyBirthday = box.get(_getUserKey(_birthdayKey));
       final verifyOnboarding = box.get(key);
-      print('DEBUG SAVE: VERIFICATION - Name: $verifyName, Birthday: $verifyBirthday, Onboarding: $verifyOnboarding');
+      print('DEBUG SAVE: VERIFICATION - Name: $verifyName, Onboarding: $verifyOnboarding');
 
       await _syncToFirestore();
     } catch (e) {

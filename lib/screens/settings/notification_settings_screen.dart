@@ -22,9 +22,12 @@ class NotificationSettingsScreen extends ConsumerWidget {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        children: [
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: ListView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            children: [
           // Daily Task Reminder Section
           Card(
             child: Padding(
@@ -304,6 +307,8 @@ class NotificationSettingsScreen extends ConsumerWidget {
             ),
           ),
         ],
+          ),
+        ),
       ),
     );
   }

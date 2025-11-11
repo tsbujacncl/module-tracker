@@ -345,9 +345,12 @@ class _ImportModuleScreenState extends ConsumerState<ImportModuleScreen> {
         ),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Header
@@ -974,6 +977,8 @@ class _ImportModuleScreenState extends ConsumerState<ImportModuleScreen> {
                 ),
               ],
             ],
+              ),
+            ),
           ),
         ),
       ),
