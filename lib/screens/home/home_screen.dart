@@ -15,6 +15,7 @@ import 'package:module_tracker/screens/module/module_form_screen.dart';
 import 'package:module_tracker/screens/assessments/assessments_screen.dart'
     show AssignmentsScreen;
 import 'package:module_tracker/screens/settings/settings_screen.dart';
+import 'package:module_tracker/screens/notes/notes_screen.dart';
 import 'package:module_tracker/screens/semester/semester_archive_screen.dart';
 import 'package:module_tracker/screens/semester/semester_setup_screen.dart';
 import 'package:module_tracker/widgets/module_card.dart';
@@ -234,6 +235,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             Icons.assessment_outlined,
                             size: 22 * scaleFactor,
                             color: const Color(0xFF8B5CF6),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 3),
+                      UniversalInteractiveWidget(
+                        style: InteractiveStyle.elastic,
+                        color: const Color(0xFFEC4899).withValues(alpha: 0.1),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const NotesScreen(),
+                          ),
+                        ),
+                        child: Container(
+                          padding: EdgeInsets.all(8 * scaleFactor),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFFEC4899,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(
+                              7 * scaleFactor,
+                            ),
+                            border: Border.all(
+                              width: 0,
+                              color: Colors.transparent,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.sticky_note_2_outlined,
+                            size: 22 * scaleFactor,
+                            color: const Color(0xFFEC4899),
                           ),
                         ),
                       ),
@@ -530,6 +562,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       Icons.assessment_outlined,
                       size: 22,
                       color: Color(0xFF8B5CF6),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElasticBounceWidget(
+                  backgroundColor: const Color(
+                    0xFFEC4899,
+                  ).withValues(alpha: 0.1),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const NotesScreen(),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEC4899).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.sticky_note_2_outlined,
+                      size: 22,
+                      color: Color(0xFFEC4899),
                     ),
                   ),
                 ),

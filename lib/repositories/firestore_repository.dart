@@ -573,4 +573,58 @@ class FirestoreRepository {
       return null;
     }
   }
+
+  // ========== NOTES OPERATIONS ==========
+
+  /// Get user's notes
+  Future<List<Map<String, dynamic>>?> getNotes(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('notes')
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        return null;
+      }
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      print('Error getting notes from Firestore: $e');
+      return null;
+    }
+  }
+
+  /// Save user's notes
+  Future<void> saveNotes(
+      String userId, List<Map<String, dynamic>> notes) async {
+    try {
+      final batch = _firestore.batch();
+      final notesCollection =
+          _firestore.collection('users').doc(userId).collection('notes');
+
+      // Delete all existing notes
+      final existingDocs = await notesCollection.get();
+      for (final doc in existingDocs.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // Add all current notes
+      for (final note in notes) {
+        final noteData = Map<String, dynamic>.from(note);
+        final noteId = noteData.remove('id') as String;
+        batch.set(notesCollection.doc(noteId), noteData);
+      }
+
+      await batch.commit();
+    } catch (e) {
+      print('Error saving notes to Firestore: $e');
+      rethrow;
+    }
+  }
 }

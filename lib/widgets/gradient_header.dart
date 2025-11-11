@@ -49,7 +49,6 @@ class GradientHeader extends StatelessWidget {
           colors: [
             Color(0xFF0EA5E9), // Vibrant cyan/sky blue
             Color(0xFF06B6D4), // Cyan
-            Color(0xFF10B981), // Green
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,

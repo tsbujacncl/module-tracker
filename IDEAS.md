@@ -1,9 +1,9 @@
 - [x] Remove birthday appearing.
 - [x] What do you think about changing Module Tracker header text from Blue to Green. From Blue to lighter blue like the logo?
-- [ ] What about instead of having the this this weeks tasks be light red or light yellow could change to have a color around edge? like for red could be a red line that goes around the perimeter? Like in Create Module
+- [x] What about instead of having the this this weeks tasks be light red or light yellow could change to have a color around edge? like for red could be a red line that goes around the perimeter? Like in Create Module
 - [ ] Implement Dark Mode
 - [x] Remove Grade Display Format
 - [x] Notification page in settings is too wide. Same with Import Module
 - [x] The icon in browser tab should be the rounded square.
-- [ ] Want to have a quick notes section. so i think want to remove current lines on IDEAS.md and replace with these
+- [x] Want to have a quick notes section with custom titles
 - [ ] Should only be portrait on phones however can be portrait or landscape on iPad so test this

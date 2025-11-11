@@ -626,16 +626,16 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
         : 16.0 * scaleFactor;
 
     // Helper to get background color based on status
-    Color getStatusColor(String status) {
+    Color getStatusBorderColor(String status) {
       switch (status) {
         case 'overdue':
-          return const Color(0xFFFFEBEE); // Light red
+          return const Color(0xFFEF9A9A); // Soft red
         case 'due':
-          return const Color(0xFFFFF9C4); // Light yellow
+          return const Color(0xFFFFCC80); // Soft orange
         case 'complete':
-          return const Color(0xFFE8F5E9); // Light green
+          return const Color(0xFFA5D6A7); // Soft green
         default:
-          return Colors.white; // Default white
+          return Colors.grey.shade300; // Light grey border
       }
     }
 
@@ -677,7 +677,14 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      color: getStatusColor(currentStatus),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: getStatusBorderColor(currentStatus),
+          width: 2,
+        ),
+      ),
       child: Padding(
         padding: EdgeInsets.all(cardPadding),
         child: Stack(
