@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,54 +15,84 @@ import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/screens/auth/login_screen.dart';
 import 'package:module_tracker/screens/home/home_screen.dart';
 import 'package:module_tracker/screens/onboarding/onboarding_screen.dart';
+import 'package:module_tracker/services/app_logger.dart';
 import 'package:module_tracker/services/notification_service.dart';
 import 'package:module_tracker/theme/app_theme.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  runZonedGuarded<Future<void>>(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
+      // Initialize Firebase
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      AppLogger.info('Firebase initialized');
+
+      // Initialize Firebase Crashlytics (skip on web)
+      if (!kIsWeb) {
+        // Pass all uncaught errors from the framework to Crashlytics
+        FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+
+        // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
+        PlatformDispatcher.instance.onError = (error, stack) {
+          FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+          return true;
+        };
+
+        AppLogger.info('Firebase Crashlytics initialized');
+      }
+
+      // Initialize Hive for local storage
+      await Hive.initFlutter();
+      AppLogger.info('Hive initialized for local storage');
+
+      // Pre-open the settings box to ensure it's ready for user preferences
+      await Hive.openBox('settings');
+      AppLogger.info('Settings box opened and ready');
+
+      // Initialize date formatting
+      await initializeDateFormatting();
+
+      // Set default orientation to portrait for phones
+      // This will be overridden for tablets once we have screen size info
+      if (!kIsWeb) {
+        await SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+        ]);
+        AppLogger.debug('Default orientation set to portrait');
+      }
+
+      // Initialize notifications (only on mobile platforms)
+      if (!kIsWeb) {
+        try {
+          final notificationService = NotificationService();
+          await notificationService.initialize();
+          await notificationService.requestPermissions();
+          AppLogger.info('Notifications initialized');
+        } catch (e, stackTrace) {
+          AppLogger.error(
+            'Error initializing notifications/background tasks',
+            error: e,
+            stackTrace: stackTrace,
+          );
+        }
+      } else {
+        AppLogger.debug('Skipping notifications/background tasks on web');
+      }
+
+      runApp(const ProviderScope(child: MyApp()));
+    },
+    (error, stack) {
+      // Catch errors that occur outside of Flutter's error handling
+      AppLogger.fatal('Uncaught error', error: error, stackTrace: stack);
+      if (!kIsWeb) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      }
+    },
   );
-  print('DEBUG: Firebase initialized');
-
-  // Initialize Hive for local storage
-  await Hive.initFlutter();
-  print('DEBUG: Hive initialized for local storage');
-
-  // Pre-open the settings box to ensure it's ready for user preferences
-  await Hive.openBox('settings');
-  print('DEBUG: Settings box opened and ready');
-
-  // Initialize date formatting
-  await initializeDateFormatting();
-
-  // Set default orientation to portrait for phones
-  // This will be overridden for tablets once we have screen size info
-  if (!kIsWeb) {
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
-    print('DEBUG: Default orientation set to portrait');
-  }
-
-  // Initialize notifications (only on mobile platforms)
-  if (!kIsWeb) {
-    try {
-      final notificationService = NotificationService();
-      await notificationService.initialize();
-      await notificationService.requestPermissions();
-      print('DEBUG: Notifications initialized');
-    } catch (e) {
-      print('DEBUG: Error initializing notifications/background tasks: $e');
-    }
-  } else {
-    print('DEBUG: Skipping notifications/background tasks on web');
-  }
-
-  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends ConsumerStatefulWidget {
@@ -102,14 +136,14 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
           DeviceOrientation.landscapeLeft,
           DeviceOrientation.landscapeRight,
         ]);
-        print('DEBUG: Tablet detected - all orientations enabled');
+        AppLogger.debug('Tablet detected - all orientations enabled');
       } else {
         // Portrait only on phones
         SystemChrome.setPreferredOrientations([
           DeviceOrientation.portraitUp,
           DeviceOrientation.portraitDown,
         ]);
-        print('DEBUG: Phone detected - portrait only');
+        AppLogger.debug('Phone detected - portrait only');
       }
     }
   }
@@ -145,11 +179,11 @@ class AuthWrapper extends ConsumerWidget {
     return authState.when(
       data: (user) {
         if (user != null) {
-          print('DEBUG AUTH WRAPPER: User is logged in - ${user.email}');
+          AppLogger.debug('AUTH WRAPPER: User is logged in - ${user.email}');
 
           // Wait for preferences to load before deciding which screen to show
           if (userPreferences.isLoading) {
-            print('DEBUG AUTH WRAPPER: Preferences still loading - showing loading indicator');
+            AppLogger.debug('AUTH WRAPPER: Preferences still loading - showing loading indicator');
             return const Scaffold(
               body: Center(
                 child: CircularProgressIndicator(),
@@ -159,13 +193,13 @@ class AuthWrapper extends ConsumerWidget {
 
           // Check if user has completed onboarding
           if (!userPreferences.hasCompletedOnboarding) {
-            print('DEBUG AUTH WRAPPER: First-time user - showing onboarding screen');
+            AppLogger.debug('AUTH WRAPPER: First-time user - showing onboarding screen');
             return const OnboardingScreen();
           }
 
           return const HomeScreen();
         } else {
-          print('DEBUG AUTH WRAPPER: No user logged in - showing login screen');
+          AppLogger.debug('AUTH WRAPPER: No user logged in - showing login screen');
           return const LoginScreen();
         }
       },
@@ -175,7 +209,7 @@ class AuthWrapper extends ConsumerWidget {
         ),
       ),
       error: (error, stackTrace) {
-        print('DEBUG AUTH WRAPPER: Error - $error');
+        AppLogger.error('AUTH WRAPPER: Error', error: error, stackTrace: stackTrace);
         return const LoginScreen();
       },
     );
