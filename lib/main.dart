@@ -7,7 +7,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:module_tracker/firebase_options.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
-import 'package:module_tracker/providers/theme_provider.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/screens/auth/login_screen.dart';
 import 'package:module_tracker/screens/home/home_screen.dart';
@@ -124,15 +123,12 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = ref.watch(themeProvider);
-
     return MaterialApp(
       title: 'Module Tracker',
       debugShowCheckedModeBanner: false,
       locale: const Locale('en', 'GB'),
       theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: themeMode.themeMode,
+      themeMode: ThemeMode.light,
       home: const AuthWrapper(),
     );
   }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
-import 'package:module_tracker/providers/theme_provider.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
 import 'package:module_tracker/providers/customization_provider.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
@@ -423,66 +422,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _showThemeDialog() async {
-    final currentTheme = ref.read(themeProvider);
-    AppThemeMode? tempTheme = currentTheme;
-
-    await showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Choose Theme'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: AppThemeMode.values.map((mode) {
-              return RadioListTile<AppThemeMode>(
-                title: Text(mode.displayName),
-                subtitle: Text(_getThemeDescription(mode)),
-                secondary: Icon(mode.icon),
-                value: mode,
-                groupValue: tempTheme,
-                onChanged: (value) {
-                  setState(() {
-                    tempTheme = value;
-                  });
-                },
-              );
-            }).toList(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (tempTheme != null) {
-                  ref.read(themeProvider.notifier).setThemeMode(tempTheme!);
-                }
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0EA5E9),
-              ),
-              child: const Text('Save', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _getThemeDescription(AppThemeMode mode) {
-    switch (mode) {
-      case AppThemeMode.light:
-        return 'Always use light theme';
-      case AppThemeMode.dark:
-        return 'Always use dark theme';
-      case AppThemeMode.system:
-        return 'Follow device settings';
-    }
   }
 
   Future<void> _showWeekStartDialog(WeekStartDay current) async {
@@ -1358,7 +1297,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final isGuest = ref.watch(isGuestUserProvider);
-    final currentTheme = ref.watch(themeProvider);
     final userPreferences = ref.watch(userPreferencesProvider);
     final customizationPrefs = ref.watch(customizationProvider);
     final scaleFactor = _getScaleFactor(context);
@@ -1808,20 +1746,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ),
                               ],
                             ),
-                          ),
-                          const Divider(height: 1),
-                          ListTile(
-                            leading: Icon(
-                              currentTheme.getIconForContext(context),
-                              size: 24 * scaleFactor,
-                            ),
-                            title: const Text('Theme'),
-                            subtitle: Text(currentTheme.displayName),
-                            trailing: Icon(
-                              Icons.chevron_right,
-                              size: 24 * scaleFactor,
-                            ),
-                            onTap: _showThemeDialog,
                           ),
                           const Divider(height: 1),
                           ListTile(
