@@ -10,6 +10,7 @@ class Module {
   final DateTime createdAt;
   final int credits;
   final int? colorValue; // Stored as color value (e.g., 0xFF3B82F6)
+  final String? notes; // Module-level quick notes
 
   Module({
     required this.id,
@@ -21,6 +22,7 @@ class Module {
     required this.createdAt,
     this.credits = 0,
     this.colorValue,
+    this.notes,
   });
 
   factory Module.fromFirestore(DocumentSnapshot doc) {
@@ -35,6 +37,7 @@ class Module {
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       credits: data['credits'] ?? 0,
       colorValue: data['colorValue'] as int?,
+      notes: data['notes'] as String?,
     );
   }
 
@@ -48,6 +51,7 @@ class Module {
       'createdAt': Timestamp.fromDate(createdAt),
       'credits': credits,
       'colorValue': colorValue,
+      'notes': notes,
     };
   }
 
@@ -63,6 +67,7 @@ class Module {
       createdAt: DateTime.parse(map['createdAt']),
       credits: map['credits'] ?? 0,
       colorValue: map['colorValue'] as int?,
+      notes: map['notes'] as String?,
     );
   }
 
@@ -77,6 +82,7 @@ class Module {
       'createdAt': createdAt.toIso8601String(),
       'credits': credits,
       'colorValue': colorValue,
+      'notes': notes,
     };
   }
 
@@ -90,6 +96,7 @@ class Module {
     DateTime? createdAt,
     int? credits,
     int? colorValue,
+    String? notes,
   }) {
     return Module(
       id: id ?? this.id,
@@ -101,6 +108,7 @@ class Module {
       createdAt: createdAt ?? this.createdAt,
       credits: credits ?? this.credits,
       colorValue: colorValue ?? this.colorValue,
+      notes: notes ?? this.notes,
     );
   }
 }

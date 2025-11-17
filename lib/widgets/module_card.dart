@@ -8,14 +8,17 @@ import 'package:module_tracker/models/recurring_task.dart';
 import 'package:module_tracker/models/task_completion.dart';
 import 'package:module_tracker/models/assessment.dart';
 import 'package:module_tracker/models/semester.dart';
+import 'package:module_tracker/models/cancelled_event.dart';
 import 'package:module_tracker/providers/module_provider.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/user_preferences_provider.dart';
+import 'package:module_tracker/providers/lecture_numbering_provider.dart' as lecture_numbering;
 import 'package:module_tracker/screens/module/module_form_screen.dart';
 import 'package:module_tracker/utils/celebration_helper.dart';
 import 'package:module_tracker/utils/responsive_text_utils.dart';
+import 'package:module_tracker/utils/date_utils.dart' as date_utils;
 import 'package:module_tracker/widgets/module_selection_dialog.dart';
 
 // Helper function to get color for assessment type badge
@@ -382,6 +385,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
     List<RecurringTask> allTasks,
     DateTime semesterStartDate,
     int weekNumber,
+    List<CancelledEvent> cancelledEvents,
+    Semester semester,
   ) {
     // For custom tasks with names, just use the name
     if (task.type == RecurringTaskType.custom ||
@@ -389,34 +394,30 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
       return task.name;
     }
 
-    // For scheduled tasks (lecture, lab, tutorial), group by type
-    final tasksOfSameType = allTasks
-        .where(
-          (t) =>
-              t.type == task.type && t.time != null && t.parentTaskId == null,
-        ) // Only scheduled items, not custom subtasks
-        .toList();
+    // For scheduled tasks (lecture, lab, tutorial), calculate instance number
+    // Filter tasks of same type for cross-task numbering
+    final tasksOfSameType = allTasks.where((t) => t.type == task.type).toList();
 
-    // Sort by day of week and time
-    tasksOfSameType.sort((a, b) {
-      final dayCompare = a.dayOfWeek.compareTo(b.dayOfWeek);
-      if (dayCompare != 0) return dayCompare;
-      return (a.time ?? '').compareTo(b.time ?? '');
-    });
-
-    // final totalOfType = tasksOfSameType.length;
-    final typeName = getTaskTypeName(task.type);
+    final instanceNumber = lecture_numbering.LectureNumberingHelper.calculateInstanceNumber(
+      task: task,
+      weekNumber: weekNumber,
+      cancelledEvents: cancelledEvents,
+      semester: semester,
+      allTasksOfSameType: tasksOfSameType,
+    );
 
     // Calculate the actual date for this task in this week
     final weekStartDate = semesterStartDate.add(Duration(days: (weekNumber - 1) * 7));
     final taskDate = weekStartDate.add(Duration(days: task.dayOfWeek - 1));
+    final dateLabel = date_utils.DateUtils.formatDayWithOrdinal(taskDate);
 
-    // Format: "Lecture (Mon 29th)"
-    final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    final dayOfWeek = dayNames[taskDate.weekday - 1];
-    final day = taskDate.day;
-
-    return '$typeName ($dayOfWeek $day${getOrdinalSuffix(day)})';
+    // Format: "Lecture 3 (Mon 29th)" or "Lecture (Cancelled)"
+    final typeName = getTaskTypeName(task.type);
+    if (instanceNumber == 0) {
+      return '$typeName (Cancelled)';
+    } else {
+      return '$typeName $instanceNumber ($dateLabel)';
+    }
   }
 
   // Get all assessments that are due in the given week
@@ -594,6 +595,9 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
     final assessmentsAsync = ref.watch(assessmentsProvider(widget.module.id));
     final completionsAsync = ref.watch(
       taskCompletionsProvider((moduleId: widget.module.id, weekNumber: widget.weekNumber)),
+    );
+    final cancelledEventsAsync = ref.watch(
+      lecture_numbering.allCancelledEventsProvider(widget.module.id),
     );
 
     // Calculate responsive scale factor based on screen width and module count
@@ -825,9 +829,11 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
 
                           return completionsAsync.when(
                             data: (completions) {
-                              final completionMap = {
-                                for (var c in completions) c.taskId: c,
-                              };
+                              return cancelledEventsAsync.when(
+                                data: (cancelledEvents) {
+                                  final completionMap = {
+                                    for (var c in completions) c.taskId: c,
+                                  };
 
                               // Sort tasks chronologically: by day of week, then by time
                               final sortedTasks = List<RecurringTask>.from(
@@ -916,6 +922,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                       tasks,
                                       semester!.startDate,
                                       widget.weekNumber,
+                                      cancelledEvents,
+                                      semester,
                                     );
 
                                     final subtasks =
@@ -1157,6 +1165,10 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                 ],
                               ),
                               );
+                                },
+                                loading: () => const CircularProgressIndicator(),
+                                error: (error, stack) => Text('Error: $error'),
+                              );
                             },
                             loading: () => const CircularProgressIndicator(),
                             error: (error, stack) => Text('Error: $error'),
@@ -1176,10 +1188,12 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                       data: (tasks) {
                         return assessmentsAsync.when(
                           data: (assessments) {
-                            // Calculate actual current week based on today's date
-                            final now = DateTime.now();
-                            final daysSinceStart = now.difference(semester.startDate).inDays;
-                            final actualCurrentWeek = (daysSinceStart / 7).floor() + 1;
+                            return cancelledEventsAsync.when(
+                              data: (cancelledEvents) {
+                                // Calculate actual current week based on today's date
+                                final now = DateTime.now();
+                                final daysSinceStart = now.difference(semester.startDate).inDays;
+                                final actualCurrentWeek = (daysSinceStart / 7).floor() + 1;
 
                             // Collect outstanding tasks from previous weeks with their completion data
                             // Only check weeks that have actually occurred (up to actualCurrentWeek)
@@ -1228,6 +1242,8 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                       tasks,
                                       semester.startDate,
                                       week,
+                                      cancelledEvents,
+                                      semester,
                                     );
 
                                     outstandingTasksData.add({
@@ -1457,6 +1473,10 @@ class _ModuleCardState extends ConsumerState<ModuleCard> with SingleTickerProvid
                                   ),
                                 ),
                               ],
+                            );
+                              },
+                              loading: () => const SizedBox.shrink(),
+                              error: (_, __) => const SizedBox.shrink(),
                             );
                           },
                           loading: () => const SizedBox.shrink(),

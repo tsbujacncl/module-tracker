@@ -34,6 +34,11 @@ service cloud.firestore {
         match /taskCompletions/{completionId} {
           allow read, write: if request.auth != null && request.auth.uid == userId;
         }
+
+        // Cancelled events
+        match /cancelledEvents/{eventId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
       }
     }
 

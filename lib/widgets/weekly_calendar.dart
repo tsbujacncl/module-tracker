@@ -19,7 +19,9 @@ import 'package:module_tracker/screens/module/module_form_screen.dart';
 import 'package:module_tracker/utils/celebration_helper.dart';
 import 'package:module_tracker/utils/date_picker_utils.dart';
 import 'package:module_tracker/utils/responsive_text_utils.dart';
+import 'package:module_tracker/utils/date_utils.dart' as date_utils;
 import 'package:module_tracker/services/app_logger.dart';
+import 'package:module_tracker/providers/lecture_numbering_provider.dart' as lecture_numbering;
 
 // Helper function to get opaque event box color based on completion status
 // Instead of using opacity which allows hour lines to show through,
@@ -972,6 +974,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                 weekNumber: widget.currentWeek,
                 dayOfWeek: dayOfWeek,
                 semester: widget.semester!,
+                allTasks: widget.tasksByModule[event.taskWithModule!.module.id] ?? [],
                 getTaskColor: getTaskColor,
                 getTaskTypeName: getTaskTypeName,
                 onTouchDown: onTouchDown,
@@ -1720,6 +1723,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                                   getTemporaryStatus,
                                                               justFinishedDrag:
                                                                   _justFinishedDrag,
+                                                              allTasks: widget.tasksByModule[event.taskWithModule!.module.id] ?? [],
                                                             ),
                                                           ),
                                                         );
@@ -2179,6 +2183,7 @@ class _WeeklyCalendarState extends ConsumerState<WeeklyCalendar> {
                                                         getTemporaryStatus,
                                                     justFinishedDrag:
                                                         _justFinishedDrag,
+                                                    allTasks: widget.tasksByModule[event.taskWithModule!.module.id] ?? [],
                                                   ),
                                                 ),
                                               );
@@ -2961,6 +2966,7 @@ class _TimetableTaskBox extends ConsumerWidget {
   final int weekNumber;
   final int dayOfWeek;
   final Semester semester;
+  final List<RecurringTask> allTasks;
   final Color Function(RecurringTaskType) getTaskColor;
   final String Function(RecurringTaskType) getTaskTypeName;
   final Function(String, TaskStatus) onTouchDown;
@@ -2976,6 +2982,7 @@ class _TimetableTaskBox extends ConsumerWidget {
     required this.weekNumber,
     required this.dayOfWeek,
     required this.semester,
+    required this.allTasks,
     required this.getTaskColor,
     required this.getTaskTypeName,
     required this.onTouchDown,
@@ -3017,23 +3024,51 @@ class _TimetableTaskBox extends ConsumerWidget {
       taskCompletionsProvider((moduleId: module.id, weekNumber: weekNumber)),
     );
 
+    // Watch cancelled events for lecture numbering
+    final cancelledEventsAsync = ref.watch(
+      lecture_numbering.allCancelledEventsProvider(module.id),
+    );
+
     return completionsAsync.when(
       data: (completions) {
-        final completion = completions.firstWhere(
-          (c) => c.taskId == task.id,
-          orElse: () => TaskCompletion(
-            id: '',
-            moduleId: module.id,
-            taskId: task.id,
-            weekNumber: weekNumber,
-            status: TaskStatus.notStarted,
-          ),
-        );
+        return cancelledEventsAsync.when(
+          data: (cancelledEvents) {
+            final completion = completions.firstWhere(
+              (c) => c.taskId == task.id,
+              orElse: () => TaskCompletion(
+                id: '',
+                moduleId: module.id,
+                taskId: task.id,
+                weekNumber: weekNumber,
+                status: TaskStatus.notStarted,
+              ),
+            );
 
-        final eventId = 'task_${module.id}_${task.id}';
-        final temporaryStatus = getTemporaryStatus(eventId, completion.status);
-        final currentStatus = temporaryStatus ?? completion.status;
-        final isCompleted = currentStatus == TaskStatus.complete;
+            // Filter tasks of same type for cross-task numbering
+            final tasksOfSameType = allTasks.where((t) => t.type == task.type).toList();
+
+            // Calculate lecture/lab/tutorial number
+            final instanceNumber = lecture_numbering.LectureNumberingHelper.calculateInstanceNumber(
+              task: task,
+              weekNumber: weekNumber,
+              cancelledEvents: cancelledEvents,
+              semester: semester,
+              allTasksOfSameType: tasksOfSameType,
+            );
+
+            // Create display label (without date for calendar view)
+            String taskLabel;
+            if (instanceNumber == 0) {
+              taskLabel = 'Cancelled';
+            } else {
+              final typeName = getTaskTypeName(task.type);
+              taskLabel = '$typeName $instanceNumber';
+            }
+
+            final eventId = 'task_${module.id}_${task.id}';
+            final temporaryStatus = getTemporaryStatus(eventId, completion.status);
+            final currentStatus = temporaryStatus ?? completion.status;
+            final isCompleted = currentStatus == TaskStatus.complete;
 
         return Listener(
           onPointerDown: (_) => onTouchDown(eventId, currentStatus),
@@ -3185,7 +3220,7 @@ class _TimetableTaskBox extends ConsumerWidget {
                           if (height >= 22) ...[
                             SizedBox(height: textGap),
                             Text(
-                              getTaskTypeName(task.type),
+                              taskLabel,
                               style: GoogleFonts.inter(
                                 fontSize: eventTypeFontSize,
                                 fontWeight: FontWeight.w500,
@@ -3269,12 +3304,37 @@ class _TimetableTaskBox extends ConsumerWidget {
             ),
           ),
         );
+          },
+          loading: () => Container(
+            height: height,
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: getTaskColor(task.type).withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(6),
+              border: Border(
+                left: BorderSide(color: getTaskColor(task.type), width: 3),
+              ),
+            ),
+            child: const Center(child: CircularProgressIndicator()),
+          ),
+          error: (_, __) => Container(
+            height: height,
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: getTaskColor(task.type).withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(6),
+              border: Border(
+                left: BorderSide(color: getTaskColor(task.type), width: 3),
+              ),
+            ),
+          ),
+        );
       },
       loading: () => Container(
         height: height,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: getTaskColor(task.type).withOpacity(0.3),
+          color: getTaskColor(task.type).withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(6),
           border: Border(
             left: BorderSide(color: getTaskColor(task.type), width: 3),
@@ -3286,7 +3346,7 @@ class _TimetableTaskBox extends ConsumerWidget {
         height: height,
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: getTaskColor(task.type).withOpacity(0.3),
+          color: getTaskColor(task.type).withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(6),
           border: Border(
             left: BorderSide(color: getTaskColor(task.type), width: 3),

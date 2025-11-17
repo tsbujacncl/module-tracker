@@ -8,8 +8,10 @@ import 'package:module_tracker/providers/module_provider.dart';
 import 'package:module_tracker/providers/semester_provider.dart';
 import 'package:module_tracker/providers/auth_provider.dart';
 import 'package:module_tracker/providers/repository_provider.dart';
+import 'package:module_tracker/providers/lecture_numbering_provider.dart' as lecture_numbering;
 import 'package:module_tracker/theme/design_tokens.dart';
 import 'package:module_tracker/utils/celebration_helper.dart';
+import 'package:module_tracker/utils/date_utils.dart' as date_utils;
 
 class WeeklyTasksTab extends ConsumerWidget {
   final Module module;
@@ -157,6 +159,7 @@ class WeeklyTasksTab extends ConsumerWidget {
                       weekNumber: selectedWeek,
                       getTaskTypeName: _getTaskTypeName,
                       getTaskColor: _getTaskColor,
+                      allTasks: tasks,
                     )),
                 const SizedBox(height: AppSpacing.lg),
               ],
@@ -178,6 +181,7 @@ class _TaskCard extends ConsumerWidget {
   final int weekNumber;
   final String Function(RecurringTaskType) getTaskTypeName;
   final Color Function(RecurringTaskType) getTaskColor;
+  final List<RecurringTask> allTasks;
 
   const _TaskCard({
     required this.task,
@@ -185,6 +189,7 @@ class _TaskCard extends ConsumerWidget {
     required this.weekNumber,
     required this.getTaskTypeName,
     required this.getTaskColor,
+    required this.allTasks,
   });
 
   @override
@@ -192,23 +197,61 @@ class _TaskCard extends ConsumerWidget {
     final completionsAsync = ref.watch(
       taskCompletionsProvider((moduleId: module.id, weekNumber: weekNumber)),
     );
+    final semester = ref.watch(currentSemesterProvider);
+    final cancelledEventsAsync = ref.watch(
+      lecture_numbering.allCancelledEventsProvider(module.id),
+    );
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final taskColor = getTaskColor(task.type);
 
+    if (semester == null) {
+      return const SizedBox.shrink();
+    }
+
     return completionsAsync.when(
       data: (completions) {
-        final completion = completions.firstWhere(
-          (c) => c.taskId == task.id,
-          orElse: () => TaskCompletion(
-            id: '',
-            moduleId: module.id,
-            taskId: task.id,
-            weekNumber: weekNumber,
-            status: TaskStatus.notStarted,
-          ),
-        );
+        return cancelledEventsAsync.when(
+          data: (cancelledEvents) {
+            final completion = completions.firstWhere(
+              (c) => c.taskId == task.id,
+              orElse: () => TaskCompletion(
+                id: '',
+                moduleId: module.id,
+                taskId: task.id,
+                weekNumber: weekNumber,
+                status: TaskStatus.notStarted,
+              ),
+            );
 
-        final isCompleted = completion.status == TaskStatus.complete;
+            // Calculate lecture/lab/tutorial number
+            // Filter tasks of same type for cross-task numbering
+            final tasksOfSameType = allTasks.where((t) => t.type == task.type).toList();
+
+            final instanceNumber = lecture_numbering.LectureNumberingHelper.calculateInstanceNumber(
+              task: task,
+              weekNumber: weekNumber,
+              cancelledEvents: cancelledEvents,
+              semester: semester,
+              allTasksOfSameType: tasksOfSameType,
+            );
+
+            // Calculate date for this task
+            final weekStart = date_utils.DateUtils.getDateForWeek(
+              weekNumber,
+              semester.startDate,
+            );
+            final taskDate = weekStart.add(Duration(days: task.dayOfWeek - 1));
+            final dateLabel = date_utils.DateUtils.formatDayWithOrdinal(taskDate);
+
+            // Create display label
+            String taskLabel;
+            if (instanceNumber == 0) {
+              taskLabel = '${getTaskTypeName(task.type)} (Cancelled)';
+            } else {
+              taskLabel = '${getTaskTypeName(task.type)} $instanceNumber ($dateLabel)';
+            }
+
+            final isCompleted = completion.status == TaskStatus.complete;
 
         return Container(
           margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -224,7 +267,7 @@ class _TaskCard extends ConsumerWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.05),
+                color: Colors.black.withValues(alpha: isDarkMode ? 0.3 : 0.05),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -293,7 +336,7 @@ class _TaskCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      getTaskTypeName(task.type),
+                      taskLabel,
                       style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -363,6 +406,10 @@ class _TaskCard extends ConsumerWidget {
               ),
             ],
           ),
+        );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
         );
       },
       loading: () => const SizedBox.shrink(),

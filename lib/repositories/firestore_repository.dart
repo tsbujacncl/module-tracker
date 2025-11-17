@@ -168,6 +168,17 @@ class FirestoreRepository {
         .update({'isActive': isActive});
   }
 
+  /// Update module notes
+  Future<void> updateModuleNotes(
+      String userId, String moduleId, String? notes) async {
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('modules')
+        .doc(moduleId)
+        .update({'notes': notes});
+  }
+
   /// Auto-archive all modules for a semester
   Future<void> autoArchiveSemesterModules(String userId, String semesterId) async {
     final batch = _firestore.batch();

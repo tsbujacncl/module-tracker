@@ -122,4 +122,30 @@ class DateUtils {
   static bool isSameWeek(DateTime date1, DateTime date2) {
     return _getStartOfWeek(date1) == _getStartOfWeek(date2);
   }
+
+  /// Format date as "Mon 22nd" (day name + ordinal date)
+  static String formatDayWithOrdinal(DateTime date) {
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final dayName = dayNames[date.weekday - 1];
+    final day = date.day;
+    final ordinal = _getOrdinalSuffix(day);
+    return '$dayName $day$ordinal';
+  }
+
+  /// Get ordinal suffix for a day (1st, 2nd, 3rd, 4th, etc.)
+  static String _getOrdinalSuffix(int day) {
+    if (day >= 11 && day <= 13) {
+      return 'th';
+    }
+    switch (day % 10) {
+      case 1:
+        return 'st';
+      case 2:
+        return 'nd';
+      case 3:
+        return 'rd';
+      default:
+        return 'th';
+    }
+  }
 }
