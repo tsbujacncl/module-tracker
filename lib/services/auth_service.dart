@@ -24,7 +24,7 @@ class AuthService {
     if (kIsWeb) {
       final clientId = EnvConfig.googleWebClientId;
       if (clientId == null || clientId.isEmpty) {
-        AppLogger.warning('Google Sign-In not configured for web: missing GOOGLE_WEB_CLIENT_ID');
+        // Return null without logging - error will be shown when user tries to sign in
         return null;
       }
       _googleSignInInstance = GoogleSignIn(clientId: clientId);
