@@ -25,14 +25,18 @@ void main() async {
     () async {
       WidgetsFlutterBinding.ensureInitialized();
 
-      // Load environment variables (optional for web/production builds)
-      try {
-        await dotenv.load(fileName: '.env');
-        AppLogger.info('Environment variables loaded from .env file');
-      } catch (e) {
-        // Initialize with empty environment if .env file doesn't exist
-        await dotenv.load(mergeWith: {});
-        AppLogger.info('No .env file found, initialized with empty environment');
+      // Load environment variables (skip for web builds where .env isn't available)
+      if (!kIsWeb) {
+        try {
+          await dotenv.load(fileName: '.env');
+          AppLogger.info('Environment variables loaded from .env file');
+        } catch (e) {
+          AppLogger.info('No .env file found, continuing without it');
+        }
+      } else {
+        // For web, initialize with empty environment
+        dotenv.testLoad(mergeWith: {});
+        AppLogger.info('Web build: initialized with empty environment');
       }
 
       // Initialize Firebase
