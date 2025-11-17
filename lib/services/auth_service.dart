@@ -9,11 +9,32 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    // For iOS/Android: clientId is automatically read from GoogleService-Info.plist/google-services.json
-    // For Web: Read OAuth Client ID from environment variables
-    clientId: kIsWeb ? EnvConfig.googleWebClientId : null,
-  );
+
+  // Lazy-initialized GoogleSignIn instance
+  // Only created when needed and if clientId is available
+  GoogleSignIn? _googleSignInInstance;
+
+  GoogleSignIn? get _googleSignIn {
+    // If already initialized, return it
+    if (_googleSignInInstance != null) {
+      return _googleSignInInstance;
+    }
+
+    // For web: Only initialize if we have a clientId
+    if (kIsWeb) {
+      final clientId = EnvConfig.googleWebClientId;
+      if (clientId == null || clientId.isEmpty) {
+        AppLogger.warning('Google Sign-In not configured for web: missing GOOGLE_WEB_CLIENT_ID');
+        return null;
+      }
+      _googleSignInInstance = GoogleSignIn(clientId: clientId);
+    } else {
+      // For iOS/Android: clientId is automatically read from GoogleService-Info.plist/google-services.json
+      _googleSignInInstance = GoogleSignIn();
+    }
+
+    return _googleSignInInstance;
+  }
 
   // Auth state stream
   Stream<User?> get authStateChanges {
@@ -73,9 +94,10 @@ class AuthService {
 
   // Sign out
   Future<void> signOut() async {
+    final googleSignIn = _googleSignIn;
     await Future.wait([
       _auth.signOut(),
-      _googleSignIn.signOut(),
+      if (googleSignIn != null) googleSignIn.signOut(),
     ]);
   }
 
@@ -147,8 +169,14 @@ class AuthService {
     try {
       AppLogger.debug('AUTH: Starting Google Sign-In flow');
 
+      // Check if Google Sign-In is configured
+      final googleSignIn = _googleSignIn;
+      if (googleSignIn == null) {
+        throw 'Google Sign-In is not configured. Please add GOOGLE_WEB_CLIENT_ID to your .env file for web builds.';
+      }
+
       // Trigger the authentication flow with timeout
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn().timeout(
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn().timeout(
         const Duration(seconds: 60),
         onTimeout: () {
           AppLogger.debug('AUTH: Google Sign-In timed out');
@@ -227,8 +255,14 @@ class AuthService {
 
       AppLogger.debug('AUTH: Linking anonymous account with Google');
 
+      // Check if Google Sign-In is configured
+      final googleSignIn = _googleSignIn;
+      if (googleSignIn == null) {
+        throw 'Google Sign-In is not configured. Please add GOOGLE_WEB_CLIENT_ID to your .env file for web builds.';
+      }
+
       // Trigger the authentication flow with timeout
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn().timeout(
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn().timeout(
         const Duration(seconds: 60),
         onTimeout: () {
           AppLogger.debug('AUTH: Google Sign-In timed out');
