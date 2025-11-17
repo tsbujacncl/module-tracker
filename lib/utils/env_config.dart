@@ -36,7 +36,8 @@ class EnvConfig {
   // Predefined environment variables for type safety
 
   /// Google Web OAuth Client ID (for web platform)
-  static String get googleWebClientId => get('GOOGLE_WEB_CLIENT_ID');
+  /// Returns null if not configured (e.g., in production builds)
+  static String? get googleWebClientId => getOrNull('GOOGLE_WEB_CLIENT_ID');
 
   /// App name from environment
   static String get appName => get('APP_NAME', fallback: 'Module Tracker');
