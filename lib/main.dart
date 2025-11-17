@@ -30,7 +30,9 @@ void main() async {
         await dotenv.load(fileName: '.env');
         AppLogger.info('Environment variables loaded from .env file');
       } catch (e) {
-        AppLogger.info('No .env file found, using system environment variables');
+        // Initialize with empty environment if .env file doesn't exist
+        await dotenv.load(mergeWith: {});
+        AppLogger.info('No .env file found, initialized with empty environment');
       }
 
       // Initialize Firebase
